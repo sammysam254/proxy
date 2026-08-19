@@ -45,41 +45,80 @@ function buildSshArgs() {
   ];
 }
 
-// ─── Start/restart autossh tunnel ────────────────────────────────────────────
+let tunnelProcess = null;
+let tunnelRestartTimer = null;
+let isStopping = false;
+
+// ─── Start/restart SSH tunnel ────────────────────────────────────────────────
 async function startTunnel() {
   if (!VPS_HOST) {
     console.warn('[TunnelManager] VPS_HOST not set — tunnel disabled.');
     return;
   }
 
+  isStopping = false;
   await stopTunnel();
 
   const args = buildSshArgs();
   console.log(`[TunnelManager] Starting tunnel to ${VPS_USER}@${VPS_HOST}:${VPS_SSH_PORT}`);
   console.log(`[TunnelManager] Port mappings: ${portMappings.length}`);
 
-  autosshProcess = spawn('autossh', [
-    '-M', '0',           // disable autossh monitoring port (use ServerAlive instead)
-    '-f',                // run in background (fork)
-    ...args,
-  ], {
-    detached: true,
-    stdio:    'ignore',
-    env: {
-      ...process.env,
-      AUTOSSH_GATETIME:   '0',
-      AUTOSSH_LOGLEVEL:   '5',
-      AUTOSSH_LOGFILE:    `${process.env.APP_DIR || '/opt/proxicell'}/logs/autossh.log`,
-    },
-  });
+  const isWin = process.platform === 'win32';
 
-  autosshProcess.unref();
-  console.log(`[TunnelManager] autossh started (PID: ${autosshProcess.pid})`);
+  if (isWin) {
+    // Windows: Use native OpenSSH client (ssh.exe) with automatic reconnect on exit
+    tunnelProcess = spawn('ssh', args, {
+      stdio: 'ignore',
+      detached: false,
+    });
+
+    tunnelProcess.on('exit', (code) => {
+      if (!isStopping && portMappings.length > 0) {
+        console.warn(`[TunnelManager] Windows SSH tunnel exited (code ${code}). Reconnecting in 5s...`);
+        clearTimeout(tunnelRestartTimer);
+        tunnelRestartTimer = setTimeout(() => {
+          if (!isStopping) startTunnel().catch(() => {});
+        }, 5000);
+      }
+    });
+
+    console.log(`[TunnelManager] Windows SSH tunnel started (PID: ${tunnelProcess.pid})`);
+  } else {
+    // Linux: Use autossh
+    tunnelProcess = spawn('autossh', [
+      '-M', '0',           // disable autossh monitoring port
+      '-f',                // run in background
+      ...args,
+    ], {
+      detached: true,
+      stdio:    'ignore',
+      env: {
+        ...process.env,
+        AUTOSSH_GATETIME:   '0',
+        AUTOSSH_LOGLEVEL:   '5',
+        AUTOSSH_LOGFILE:    `${process.env.APP_DIR || '/opt/proxicell'}/logs/autossh.log`,
+      },
+    });
+
+    tunnelProcess.unref();
+    console.log(`[TunnelManager] autossh started (PID: ${tunnelProcess.pid})`);
+  }
 }
 
 async function stopTunnel() {
-  await execAsync('pkill -f autossh 2>/dev/null || true').catch(() => {});
-  autosshProcess = null;
+  isStopping = true;
+  clearTimeout(tunnelRestartTimer);
+
+  if (process.platform === 'win32') {
+    if (tunnelProcess) {
+      try { tunnelProcess.kill('SIGKILL'); } catch {}
+      tunnelProcess = null;
+    }
+    await execAsync('taskkill /F /IM ssh.exe 2>nul || exit 0', { shell: 'cmd.exe' }).catch(() => {});
+  } else {
+    await execAsync('pkill -f autossh 2>/dev/null || true').catch(() => {});
+    tunnelProcess = null;
+  }
 }
 
 // ─── Add tunnel ports for a new modem ─────────────────────────────────────────

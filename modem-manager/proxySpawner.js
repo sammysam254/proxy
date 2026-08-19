@@ -38,16 +38,19 @@ function writePasswdFile() {
 
 // ─── Generate 3proxy config ───────────────────────────────────────────────────
 function generate3proxyConfig(modems) {
+  const normLogPath = path.join(LOG_DIR, '3proxy.log').replace(/\\/g, '/');
+  const normPasswdPath = PASSWD_FILE.replace(/\\/g, '/');
+
   const lines = [
     '# ProxiCell — 3proxy config',
     '# Auto-generated. Do not edit manually.',
     '',
-    `log ${LOG_DIR}/3proxy.log D`,
+    `log "${normLogPath}" D`,
     'logformat "- +_L%t.%.  %N.%p %E %U %C:%c %R:%r %O %I %h %T"',
     'rotate 30',
     '',
     '# Auth',
-    `users $/usr/local/etc/proxicell/passwd`,
+    `users $"${normPasswdPath}"`,
     '',
     '# Max connections per user',
     'maxconn 20',
@@ -65,7 +68,6 @@ function generate3proxyConfig(modems) {
 
   for (const modem of modems) {
     // CRITICAL: Skip any device that doesn't have a valid IP yet
-    // A device without an IP cannot route traffic — including it would break 3proxy
     if (!modem.ipAddress || modem.ipAddress === '0.0.0.0') {
       lines.push(`# SKIPPED (no IP): ${modem.label}`);
       lines.push('');
@@ -76,7 +78,7 @@ function generate3proxyConfig(modems) {
 
     const { http, socks4, socks5 } = modem.portSet;
     const exitIp  = modem.ipAddress;   // The SIM card's IP — this is what routes traffic out
-    const bindIp  = '0.0.0.0';        // Listen on all interfaces (tunnel delivers traffic here)
+    const bindIp  = '0.0.0.0';        // Listen on all interfaces
     const label   = modem.label.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
     const devType = modem.isAndroid ? 'Android' : 'Modem';
 
@@ -88,17 +90,15 @@ function generate3proxyConfig(modems) {
     const modemCreds = credStore.get(modem.id || modem.devicePath) || [];
 
     if (modemCreds.length > 0) {
-      // Allow only this modem's users — deny everyone else on these ports
       const userList = modemCreds.map(c => c.username).join(',');
       lines.push(`allow ${userList} * * ${http},${socks4},${socks5}`);
     } else {
-      // No paying users yet — deny all connections on these ports
       lines.push(`# No active users — denying all on :${http}/:${socks4}/:${socks5}`);
       lines.push(`deny * * * ${http},${socks4},${socks5}`);
     }
     lines.push('');
 
-    // HTTP proxy — exits via SIM card IP
+    // HTTP proxy
     lines.push(`# HTTP — ${label}`);
     lines.push(`proxy -n -a -p${http} -i${bindIp} -e${exitIp}`);
     lines.push('');
@@ -117,15 +117,37 @@ function generate3proxyConfig(modems) {
   return lines.join('\n');
 }
 
+// ─── Find 3proxy executable ──────────────────────────────────────────────────
+function get3proxyBin() {
+  const isWin = process.platform === 'win32';
+  if (isWin) {
+    const candidates = [
+      path.join(__dirname, 'bin', '3proxy.exe'),
+      path.join(APP_DIR, 'bin', '3proxy.exe'),
+      path.join(process.cwd(), 'bin', '3proxy.exe'),
+      '3proxy.exe',
+      '3proxy',
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return '3proxy.exe';
+  }
+  return '3proxy';
+}
+
 // ─── Write config and reload 3proxy ──────────────────────────────────────────
 let proxy3Pid = null;
 
 async function reloadConfig(modems) {
   if (!modems) {
-    // If no modems passed, just reload passwd
     writePasswdFile();
     if (proxy3Pid) {
-      await execAsync(`kill -HUP ${proxy3Pid}`).catch(() => {});
+      if (process.platform === 'win32') {
+        // On Windows 3proxy re-reads passwd automatically or restarts
+      } else {
+        await execAsync(`kill -HUP ${proxy3Pid}`).catch(() => {});
+      }
     }
     return;
   }
@@ -135,11 +157,16 @@ async function reloadConfig(modems) {
   writePasswdFile();
 
   // Stop existing 3proxy
-  await execAsync('pkill -f 3proxy 2>/dev/null || true').catch(() => {});
+  if (process.platform === 'win32') {
+    await execAsync('taskkill /F /IM 3proxy.exe 2>nul || exit 0', { shell: 'cmd.exe' }).catch(() => {});
+  } else {
+    await execAsync('pkill -f 3proxy 2>/dev/null || true').catch(() => {});
+  }
   await new Promise(r => setTimeout(r, 1000));
 
   // Start 3proxy with new config
-  const proc = exec(`3proxy ${CONFIG_FILE}`);
+  const bin = get3proxyBin();
+  const proc = exec(`"${bin}" "${CONFIG_FILE}"`, { shell: true });
   proxy3Pid = proc.pid;
 
   proc.stdout?.on('data', d => process.stdout.write(`[3proxy] ${d}`));
@@ -150,7 +177,7 @@ async function reloadConfig(modems) {
     }
   });
 
-  console.log(`[ProxySpawner] 3proxy started (PID: ${proc.pid}) with ${modems.length} modem(s)`);
+  console.log(`[ProxySpawner] 3proxy started (PID: ${proc.pid}) with ${modems.length} device(s)`);
 }
 
 // ─── Per-device proxy start/stop ─────────────────────────────────────────────

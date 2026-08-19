@@ -23,7 +23,18 @@ ssh ubuntu@YOUR_VPS_IP
 bash vps-setup.sh
 ```
 
-### Step 2: Set Up Local Machine (where modems plug in)
+### Step 2: Set Up Local Machine (where modems / Android phones plug in)
+
+#### On Windows:
+1. Open PowerShell or Command Prompt as Administrator:
+   ```cmd
+   git clone https://github.com/sammysam254/proxy.git
+   cd proxy
+   setup.bat
+   ```
+2. To start the proxy system anytime later, double-click `start.bat`.
+
+#### On Linux (Ubuntu / Debian / VirtualBox):
 ```bash
 # Option A: One-liner directly from GitHub
 curl -fsSL https://raw.githubusercontent.com/sammysam254/proxy/main/setup.sh -o setup.sh && sudo bash setup.sh

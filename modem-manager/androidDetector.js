@@ -66,8 +66,30 @@ async function getAdbDevices() {
 }
 
 // ─── Get network interface created by Android USB tethering ──────────────────
-// Android creates rndis0, usb0, or usb1 when USB tethering is on
 async function getAndroidTetheredInterface(serial) {
+  // ── Windows implementation ────────────────────────────────────────────────
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execAsync('ipconfig', { timeout: 4000 });
+      // Look for Remote NDIS, USB Ethernet, or Cellular adapter sections
+      const sections = stdout.split(/\r?\n\r?\n/);
+      for (const sec of sections) {
+        if (/NDIS|USB|Cellular|Android|RNDIS/i.test(sec) || (sec.includes('Ethernet adapter') && !sec.includes('vEthernet'))) {
+          const ipMatch = sec.match(/IPv4 Address[ .:]+([\d.]+)/i) || sec.match(/IP Address[ .:]+([\d.]+)/i);
+          const nameMatch = sec.match(/adapter ([^:\r\n]+):/i);
+          if (ipMatch && !ipMatch[1].startsWith('169.254.') && !ipMatch[1].startsWith('127.')) {
+            return {
+              iface: (nameMatch ? nameMatch[1].trim() : 'Ethernet'),
+              ipAddress: ipMatch[1].trim(),
+            };
+          }
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  // ── Linux implementation ──────────────────────────────────────────────────
   const fs   = require('fs');
   const ifDir = '/sys/class/net';
   if (!fs.existsSync(ifDir)) return null;
@@ -99,7 +121,6 @@ async function getAndroidTetheredInterface(serial) {
     const { stdout } = await execAsync('ip link show type ether', { timeout: 3000 });
     const rndisMatch = stdout.match(/(\w+)@/g);
     if (rndisMatch) {
-      // Try each one
       for (const match of rndisMatch) {
         const iface = match.replace('@', '');
         const { stdout: addrOut } = await execAsync(`ip addr show ${iface}`, { timeout: 3000 });
