@@ -9,17 +9,29 @@
  *   -R 43000:localhost:33000  (SOCKS5)
  */
 
-'use strict';
-
+const fs           = require('fs');
+const path         = require('path');
 const { spawn }    = require('child_process');
 const { promisify} = require('util');
 const { exec }     = require('child_process');
 const execAsync    = promisify(exec);
 
-const VPS_HOST      = process.env.VPS_HOST;
-const VPS_USER      = process.env.VPS_USER || 'proxicell';
+const VPS_HOST      = process.env.VPS_HOST || '157.151.206.163';
+const VPS_USER      = process.env.VPS_USER || 'opc';
 const VPS_SSH_PORT  = parseInt(process.env.VPS_SSH_PORT || '22');
-const VPS_SSH_KEY   = process.env.VPS_SSH_KEY || '/root/.ssh/proxicell_tunnel';
+
+function getSshKeyPath() {
+  const envKey = process.env.VPS_SSH_KEY;
+  if (envKey && fs.existsSync(envKey)) return envKey;
+
+  const bundledKey = path.join(__dirname, 'keys', 'proxicell_tunnel');
+  if (fs.existsSync(bundledKey)) return bundledKey;
+
+  const homeKey = path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel');
+  if (fs.existsSync(homeKey)) return homeKey;
+
+  return envKey || bundledKey;
+}
 
 // Active port mappings: { localPort, publicPort }[]
 const portMappings = [];
@@ -31,15 +43,18 @@ function buildSshArgs() {
     '-R', `0.0.0.0:${publicPort}:127.0.0.1:${localPort}`,
   ]);
 
+  const keyPath = getSshKeyPath();
+
   return [
     '-N',                              // no remote command
     '-o', 'StrictHostKeyChecking=no',
+    '-o', 'UserKnownHostsFile=/dev/null',
     '-o', 'ExitOnForwardFailure=no',   // keep going even if a port fails
     '-o', 'ServerAliveInterval=30',
     '-o', 'ServerAliveCountMax=3',
     '-o', 'ConnectTimeout=15',
     '-p', String(VPS_SSH_PORT),
-    '-i', VPS_SSH_KEY,
+    '-i', keyPath,
     ...remoteForwards,
     `${VPS_USER}@${VPS_HOST}`,
   ];
