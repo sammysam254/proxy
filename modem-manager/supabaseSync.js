@@ -107,7 +107,7 @@ async function syncBandwidth(modems) {
       const { bytesIn, bytesOut } = await spawner.getModemBandwidth(modem);
       const totalBytes = bytesIn + bytesOut;
 
-      // Update modem total
+      // Update modem total data used
       await supabase.from('modems').update({
         data_used_bytes: totalBytes,
       }).eq('id', modem.id);
@@ -120,30 +120,29 @@ async function syncBandwidth(modems) {
         .eq('status', 'active');
 
       if (subs && subs.length > 0) {
-        // Log usage
-        const logEntries = subs.map(s => ({
-          subscription_id: s.id,
-          bytes_in:        bytesIn,
-          bytes_out:       bytesOut,
-          logged_at:       new Date().toISOString(),
-        }));
+        const gbUsed = totalBytes / (1024 ** 3);
+        const gbUsedFormatted = parseFloat(gbUsed.toFixed(3));
 
-        await supabase.from('usage_logs').insert(logEntries);
-
-        // Check if any GB-limited subscriptions are exhausted
+        // Update all active subscriptions with the current GB used
         for (const sub of subs) {
-          if (sub.gb_limit) {
-            const gbUsed = totalBytes / (1024 ** 3);
-            if (gbUsed >= sub.gb_limit) {
-              // Suspend subscription
-              await supabase.from('subscriptions').update({
-                status:   'expired',
-                gb_used:  gbUsed,
-              }).eq('id', sub.id);
-
-              console.log(`[SupabaseSync] Subscription ${sub.id} expired (GB limit reached)`);
-            }
+          const updateData = { gb_used: gbUsedFormatted };
+          if (sub.gb_limit && gbUsed >= sub.gb_limit) {
+            updateData.status = 'expired';
+            console.log(`[SupabaseSync] Subscription ${sub.id} expired (GB limit reached: ${gbUsedFormatted}/${sub.gb_limit} GB)`);
           }
+          await supabase.from('subscriptions').update(updateData).eq('id', sub.id);
+        }
+
+        // Log periodic usage to usage_logs
+        if (totalBytes > 0) {
+          const logEntries = subs.map(s => ({
+            subscription_id: s.id,
+            bytes_in:        bytesIn,
+            bytes_out:       bytesOut,
+            logged_at:       new Date().toISOString(),
+          }));
+
+          await supabase.from('usage_logs').insert(logEntries).catch(() => {});
         }
       }
     } catch (e) {

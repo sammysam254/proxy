@@ -272,14 +272,19 @@ export default function Dashboard({ session }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadSubs();
+    loadSubs(true);
+    // Live update bandwidth and subscriptions every 15 seconds
+    const interval = setInterval(() => {
+      loadSubs(false);
+    }, 15000);
+    return () => clearInterval(interval);
   }, []);
 
-  async function loadSubs() {
-    setLoading(true);
+  async function loadSubs(showLoader = true) {
+    if (showLoader) setLoading(true);
     const { data, error } = await getMySubscriptions();
     if (!error) setSubs(data || []);
-    setLoading(false);
+    if (showLoader) setLoading(false);
   }
 
   const active  = subs.filter(s => s.status === 'active');

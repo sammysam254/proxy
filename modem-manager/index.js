@@ -302,8 +302,8 @@ async function main() {
   // Detection cycle: every 30 seconds
   cron.schedule('*/30 * * * * *', runCycle);
 
-  // Bandwidth sync: every 5 minutes
-  cron.schedule('*/5 * * * *', async () => {
+  // Bandwidth sync: every 15 seconds
+  cron.schedule('*/15 * * * * *', async () => {
     const proxying = [...registry.values()].filter(d => d.state === 'proxying');
     if (proxying.length > 0) {
       await sync.syncBandwidth(proxying).catch(e => {
