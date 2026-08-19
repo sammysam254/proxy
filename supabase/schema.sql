@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS modems (
   signal      INTEGER DEFAULT 0,                     -- signal strength 0-100
   operator    TEXT,                                   -- carrier name
   iccid       TEXT,                                   -- SIM card ICCID
-  device_path TEXT UNIQUE,                            -- /dev/ttyUSB0, COM3, or ADB serial
+  device_path TEXT,                                   -- /dev/ttyUSB0, COM3, or ADB serial
   data_used_bytes BIGINT DEFAULT 0,
   -- Android phone columns
   is_android       BOOLEAN DEFAULT false,             -- true = Android phone via ADB/tethering
@@ -29,6 +29,17 @@ CREATE TABLE IF NOT EXISTS modems (
   last_seen   TIMESTAMPTZ DEFAULT NOW(),
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure device_path has unique constraint if table already exists
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'modems_device_path_key'
+  ) THEN
+    ALTER TABLE modems ADD CONSTRAINT modems_device_path_key UNIQUE (device_path);
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ============================================
 -- PROXIES TABLE
@@ -50,7 +61,7 @@ CREATE TABLE IF NOT EXISTS proxies (
 -- ============================================
 CREATE TABLE IF NOT EXISTS plans (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name          TEXT UNIQUE NOT NULL,
+  name          TEXT NOT NULL,
   price_usd     NUMERIC(10,2) NOT NULL,
   duration_days INTEGER,                              -- NULL = pay-per-gb
   gb_limit      NUMERIC(10,3),                       -- NULL = unlimited (time-based)
@@ -59,17 +70,22 @@ CREATE TABLE IF NOT EXISTS plans (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default plans (safe on conflict)
-INSERT INTO plans (name, price_usd, duration_days, gb_limit, description) VALUES
-  ('Pay Per GB',  3.00,  NULL, 1,    '3 USD per GB of data used'),
-  ('Daily',      10.00,  1,    NULL, 'Unlimited data for 1 day'),
-  ('Weekly',     30.00,  7,    NULL, 'Unlimited data for 7 days'),
-  ('Monthly',    80.00,  30,   NULL, 'Unlimited data for 30 days')
-ON CONFLICT (name) DO UPDATE SET
-  price_usd = EXCLUDED.price_usd,
-  duration_days = EXCLUDED.duration_days,
-  gb_limit = EXCLUDED.gb_limit,
-  description = EXCLUDED.description;
+-- Insert default plans safely without requiring unique constraints
+INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
+SELECT 'Pay Per GB', 3.00, NULL, 1, '3 USD per GB of data used'
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Pay Per GB');
+
+INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
+SELECT 'Daily', 10.00, 1, NULL, 'Unlimited data for 1 day'
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Daily');
+
+INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
+SELECT 'Weekly', 30.00, 7, NULL, 'Unlimited data for 7 days'
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Weekly');
+
+INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
+SELECT 'Monthly', 80.00, 30, NULL, 'Unlimited data for 30 days'
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Monthly');
 
 -- ============================================
 -- CUSTOMERS TABLE (extends Supabase auth.users)
