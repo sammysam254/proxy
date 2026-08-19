@@ -160,12 +160,18 @@ function ProxyCredCard({ sub }) {
             <span>{countdown.fullText}</span>
           </div>
         )}
-        {sub.gb_limit && (
-          <div className="flex items-center gap-sm text-sm text-muted">
-            <Database size={14} />
-            {(sub.gb_used || 0).toFixed(2)} / {sub.gb_limit} GB
-          </div>
-        )}
+        <div className="flex items-center gap-sm text-sm text-muted" style={{
+          background: 'rgba(255, 255, 255, 0.04)',
+          padding: '4px 10px',
+          borderRadius: '6px',
+        }}>
+          <Database size={14} />
+          {sub.gb_limit ? (
+            <span>{(sub.gb_used || 0).toFixed(2)} / {sub.gb_limit} GB</span>
+          ) : (
+            <span>{(sub.gb_used || 0).toFixed(2)} GB used (Unlimited)</span>
+          )}
+        </div>
       </div>
 
       {/* GB progress */}
