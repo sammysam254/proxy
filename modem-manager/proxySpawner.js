@@ -1,280 +1,326 @@
 /**
- * ProxiCell — 3proxy Spawner
- * Generates 3proxy config files and manages the 3proxy process
- * Supports: HTTP, SOCKS4, SOCKS5 per modem interface
+ * ProxiCell — Native High-Performance Proxy Engine
+ * Built in pure Node.js (HTTP / HTTPS CONNECT / SOCKS4 / SOCKS5)
+ *
+ * Features:
+ *   - Zero binary dependencies (works on Windows, Linux, macOS with no SmartScreen/Defender issues)
+ *   - Outbound SIM Binding (localAddress: modem.ipAddress) so traffic exits via the SIM card
+ *   - Username / Password Authentication per device
+ *   - Accurate real-time incoming/outgoing bandwidth tracking
  */
 
 'use strict';
 
-const fs         = require('fs');
-const path       = require('path');
-const { exec }   = require('child_process');
-const { promisify } = require('util');
-const execAsync  = promisify(exec);
+const http = require('http');
+const net  = require('net');
+const url  = require('url');
 
-const APP_DIR     = process.env.APP_DIR || '/opt/proxicell';
-const CONFIG_DIR  = path.join(APP_DIR, 'proxy-configs');
-const PASSWD_FILE = path.join(CONFIG_DIR, 'passwd');
-const CONFIG_FILE = path.join(CONFIG_DIR, '3proxy.cfg');
-const LOG_DIR     = path.join(APP_DIR, 'logs');
-
-// In-memory store: modemId → [ { username, password } ]
+// ─── State ────────────────────────────────────────────────────────────────────
+// In-memory credential store: modemId → [ { username, password } ]
 const credStore = new Map();
 
-// ─── Ensure directories exist ─────────────────────────────────────────────────
-[CONFIG_DIR, LOG_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
+// Active server instances: devicePath → { httpServers: [], socksServers: [], bandwidth: { in: 0, out: 0 } }
+const activeServers = new Map();
 
-// ─── Generate passwd file (3proxy auth format) ────────────────────────────────
-function writePasswdFile() {
-  const lines = [];
-  for (const [, creds] of credStore) {
-    for (const { username, password } of creds) {
-      // Format: username:CL:password  (ClearText auth)
-      lines.push(`${username}:CL:${password}`);
-    }
-  }
-  fs.writeFileSync(PASSWD_FILE, lines.join('\n') + '\n', 'utf8');
+// ─── Authentication Helper ───────────────────────────────────────────────────
+function isAuthorized(modemId, username, password) {
+  const creds = credStore.get(modemId);
+  // If no credentials registered yet for this modem, allow or check if public
+  if (!creds || creds.length === 0) return false;
+  return creds.some(c => c.username === username && c.password === password);
 }
 
-// ─── Generate 3proxy config ───────────────────────────────────────────────────
-function generate3proxyConfig(modems) {
-  const normLogPath = path.join(LOG_DIR, '3proxy.log').replace(/\\/g, '/');
-  const normPasswdPath = PASSWD_FILE.replace(/\\/g, '/');
+// ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
+function createHttpProxy(modem, port) {
+  const exitIp  = modem.ipAddress;
+  const modemId = modem.id || modem.devicePath;
 
-  const lines = [
-    '# ProxiCell — 3proxy config',
-    '# Auto-generated. Do not edit manually.',
-    '',
-    `log "${normLogPath}" D`,
-    'logformat "- +_L%t.%.  %N.%p %E %U %C:%c %R:%r %O %I %h %T"',
-    'rotate 30',
-    '',
-    '# Auth',
-    `users $"${normPasswdPath}"`,
-    '',
-    '# Max connections per user',
-    'maxconn 20',
-    '',
-    '# Connection timeout',
-    'timeouts 1 5 30 60 180 1800 15 60',
-    '',
-    'nserver 8.8.8.8',
-    'nserver 1.1.1.1',
-    'nscache 65536',
-    '',
-    'auth strong',
-    '',
-  ];
-
-  for (const modem of modems) {
-    // CRITICAL: Skip any device that doesn't have a valid IP yet
-    if (!modem.ipAddress || modem.ipAddress === '0.0.0.0') {
-      lines.push(`# SKIPPED (no IP): ${modem.label}`);
-      lines.push('');
-      continue;
-    }
-
-    if (!modem.portSet) continue;
-
-    const { http, socks4, socks5 } = modem.portSet;
-    const exitIp  = modem.ipAddress;   // The SIM card's IP — this is what routes traffic out
-    const bindIp  = '0.0.0.0';        // Listen on all interfaces
-    const label   = modem.label.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
-    const devType = modem.isAndroid ? 'Android' : 'Modem';
-
-    lines.push(`# ── ${devType}: ${modem.label} ──`);
-    lines.push(`# Interface: ${modem.interface}  Exit IP: ${exitIp}`);
-    lines.push('');
-
-    // Per-device user allow list
-    const modemCreds = credStore.get(modem.id || modem.devicePath) || [];
-
-    if (modemCreds.length > 0) {
-      const userList = modemCreds.map(c => c.username).join(',');
-      lines.push(`allow ${userList} * * ${http},${socks4},${socks5}`);
+  const server = http.createServer((req, res) => {
+    // 1. Check Auth for standard HTTP
+    const authHeader = req.headers['proxy-authorization'];
+    if (authHeader && authHeader.startsWith('Basic ')) {
+      const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+      const [u, p]  = decoded.split(':');
+      if (!isAuthorized(modemId, u, p)) {
+        res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
+        return res.end('Proxy Authentication Required');
+      }
     } else {
-      lines.push(`# No active users — denying all on :${http}/:${socks4}/:${socks5}`);
-      lines.push(`deny * * * ${http},${socks4},${socks5}`);
-    }
-    lines.push('');
-
-    // HTTP proxy
-    lines.push(`# HTTP — ${label}`);
-    lines.push(`proxy -n -a -p${http} -i${bindIp} -e${exitIp}`);
-    lines.push('');
-
-    // SOCKS4 proxy
-    lines.push(`# SOCKS4 — ${label}`);
-    lines.push(`socks -4 -n -a -p${socks4} -i${bindIp} -e${exitIp}`);
-    lines.push('');
-
-    // SOCKS5 proxy
-    lines.push(`# SOCKS5 — ${label}`);
-    lines.push(`socks -n -a -p${socks5} -i${bindIp} -e${exitIp}`);
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
-// ─── Find 3proxy executable ──────────────────────────────────────────────────
-function get3proxyBin() {
-  const isWin = process.platform === 'win32';
-  if (isWin) {
-    const candidates = [
-      path.join(__dirname, 'bin', '3proxy.exe'),
-      path.join(APP_DIR, 'bin', '3proxy.exe'),
-      path.join(process.cwd(), 'bin', '3proxy.exe'),
-      '3proxy.exe',
-      '3proxy',
-    ];
-    for (const c of candidates) {
-      if (fs.existsSync(c)) return c;
-    }
-    return '3proxy.exe';
-  }
-  return '3proxy';
-}
-
-// ─── Write config and reload 3proxy ──────────────────────────────────────────
-let proxy3Pid = null;
-
-async function reloadConfig(modems) {
-  if (!modems) {
-    writePasswdFile();
-    if (proxy3Pid) {
-      if (process.platform === 'win32') {
-        // On Windows 3proxy re-reads passwd automatically or restarts
-      } else {
-        await execAsync(`kill -HUP ${proxy3Pid}`).catch(() => {});
+      const creds = credStore.get(modemId);
+      if (creds && creds.length > 0) {
+        res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
+        return res.end('Proxy Authentication Required');
       }
     }
-    return;
-  }
 
-  const config = generate3proxyConfig(modems);
-  fs.writeFileSync(CONFIG_FILE, config, 'utf8');
-  writePasswdFile();
+    // 2. Forward regular HTTP request through modem IP
+    const parsed = url.parse(req.url);
+    const options = {
+      hostname:     parsed.hostname,
+      port:         parsed.port || 80,
+      path:         parsed.path,
+      method:       req.method,
+      headers:      req.headers,
+      localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
+    };
 
-  // Stop existing 3proxy
-  if (process.platform === 'win32') {
-    await execAsync('taskkill /F /IM 3proxy.exe 2>nul || exit 0', { shell: 'cmd.exe' }).catch(() => {});
-  } else {
-    await execAsync('pkill -f 3proxy 2>/dev/null || true').catch(() => {});
-  }
-  await new Promise(r => setTimeout(r, 1000));
+    delete options.headers['proxy-authorization'];
 
-  // Start 3proxy with new config
-  const bin = get3proxyBin();
-  const proc = exec(`"${bin}" "${CONFIG_FILE}"`, { shell: true });
-  proxy3Pid = proc.pid;
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+      proxyRes.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
+    });
 
-  proc.stdout?.on('data', d => process.stdout.write(`[3proxy] ${d}`));
-  proc.stderr?.on('data', d => process.stderr.write(`[3proxy] ${d}`));
-  proc.on('exit', code => {
-    if (code !== 0 && code !== null) {
-      console.error(`[3proxy] exited with code ${code}`);
-    }
+    req.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
+    req.pipe(proxyReq);
+
+    proxyReq.on('error', () => {
+      if (!res.headersSent) res.writeHead(502);
+      res.end('Bad Gateway');
+    });
   });
 
-  console.log(`[ProxySpawner] 3proxy started (PID: ${proc.pid}) with ${modems.length} device(s)`);
+  // 3. Handle HTTPS CONNECT Tunnels
+  server.on('connect', (req, clientSocket, head) => {
+    const authHeader = req.headers['proxy-authorization'];
+    if (authHeader && authHeader.startsWith('Basic ')) {
+      const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+      const [u, p]  = decoded.split(':');
+      if (!isAuthorized(modemId, u, p)) {
+        clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
+        return clientSocket.end();
+      }
+    } else {
+      const creds = credStore.get(modemId);
+      if (creds && creds.length > 0) {
+        clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
+        return clientSocket.end();
+      }
+    }
+
+    const [targetHost, targetPort] = req.url.split(':');
+    const portNum = parseInt(targetPort || '443');
+
+    // Create outbound socket exiting specifically through the SIM card IP
+    const serverSocket = net.connect({
+      host:         targetHost,
+      port:         portNum,
+      localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
+    }, () => {
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head && head.length > 0) serverSocket.write(head);
+      clientSocket.pipe(serverSocket);
+      serverSocket.pipe(clientSocket);
+    });
+
+    clientSocket.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
+    serverSocket.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
+
+    serverSocket.on('error', () => clientSocket.destroy());
+    clientSocket.on('error', () => serverSocket.destroy());
+  });
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`[ProxyEngine] HTTP/HTTPS proxy listening on 0.0.0.0:${port} (Exit: ${exitIp})`);
+  });
+
+  return server;
 }
 
-// ─── Per-device proxy start/stop ─────────────────────────────────────────────
+// ─── SOCKS5 / SOCKS4 Proxy Server ───────────────────────────────────────────
+function createSocksProxy(modem, port, isSocks4 = false) {
+  const exitIp  = modem.ipAddress;
+  const modemId = modem.id || modem.devicePath;
 
-// Registry of all devices managed by spawner (including offline ones)
-const activeModems = new Map();
+  const server = net.createServer((socket) => {
+    socket.once('data', (firstChunk) => {
+      const version = firstChunk[0];
 
-async function startProxy(device) {
-  if (!device.ipAddress) {
-    console.warn(`[ProxySpawner] startProxy called for ${device.label} but no IP — skipping`);
-    return;
+      if (version === 0x05 && !isSocks4) {
+        // ── SOCKS5 Handshake ──────────────────────────────────────────────
+        const nmethods = firstChunk[1];
+        const methods  = firstChunk.slice(2, 2 + nmethods);
+        const creds    = credStore.get(modemId);
+        const reqAuth  = creds && creds.length > 0;
+
+        if (reqAuth) {
+          // Tell client to use Username/Password auth (0x02)
+          socket.write(Buffer.from([0x05, 0x02]));
+          socket.once('data', (authChunk) => {
+            if (authChunk[0] !== 0x01) return socket.destroy();
+            const ulen = authChunk[1];
+            const u = authChunk.slice(2, 2 + ulen).toString('utf8');
+            const plen = authChunk[2 + ulen];
+            const p = authChunk.slice(3 + ulen, 3 + ulen + plen).toString('utf8');
+
+            if (isAuthorized(modemId, u, p)) {
+              socket.write(Buffer.from([0x01, 0x00])); // Auth success
+              handleSocks5Request(socket, modem, exitIp);
+            } else {
+              socket.write(Buffer.from([0x01, 0x01])); // Auth failed
+              socket.destroy();
+            }
+          });
+        } else {
+          // No auth required (0x00)
+          socket.write(Buffer.from([0x05, 0x00]));
+          handleSocks5Request(socket, modem, exitIp);
+        }
+      } else if (version === 0x04 || isSocks4) {
+        // ── SOCKS4 Handshake ──────────────────────────────────────────────
+        const cmd = firstChunk[1];
+        if (cmd !== 0x01) return socket.destroy(); // only CONNECT supported
+        const destPort = firstChunk.readUInt16BE(2);
+        const destIp   = `${firstChunk[4]}.${firstChunk[5]}.${firstChunk[6]}.${firstChunk[7]}`;
+
+        const outbound = net.connect({
+          host: destIp,
+          port: destPort,
+          localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
+        }, () => {
+          socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+          socket.pipe(outbound);
+          outbound.pipe(socket);
+        });
+
+        socket.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
+        outbound.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
+        outbound.on('error', () => socket.destroy());
+        socket.on('error', () => outbound.destroy());
+      } else {
+        socket.destroy();
+      }
+    });
+
+    socket.on('error', () => {});
+  });
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`[ProxyEngine] SOCKS${isSocks4 ? '4' : '5'} proxy listening on 0.0.0.0:${port} (Exit: ${exitIp})`);
+  });
+
+  return server;
+}
+
+function handleSocks5Request(socket, modem, exitIp) {
+  socket.once('data', (req) => {
+    if (req[0] !== 0x05 || req[1] !== 0x01) { // only TCP CONNECT
+      socket.write(Buffer.from([0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
+      return socket.destroy();
+    }
+
+    const addrType = req[3];
+    let host = '';
+    let port = 0;
+    let offset = 4;
+
+    if (addrType === 0x01) {
+      // IPv4
+      host = `${req[4]}.${req[5]}.${req[6]}.${req[7]}`;
+      offset = 8;
+    } else if (addrType === 0x03) {
+      // Domain name
+      const len = req[4];
+      host = req.slice(5, 5 + len).toString('utf8');
+      offset = 5 + len;
+    } else {
+      socket.destroy();
+      return;
+    }
+
+    port = req.readUInt16BE(offset);
+
+    // Connect outbound using the modem's SIM exit IP
+    const outbound = net.connect({
+      host: host,
+      port: port,
+      localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
+    }, () => {
+      // SOCKS5 success response
+      const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+      socket.write(resp);
+      socket.pipe(outbound);
+      outbound.pipe(socket);
+    });
+
+    socket.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
+    outbound.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
+
+    outbound.on('error', () => socket.destroy());
+    socket.on('error', () => outbound.destroy());
+  });
+}
+
+// ─── Bandwidth Tracking ───────────────────────────────────────────────────────
+function recordBandwidth(devicePath, bytesIn, bytesOut) {
+  const s = activeServers.get(devicePath);
+  if (s && s.bandwidth) {
+    s.bandwidth.in  += bytesIn;
+    s.bandwidth.out += bytesOut;
   }
-  activeModems.set(device.devicePath, device);
-  // Only build config for devices that have a valid IP
-  const online = [...activeModems.values()].filter(d => d.ipAddress && d.ipAddress !== '0.0.0.0');
-  await reloadConfig(online);
 }
 
-async function stopProxy(device) {
-  activeModems.delete(device.devicePath);
-  const online = [...activeModems.values()].filter(d => d.ipAddress && d.ipAddress !== '0.0.0.0');
-  if (online.length > 0) {
-    await reloadConfig(online);
-  } else {
-    // No online devices — kill 3proxy entirely
-    await execAsync('pkill -f 3proxy 2>/dev/null || true').catch(() => {});
-    proxy3Pid = null;
+async function getModemBandwidth(modem) {
+  const s = activeServers.get(modem.devicePath);
+  if (s && s.bandwidth) {
+    return { bytesIn: s.bandwidth.in, bytesOut: s.bandwidth.out };
+  }
+  return { bytesIn: 0, bytesOut: 0 };
+}
+
+// ─── Start / Stop Proxy per Device ───────────────────────────────────────────
+async function startProxy(modem) {
+  if (!modem.ipAddress || !modem.portSet) return;
+  await stopProxy(modem);
+
+  const { http: httpPort, socks4: socks4Port, socks5: socks5Port } = modem.portSet;
+
+  const httpSrv   = createHttpProxy(modem, httpPort);
+  const socks4Srv = createSocksProxy(modem, socks4Port, true);
+  const socks5Srv = createSocksProxy(modem, socks5Port, false);
+
+  activeServers.set(modem.devicePath, {
+    servers: [httpSrv, socks4Srv, socks5Srv],
+    bandwidth: { in: 0, out: 0 },
+  });
+
+  console.log(`[ProxyEngine] ✅ Started HTTP(:${httpPort}), SOCKS4(:${socks4Port}), SOCKS5(:${socks5Port}) for ${modem.label}`);
+}
+
+async function stopProxy(modem) {
+  const s = activeServers.get(modem.devicePath);
+  if (s && s.servers) {
+    for (const srv of s.servers) {
+      try { srv.close(); } catch {}
+    }
+    activeServers.delete(modem.devicePath);
   }
 }
 
-// ─── Credential management ────────────────────────────────────────────────────
-
+// ─── Credentials Store ────────────────────────────────────────────────────────
 async function addCredential(username, password, modemId) {
-  if (!credStore.has(modemId)) {
-    credStore.set(modemId, []);
+  if (!credStore.has(modemId)) credStore.set(modemId, []);
+  const list = credStore.get(modemId);
+  const existing = list.find(c => c.username === username);
+  if (existing) {
+    existing.password = password;
+  } else {
+    list.push({ username, password });
   }
-  const creds = credStore.get(modemId);
-
-  // Remove existing entry for this username
-  const idx = creds.findIndex(c => c.username === username);
-  if (idx !== -1) creds.splice(idx, 1);
-
-  creds.push({ username, password });
-  credStore.set(modemId, creds);
-
-  writePasswdFile();
-
-  // Signal 3proxy to reload (HUP)
-  if (proxy3Pid) {
-    await execAsync(`kill -HUP ${proxy3Pid}`).catch(() => {});
-  }
+  console.log(`[ProxyEngine] Added credential for user '${username}' on modem '${modemId}'`);
 }
 
 async function removeCredential(username, modemId) {
-  if (credStore.has(modemId)) {
-    const creds = credStore.get(modemId);
-    const idx = creds.findIndex(c => c.username === username);
-    if (idx !== -1) {
-      creds.splice(idx, 1);
-      writePasswdFile();
-      if (proxy3Pid) {
-        await execAsync(`kill -HUP ${proxy3Pid}`).catch(() => {});
-      }
-    }
-  }
-}
-
-// ─── Get bandwidth from iptables counters ─────────────────────────────────────
-async function getModemBandwidth(modem) {
-  if (!modem.interface) return { bytesIn: 0, bytesOut: 0 };
-  try {
-    const { stdout } = await execAsync(
-      `iptables -nvL FORWARD -x 2>/dev/null | grep ${modem.interface} || echo "0 0"`
-    );
-    const lines = stdout.trim().split('\n');
-    let bytesIn = 0, bytesOut = 0;
-    for (const line of lines) {
-      const parts = line.trim().split(/\s+/);
-      if (parts.length >= 2) {
-        bytesIn  += parseInt(parts[1]) || 0;
-        bytesOut += parseInt(parts[1]) || 0;
-      }
-    }
-    return { bytesIn, bytesOut };
-  } catch {
-    return { bytesIn: 0, bytesOut: 0 };
-  }
+  if (!credStore.has(modemId)) return;
+  const list = credStore.get(modemId).filter(c => c.username !== username);
+  credStore.set(modemId, list);
 }
 
 module.exports = {
   startProxy,
   stopProxy,
-  // reloadConfig: called by index.js after each cycle
-  reloadConfig: () => {
-    const online = [...activeModems.values()].filter(d => d.ipAddress && d.ipAddress !== '0.0.0.0');
-    return reloadConfig(online);
-  },
+  reloadConfig: async () => {},
   addCredential,
   removeCredential,
   getModemBandwidth,

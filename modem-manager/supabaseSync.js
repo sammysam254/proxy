@@ -8,6 +8,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const spawner          = require('./proxySpawner');
 
+const VPS_HOST     = process.env.VPS_HOST || '157.151.206.163';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zsfijzjzioaragnlopgn.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'dummy_key';
 
