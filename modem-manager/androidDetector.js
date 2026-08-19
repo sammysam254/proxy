@@ -11,40 +11,55 @@
  *   - Phone connected via USB cable
  */
 
-'use strict';
+const { execFile, exec } = require('child_process');
+const { promisify }       = require('util');
+const execAsync           = promisify(exec);
+const fs                  = require('fs');
+const path                = require('path');
 
-const { promisify }  = require('util');
-const { exec }       = require('child_process');
-const execAsync      = promisify(exec);
+// ─── Find adb binary path ───────────────────────────────────────────────────
+function getAdbBin() {
+  const candidates = [
+    path.join(__dirname, 'bin', 'platform-tools', 'adb.exe'),
+    path.join(__dirname, 'bin', 'platform-tools', 'adb'),
+    path.join(process.cwd(), 'modem-manager', 'bin', 'platform-tools', 'adb.exe'),
+    path.join(process.cwd(), 'bin', 'platform-tools', 'adb.exe'),
+    'adb.exe',
+    'adb',
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return 'adb';
+}
+
+// ─── Run adb with args via execFile ──────────────────────────────────────────
+function runAdb(args) {
+  return new Promise((resolve) => {
+    const bin = getAdbBin();
+    execFile(bin, args, { timeout: 8000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      resolve(stdout ? stdout.trim() : null);
+    });
+  });
+}
 
 // ─── Helper: run adb shell command on a device ────────────────────────────────
-async function adb(serial, cmd) {
-  try {
-    const { stdout } = await execAsync(`adb -s ${serial} shell ${cmd}`, { timeout: 8000 });
-    return stdout.trim();
-  } catch {
-    return null;
-  }
+async function adb(serial, shellCmd) {
+  // shellCmd can be a string, we split or pass to sh -c
+  return runAdb(['-s', serial, 'shell', shellCmd]);
 }
 
 // ─── Helper: run adb command (not shell) ─────────────────────────────────────
-async function adbCmd(cmd) {
-  try {
-    const { stdout } = await execAsync(`adb ${cmd}`, { timeout: 8000 });
-    return stdout.trim();
-  } catch {
-    return null;
-  }
+async function adbCmd(cmdStr) {
+  const args = cmdStr.trim().split(/\s+/);
+  return runAdb(args);
 }
 
 // ─── Check if adb is installed ───────────────────────────────────────────────
 async function isAdbAvailable() {
-  try {
-    await execAsync('adb version', { timeout: 5000 });
-    return true;
-  } catch {
-    return false;
-  }
+  const out = await runAdb(['version']);
+  return !!out;
 }
 
 // ─── Get list of connected ADB devices ───────────────────────────────────────
@@ -70,19 +85,43 @@ async function getAndroidTetheredInterface(serial) {
   // ── Windows implementation ────────────────────────────────────────────────
   if (process.platform === 'win32') {
     try {
-      const { stdout } = await execAsync('ipconfig', { timeout: 4000 });
-      // Look for Remote NDIS, USB Ethernet, or Cellular adapter sections
-      const sections = stdout.split(/\r?\n\r?\n/);
-      for (const sec of sections) {
-        if (/NDIS|USB|Cellular|Android|RNDIS/i.test(sec) || (sec.includes('Ethernet adapter') && !sec.includes('vEthernet'))) {
-          const ipMatch = sec.match(/IPv4 Address[ .:]+([\d.]+)/i) || sec.match(/IP Address[ .:]+([\d.]+)/i);
-          const nameMatch = sec.match(/adapter ([^:\r\n]+):/i);
-          if (ipMatch && !ipMatch[1].startsWith('169.254.') && !ipMatch[1].startsWith('127.')) {
-            return {
-              iface: (nameMatch ? nameMatch[1].trim() : 'Ethernet'),
-              ipAddress: ipMatch[1].trim(),
-            };
-          }
+      const { stdout } = await execAsync('netsh interface ipv4 show addresses', { timeout: 4000 });
+      const blocks = stdout.split(/Configuration for interface /);
+
+      // Pass 1: Look specifically for secondary adapters with Default Gateway (active tethering)
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        const nameMatch = block.match(/^"([^"]+)"/);
+        const ifaceName = nameMatch ? nameMatch[1] : '';
+
+        // Skip virtual interfaces and loopback
+        if (/loopback|tailscale|virtualbox|vmware|vEthernet/i.test(ifaceName)) continue;
+        if (ifaceName.toLowerCase() === 'ethernet') continue; // skip primary LAN
+
+        const ipMatch = block.match(/IP Address:\s+([\d.]+)/i);
+        const gwMatch = block.match(/Default Gateway:\s+([\d.]+)/i);
+
+        if (ipMatch && gwMatch && !ipMatch[1].startsWith('169.254.') && !ipMatch[1].startsWith('127.')) {
+          return {
+            iface: ifaceName,
+            ipAddress: ipMatch[1].trim(),
+          };
+        }
+      }
+
+      // Pass 2: Look for any NDIS / Cellular / Android named adapter with valid IP
+      for (const block of blocks) {
+        const nameMatch = block.match(/^"([^"]+)"/);
+        const ifaceName = nameMatch ? nameMatch[1] : '';
+        if (/loopback|tailscale|virtualbox|vmware|vEthernet/i.test(ifaceName)) continue;
+        if (ifaceName.toLowerCase() === 'ethernet') continue;
+
+        const ipMatch = block.match(/IP Address:\s+([\d.]+)/i);
+        if (ipMatch && !ipMatch[1].startsWith('169.254.') && !ipMatch[1].startsWith('127.')) {
+          return {
+            iface: ifaceName,
+            ipAddress: ipMatch[1].trim(),
+          };
         }
       }
     } catch {}

@@ -181,21 +181,17 @@ RETURNS BOOLEAN AS $$
   SELECT COALESCE((SELECT is_admin FROM customers WHERE id = auth.uid()), false);
 $$ LANGUAGE sql SECURITY DEFINER;
 
--- Plans
-DROP POLICY IF EXISTS "plans_public_read" ON plans;
-CREATE POLICY "plans_public_read" ON plans FOR SELECT USING (true);
-
--- Modems
+-- Modems (public read, full access for modem manager sync)
 DROP POLICY IF EXISTS "modems_admin_all" ON modems;
-CREATE POLICY "modems_admin_all" ON modems USING (is_admin_user());
 DROP POLICY IF EXISTS "modems_public_read" ON modems;
-CREATE POLICY "modems_public_read" ON modems FOR SELECT USING (true);
+DROP POLICY IF EXISTS "modems_all" ON modems;
+CREATE POLICY "modems_all" ON modems FOR ALL USING (true) WITH CHECK (true);
 
--- Proxies
+-- Proxies (public read, full access for proxy manager)
 DROP POLICY IF EXISTS "proxies_admin_all" ON proxies;
-CREATE POLICY "proxies_admin_all" ON proxies USING (is_admin_user());
 DROP POLICY IF EXISTS "proxies_public_read" ON proxies;
-CREATE POLICY "proxies_public_read" ON proxies FOR SELECT USING (active = true);
+DROP POLICY IF EXISTS "proxies_all" ON proxies;
+CREATE POLICY "proxies_all" ON proxies FOR ALL USING (true) WITH CHECK (true);
 
 -- Customers
 DROP POLICY IF EXISTS "customers_self" ON customers;
@@ -215,14 +211,10 @@ CREATE POLICY "orders_self" ON orders USING (customer_id = auth.uid());
 DROP POLICY IF EXISTS "orders_admin" ON orders;
 CREATE POLICY "orders_admin" ON orders USING (is_admin_user());
 
--- Usage logs
+-- Usage logs (full access for bandwidth recorder)
 DROP POLICY IF EXISTS "usage_self" ON usage_logs;
-CREATE POLICY "usage_self" ON usage_logs USING (
-  is_admin_user() OR EXISTS (
-    SELECT 1 FROM subscriptions s
-    WHERE s.id = subscription_id AND s.customer_id = auth.uid()
-  )
-);
+DROP POLICY IF EXISTS "usage_all" ON usage_logs;
+CREATE POLICY "usage_all" ON usage_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- System config
 DROP POLICY IF EXISTS "sysconfig_admin" ON system_config;
