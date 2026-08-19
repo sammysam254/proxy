@@ -244,6 +244,28 @@ async function runCycle() {
   }
 }
 
+// ─── Terminate any previous orphan instances ──────────────────────────────
+async function killPreviousInstances() {
+  const currentPid = process.pid;
+  try {
+    if (process.platform === 'win32') {
+      const { execSync } = require('child_process');
+      log.info('Checking and cleaning up any stale previous instances...');
+      // 1. Kill any other node processes running modem-manager
+      try {
+        execSync(`powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'node.exe'\\" | Where-Object { $_.ProcessId -ne ${currentPid} -and ($_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*index.js*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 5000 });
+      } catch {}
+
+      // 2. Kill any stale SSH reverse tunnels from previous runs
+      try {
+        execSync(`powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*157.151.206.163*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 5000 });
+      } catch {}
+    }
+  } catch (e) {
+    // Non-fatal
+  }
+}
+
 // ─── Status table ─────────────────────────────────────────────────────────────
 function printStatusTable() {
   const devices = [...registry.values()];
@@ -276,9 +298,12 @@ function printStatusTable() {
 // ─── Startup ──────────────────────────────────────────────────────────────────
 async function main() {
   console.log(chalk.cyan.bold('\n  ╔══════════════════════════════════════════╗'));
-  console.log(chalk.cyan.bold('  ║  ProxiCell Modem Manager v2.0.0          ║'));
+  console.log(chalk.cyan.bold('  ║  Vertex Proxies — Modem Manager v2.0     ║'));
   console.log(chalk.cyan.bold('  ║  USB Modems + Android Phones             ║'));
   console.log(chalk.cyan.bold('  ╚══════════════════════════════════════════╝\n'));
+
+  // Terminate any previous instances & stale reverse tunnels
+  await killPreviousInstances();
 
   log.info('Starting up...');
   log.info(`VPS Host:  ${process.env.VPS_HOST || '(not set)'}`);
