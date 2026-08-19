@@ -170,7 +170,7 @@ export default function Storefront({ session }) {
         <section style={{ padding: '60px 0', background: 'var(--clr-bg-2)' }}>
           <div className="container">
             <h2 style={{ textAlign: 'center', fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', marginBottom: '8px' }}>
-              Why ProxiCell Mobile Proxies?
+              Why Vertex Mobile Proxies?
             </h2>
             <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '40px', fontSize: '0.95rem' }}>
               Built on real 4G/5G mobile carriers with dedicated hardware
@@ -312,9 +312,9 @@ export default function Storefront({ session }) {
           <div className="container">
             <div className="flex items-center justify-center gap-md" style={{ marginBottom: '12px' }}>
               <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
-              <span className="text-gradient" style={{ fontWeight: 700 }}>ProxiCell</span>
+              <span className="text-gradient" style={{ fontWeight: 700 }}>Vertex Proxies</span>
             </div>
-            <p>© {new Date().getFullYear()} ProxiCell. Real mobile proxies for professionals.</p>
+            <p>© {new Date().getFullYear()} Vertex Proxies. Real mobile proxies for professionals.</p>
           </div>
         </footer>
 

@@ -74,7 +74,7 @@ export default function AuthPage() {
         {/* Logo */}
         <div className="flex items-center gap-sm" style={{ marginBottom: '32px', justifyContent: 'center' }}>
           <div className="logo-icon"><Wifi size={18} color="#fff" /></div>
-          <span className="text-gradient" style={{ fontSize: '1.3rem', fontWeight: 800 }}>ProxiCell</span>
+          <span className="text-gradient" style={{ fontSize: '1.3rem', fontWeight: 800 }}>Vertex Proxies</span>
         </div>
 
         {/* Tab switcher */}

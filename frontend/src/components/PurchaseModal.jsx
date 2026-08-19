@@ -157,8 +157,17 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
   };
 
-  const [cryptoInvoiceUrl, setCryptoInvoiceUrl]     = useState(null);
+  const [showUsdtCheckout, setShowUsdtCheckout] = useState(false);
+  const [usdtNetwork, setUsdtNetwork]           = useState('TRC20'); // TRC20 | BEP20 | ERC20 | POLYGON
+  const [cryptoInvoiceUrl, setCryptoInvoiceUrl] = useState(null);
   const [pendingCryptoData, setPendingCryptoData] = useState(null);
+
+  const USDT_ADDRESSES = {
+    TRC20:   'TWMc4qXkGe57U6x87pY4F6Q2mN8K3sB9jA',
+    BEP20:   '0x83B38c8Eb3686D32490e55728a3fFF70984950e1',
+    ERC20:   '0x83B38c8Eb3686D32490e55728a3fFF70984950e1',
+    POLYGON: '0x83B38c8Eb3686D32490e55728a3fFF70984950e1',
+  };
 
   const handlePayWithCrypto = async () => {
     if (!selProxy) {
@@ -171,9 +180,16 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       const { data: order, error } = await createOrder(plan.id, selProxy.id, 'crypto');
       if (error) throw error;
 
-      // Call NOWPayments API directly
+      // Save pending order details
+      setPendingCryptoData({
+        orderId:   order.id,
+        planId:    plan.id,
+        proxyId:   selProxy.id,
+      });
+
+      // Also create NOWPayments invoice in background
       const apiKey = NOWPAYMENTS_API_KEY || 'QNJ3N44-2JP4AKM-PGPJXCK-3AQPC3T';
-      const res = await fetch('https://api.nowpayments.io/v1/invoice', {
+      fetch('https://api.nowpayments.io/v1/invoice', {
         method: 'POST',
         headers: {
           'x-api-key': apiKey,
@@ -183,28 +199,17 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           price_amount: parseFloat(plan.price_usd),
           price_currency: 'usd',
           order_id: order.id,
-          order_description: `ProxiCell ${plan.name} Proxy Subscription`,
+          order_description: `Vertex Proxies ${plan.name} Proxy Subscription`,
           success_url: `${window.location.origin}/dashboard?payment=success&order_id=${order.id}`,
           cancel_url: `${window.location.origin}/#pricing`,
         }),
-      });
+      }).then(r => r.json()).then(inv => {
+        if (inv?.invoice_url) setCryptoInvoiceUrl(inv.invoice_url);
+      }).catch(() => {});
 
-      const invoice = await res.json();
-
-      if (invoice?.invoice_url) {
-        // Save pending order details — do NOT activate subscription until payment is completed
-        setPendingCryptoData({
-          orderId:   order.id,
-          planId:    plan.id,
-          proxyId:   selProxy.id,
-          invoiceId: invoice.id ? String(invoice.id) : null,
-        });
-        setCryptoInvoiceUrl(invoice.invoice_url);
-        playClickSound();
-        toast.success('Crypto invoice created! Complete payment below to activate proxy.');
-      } else {
-        throw new Error(invoice?.message || 'Failed to create crypto invoice. Please try again.');
-      }
+      setShowUsdtCheckout(true);
+      playClickSound();
+      toast.success('USDT payment ready! Select your preferred network.');
     } catch (err) {
       playErrorSound();
       toast.error(err.message || 'Crypto payment error');
@@ -223,7 +228,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         pendingCryptoData.planId,
         pendingCryptoData.proxyId,
         'crypto',
-        pendingCryptoData.invoiceId
+        `USDT_${usdtNetwork}_${Date.now()}`
       );
       playSuccessSound();
       toast.success('🎉 Payment confirmed! Your proxy credentials are now active.');
@@ -236,17 +241,26 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
   };
 
+  const copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text);
+    playClickSound();
+    toast.success(`Copied ${label}!`, { duration: 1500 });
+  };
+
+  const currentAddress = USDT_ADDRESSES[usdtNetwork] || USDT_ADDRESSES.TRC20;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(currentAddress)}`;
+
   return (
     <div className="modal-backdrop" onClick={handleBackdrop}>
-      <div className="modal" style={{ maxWidth: cryptoInvoiceUrl ? '560px' : '480px', width: '92%' }}>
+      <div className="modal" style={{ maxWidth: showUsdtCheckout ? '520px' : '480px', width: '92%' }}>
         {/* Header */}
         <div className="flex justify-between items-center" style={{ marginBottom: '20px' }}>
           <div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '2px' }}>
-              {cryptoInvoiceUrl ? 'Complete Crypto Payment' : 'Purchase Plan'}
+            <h2 style={{ fontSize: '1.45rem', marginBottom: '2px' }}>
+              {showUsdtCheckout ? 'Pay with USDT' : 'Purchase Plan'}
             </h2>
             <p className="text-muted text-sm">
-              {cryptoInvoiceUrl ? 'Pay with USDT, BTC, ETH or other crypto' : 'Complete your proxy subscription'}
+              {showUsdtCheckout ? 'Select network, scan QR or copy address' : 'Complete your proxy subscription'}
             </p>
           </div>
           <button className="btn btn-ghost btn-sm modal-close" onClick={onClose} style={{ position: 'relative', top: 'auto', right: 'auto' }}>
@@ -254,47 +268,152 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           </button>
         </div>
 
-        {cryptoInvoiceUrl ? (
+        {showUsdtCheckout ? (
           <div>
-            <div style={{
-              width: '100%',
-              height: '520px',
-              borderRadius: 'var(--radius-md)',
-              overflow: 'hidden',
-              border: '1px solid var(--clr-border)',
-              background: '#fff',
-              marginBottom: '16px',
-            }}>
-              <iframe
-                src={cryptoInvoiceUrl}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-                title="NOWPayments Crypto Checkout"
-                allow="payment"
-              />
+            {/* USDT Network Selector */}
+            <div style={{ marginBottom: '16px' }}>
+              <label className="input-label" style={{ marginBottom: '8px' }}>Select USDT Network</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                {[
+                  { key: 'TRC20', label: 'TRC20', note: 'Tron (Lowest Fee)' },
+                  { key: 'BEP20', label: 'BEP20', note: 'BSC' },
+                  { key: 'ERC20', label: 'ERC20', note: 'Ethereum' },
+                  { key: 'POLYGON', label: 'Polygon', note: 'MATIC' },
+                ].map(net => (
+                  <button
+                    key={net.key}
+                    type="button"
+                    onClick={() => { playClickSound(); setUsdtNetwork(net.key); }}
+                    className={`btn btn-sm ${usdtNetwork === net.key ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{
+                      padding: '8px 4px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      flexDirection: 'column',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
+                    {net.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex gap-sm">
+            {/* High-Contrast QR Code Card */}
+            <div style={{
+              background: '#ffffff',
+              borderRadius: 'var(--radius-lg)',
+              padding: '16px',
+              textAlign: 'center',
+              marginBottom: '16px',
+              boxShadow: 'var(--shadow-md)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <img
+                src={qrUrl}
+                alt="USDT Deposit QR"
+                style={{
+                  width: '180px',
+                  height: '180px',
+                  display: 'block',
+                  borderRadius: '8px',
+                }}
+              />
+              <div style={{ color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', marginTop: '6px' }}>
+                USDT ({usdtNetwork})
+              </div>
+            </div>
+
+            {/* Amount and Address Cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
+              {/* Amount */}
+              <div className="card" style={{ padding: '12px 14px', background: 'var(--clr-surface-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>Exact Amount to Send</div>
+                  <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--clr-accent)' }}>
+                    {parseFloat(plan.price_usd).toFixed(2)} USDT
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(parseFloat(plan.price_usd).toFixed(2), 'Amount')}
+                  className="btn btn-secondary btn-sm"
+                  style={{ padding: '6px 12px' }}
+                >
+                  Copy Amount
+                </button>
+              </div>
+
+              {/* Address */}
+              <div className="card" style={{ padding: '12px 14px', background: 'var(--clr-surface-2)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)', marginBottom: '4px' }}>
+                  USDT ({usdtNetwork}) Deposit Address
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '0.78rem',
+                    color: 'var(--clr-text)',
+                    wordBreak: 'break-all',
+                    flex: 1,
+                    background: 'rgba(0,0,0,0.3)',
+                    padding: '8px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                  }}>
+                    {currentAddress}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(currentAddress, 'USDT Address')}
+                    className="btn btn-primary btn-sm"
+                    style={{ padding: '8px 12px', flexShrink: 0 }}
+                  >
+                    Copy Address
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-sm" style={{ marginBottom: cryptoInvoiceUrl ? '10px' : '0' }}>
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => {
-                  setCryptoInvoiceUrl(null);
+                  setShowUsdtCheckout(false);
                   setPendingCryptoData(null);
                 }}
                 style={{ flex: 1 }}
               >
-                ← Cancel
+                ← Back
               </button>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleConfirmCryptoPayment}
                 disabled={loading}
-                style={{ flex: 2 }}
+                style={{ flex: 2, padding: '12px' }}
               >
-                {loading ? 'Activating Proxy...' : 'I\'ve Completed Payment →'}
+                {loading ? 'Activating Proxy...' : 'I\'ve Sent the USDT →'}
               </button>
             </div>
+
+            {cryptoInvoiceUrl && (
+              <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                <a
+                  href={cryptoInvoiceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', textDecoration: 'underline' }}
+                >
+                  Open NOWPayments Gateway Page ↗
+                </a>
+              </div>
+            )}
           </div>
         ) : (
+
           <>
             {/* Plan summary */}
             <div className="card card-accent" style={{ marginBottom: '20px' }}>
@@ -338,11 +457,12 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 {[
                   { key: 'paystack', label: 'Card / M-Pesa',  icon: <CreditCard size={18} />,  sub: `KES ${(Math.round(parseFloat(plan.price_usd) * 133)).toLocaleString()} (Paystack)` },
-                  { key: 'crypto',   label: 'Crypto',        icon: <Bitcoin size={18} />,     sub: `$${parseFloat(plan.price_usd).toFixed(0)} (USDT, BTC)` },
+                  { key: 'crypto',   label: 'USDT Crypto',   icon: <Bitcoin size={18} />,     sub: `USDT (TRC20, BEP20, ERC20)` },
                 ].map(m => (
                   <button
                     key={m.key}
-                    onClick={() => setPayMethod(m.key)}
+                    type="button"
+                    onClick={() => { playClickSound(); setPayMethod(m.key); }}
                     style={{
                       padding: '14px',
                       borderRadius: 'var(--radius-md)',
@@ -381,6 +501,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                   You are signed in as Super Admin. You can simulate the full customer checkout instantly for $0.00 to inspect the credentials and dashboard.
                 </p>
                 <button
+                  type="button"
                   className="btn btn-sm"
                   style={{ background: '#8b5cf6', color: '#fff', width: '100%', fontWeight: 700, padding: '10px' }}
                   onClick={handleAdminSimulate}
@@ -398,7 +519,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
               marginBottom: '20px',
             }}>
               <Lock size={13} />
-              Payments are processed securely inside this window. Credentials activate immediately.
+              Secure instant checkout. Your mobile proxy is provisioned automatically upon payment.
             </div>
 
             {/* Action button */}
@@ -412,7 +533,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                 ? <><div className="loader" style={{ width: 18, height: 18 }} /> Processing...</>
                 : payMethod === 'paystack'
                   ? <>Pay KES {(Math.round(parseFloat(plan.price_usd) * 133)).toLocaleString()} ($${parseFloat(plan.price_usd).toFixed(0)}) with Card / M-Pesa <ChevronRight size={18} /></>
-                  : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with Crypto <ChevronRight size={18} /></>
+                  : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with USDT <ChevronRight size={18} /></>
               }
             </button>
           </>
@@ -421,4 +542,5 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     </div>
   );
 }
+
 

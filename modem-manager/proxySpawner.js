@@ -157,6 +157,14 @@ function createHttpProxy(modem, port) {
       }
     });
 
+    serverSocket.on('error', (err) => {
+      console.warn(`[ProxyEngine] Outbound connect error to ${targetHost}:${portNum} via ${exitIp}:`, err.message);
+      if (!clientSocket.destroyed) {
+        clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+        clientSocket.destroy();
+      }
+    });
+
     forwardStreams(clientSocket, serverSocket, modem.devicePath);
   });
 

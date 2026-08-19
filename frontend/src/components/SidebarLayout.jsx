@@ -8,14 +8,16 @@ import {
 import { signOut, isAdmin } from '../lib/supabase';
 
 const CUSTOMER_NAV = [
-  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/dashboard',          icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
-  { to: '/dashboard/settings', icon: <Settings size={18} />,        label: 'Settings' },
+  { to: '/',          icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',   icon: <Server size={18} />,          label: 'Proxies' },
+  { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
+  { to: '/settings',  icon: <Settings size={18} />,        label: 'Settings' },
 ];
 
 const GUEST_NAV = [
-  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/auth',               icon: <Users size={18} />,           label: 'Sign In / Register' },
+  { to: '/',          icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',   icon: <Server size={18} />,          label: 'Proxies' },
+  { to: '/auth',      icon: <Users size={18} />,           label: 'Sign In / Register' },
 ];
 
 const ADMIN_NAV = [
@@ -72,7 +74,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
         {!collapsed && (
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
             <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
-            <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.1rem' }}>ProxiCell</span>
+            <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.15rem' }}>Vertex Proxies</span>
           </Link>
         )}
         {collapsed && (
