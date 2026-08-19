@@ -1,44 +1,43 @@
 @echo off
-setlocal EnableExtensions
-title ProxiCell - Universal Auto Setup
+setlocal EnableExtensions EnableDelayedExpansion
+title Vertex Proxies — All-in-One Setup ^& Modem Launcher
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
-
-echo ================================================================
-echo           ProxiCell - Automated System Setup
-echo ================================================================
-echo [*] Working Directory: %SCRIPT_DIR%
-echo.
-
-:: ─── 1. Auto-Clone complete repository if missing ───
-if not exist "%SCRIPT_DIR%modem-manager\index.js" (
-    echo [*] Downloading ProxiCell system from GitHub...
-    if exist "%SCRIPT_DIR%proxy-tmp" rmdir /s /q "%SCRIPT_DIR%proxy-tmp"
-    git clone --depth 1 https://github.com/sammysam254/proxy.git "%SCRIPT_DIR%proxy-tmp"
-    if exist "%SCRIPT_DIR%proxy-tmp\modem-manager\index.js" (
-        xcopy /e /i /y "%SCRIPT_DIR%proxy-tmp\*" "%SCRIPT_DIR%" >nul
-        rmdir /s /q "%SCRIPT_DIR%proxy-tmp"
-        echo [OK] Repository cloned successfully.
-        echo.
-    ) else (
-        if exist "C:\proxy\modem-manager\index.js" cd /d "C:\proxy"
-    )
-)
-
 set "PROJ_DIR=%CD%\"
 
-:: ─── 2. Ensure Node.js & ADB in PATH ───
-set "PATH=C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\node;%USERPROFILE%\AppData\Roaming\npm;C:\Program Files\Git\cmd;C:\Program Files\Git\bin;%PROJ_DIR%modem-manager\bin;%PROJ_DIR%modem-manager\bin\platform-tools;%PATH%"
+echo ================================================================
+echo        VERTEX PROXIES — ALL-IN-ONE SETUP ^& MODEM LAUNCHER
+echo ================================================================
+echo [*] Project Directory: %PROJ_DIR%
+echo.
 
+:: ─── 1. Auto-Clean Any Stale / Previous Running Instances ───
+echo [*] Stopping any previous background instances...
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*index.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name = 'ssh.exe'\" | Where-Object { $_.CommandLine -like '*157.151.206.163*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+echo [OK] Previous instances cleaned.
+echo.
+
+:: ─── 2. Setup PATH (Node.js, Git, ADB, OpenSSH) ───
+set "PATH=C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\node;%USERPROFILE%\AppData\Roaming\npm;C:\Program Files\Git\cmd;C:\Program Files\Git\bin;%PROJ_DIR%modem-manager\bin;%PROJ_DIR%modem-manager\bin\platform-tools;C:\Windows\System32\OpenSSH;%PATH%"
+
+:: ─── 3. Verify / Auto-Install Node.js ───
 node -v >nul 2>&1
 if errorlevel 1 (
-    echo [*] Installing Node.js LTS via winget...
+    echo [*] Node.js not found in PATH. Attempting automatic installation via winget...
     winget install OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
     set "PATH=C:\Program Files\nodejs;%PATH%"
+    node -v >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Node.js is required. Please install Node.js from https://nodejs.org
+        pause
+        exit /b 1
+    )
 )
+echo [OK] Node.js runtime ready.
 
-:: ─── 3. Auto-Configure SSH Key for Oracle VPS Tunnel ───
+:: ─── 4. Auto-Configure SSH Key for Oracle VPS Reverse Tunnel ───
 set "SSH_DIR=%USERPROFILE%\.ssh"
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%"
 set "LOCAL_SSH_KEY=%SSH_DIR%\proxicell_tunnel"
@@ -52,9 +51,9 @@ if not exist "%LOCAL_SSH_KEY%" (
     )
 )
 icacls "%LOCAL_SSH_KEY%" /inheritance:r /grant:r "%USERNAME%:(R)" >nul 2>&1
-echo [OK] VPS Tunnel authentication keys configured.
+echo [OK] VPS Reverse Tunnel authorization keys configured.
 
-:: ─── 4. Auto-Configure Environment Variables ───
+:: ─── 5. Auto-Configure Environment Variables (.env) ───
 (
     echo VPS_HOST=157.151.206.163
     echo VPS_USER=opc
@@ -66,19 +65,36 @@ echo [OK] VPS Tunnel authentication keys configured.
     echo NODE_ENV=production
     echo LOG_LEVEL=info
 ) > "%PROJ_DIR%.env"
-echo [OK] Environment settings written to .env
+echo [OK] Environment settings verified in .env
 
-:: ─── 5. Install Dependencies ───
-echo [*] Installing modem-manager dependencies...
+:: ─── 6. Auto-Install / Verify Node Dependencies ───
+if not exist "%PROJ_DIR%modem-manager\node_modules" (
+    echo [*] Installing modem-manager dependencies...
+    cd /d "%PROJ_DIR%modem-manager"
+    call npm install
+    cd /d "%PROJ_DIR%"
+    echo [OK] Dependencies installed.
+) else (
+    echo [OK] Modem manager dependencies verified.
+)
+
+:: ─── 7. Hardware Initialization (Start ADB Daemon ^& Detect Devices) ───
+echo [*] Initializing Android Debug Bridge (ADB)...
+adb start-server >nul 2>&1
+echo [*] Scanning for connected Android phones and USB modems...
+adb devices -l
+echo.
+
+:: ─── 8. Launch Vertex Proxies Modem Manager Engine ───
+echo ================================================================
+echo   [SUCCESS] SYSTEM INITIALIZED ^& READY
+echo   Starting Vertex Proxies Modem Manager Engine...
+echo   VPS Host:       157.151.206.163
+echo   Web Dashboard:  https://proxyke.netlify.app
+echo ================================================================
+echo.
+
 cd /d "%PROJ_DIR%modem-manager"
-call npm install
-cd /d "%PROJ_DIR%"
-echo [OK] Dependencies ready.
-echo.
+node index.js
 
-echo ================================================================
-echo   [SUCCESS] Setup Completed!
-echo   Double-click "start.bat" to run the Proxy System.
-echo ================================================================
-echo.
 pause
