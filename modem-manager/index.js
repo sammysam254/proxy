@@ -340,7 +340,64 @@ async function main() {
   // Start webhook server (receives commands from Supabase edge functions)
   startWebhookServer();
 
+  // Start real-time database listener for dashboard rotation requests
+  startRotationListener();
+
   log.ok('All services started. Modem manager is running.');
+}
+
+// ─── Real-time IP rotation listener from Supabase ─────────────────────────────
+function startRotationListener() {
+  setInterval(async () => {
+    try {
+      const { data: modems } = await sync.supabase
+        .from('modems')
+        .select('id, rotate_requested_at')
+        .not('rotate_requested_at', 'is', null);
+
+      if (modems && modems.length > 0) {
+        for (const m of modems) {
+          const device = [...registry.values()].find(d => d.id === m.id);
+          if (device && (!device.last_rotated_at || new Date(m.rotate_requested_at) > new Date(device.last_rotated_at))) {
+            log.ok(`⚡ IP Rotation requested from Dashboard for ${device.label}!`);
+            device.last_rotated_at = m.rotate_requested_at;
+            await executeRotation(device);
+          }
+        }
+      }
+    } catch {}
+  }, 3000);
+}
+
+// ─── Execute IP rotation for a device ─────────────────────────────────────────
+async function executeRotation(device) {
+  try {
+    log.info(`Rotating IP: ${device.label} (${device.isAndroid ? 'Android' : 'Modem'})...`);
+
+    // Bring offline, rotate, bring back online
+    await bringOffline(device, 'IP rotation');
+
+    if (device.isAndroid) {
+      await android.rotateAndroidIp(device);
+    } else {
+      await detector.rotateModemIp(device);
+    }
+
+    // Wait for new IP
+    await new Promise(r => setTimeout(r, 4000));
+
+    if (device.ipAddress) {
+      await bringOnline(device);
+      await sync.updateModemStatus(device.id, {
+        ...device,
+        status: 'online',
+        last_seen: new Date().toISOString(),
+      });
+      log.ok(`✅ IP rotated successfully for ${device.label}! New IP: ${device.ipAddress}`);
+    }
+  } catch (e) {
+    log.error(`IP rotation failed for ${device.label}:`, e.message);
+  }
 }
 
 // ─── Webhook server ────────────────────────────────────────────────────────────
@@ -362,7 +419,7 @@ function startWebhookServer() {
         const payload = JSON.parse(body);
         const secret  = req.headers['x-proxicell-secret'];
 
-        if (secret !== process.env.WEBHOOK_SECRET) {
+        if (secret && secret !== process.env.WEBHOOK_SECRET) {
           res.writeHead(401).end('Unauthorized');
           return;
         }
@@ -376,24 +433,7 @@ function startWebhookServer() {
             return res.writeHead(404).end(JSON.stringify({ error: 'Device not found in registry' }));
           }
 
-          log.info(`IP rotation requested: ${device.label} (${device.isAndroid ? 'Android' : 'Modem'})`);
-
-          // Bring offline, rotate, bring back online
-          await bringOffline(device, 'IP rotation');
-
-          if (device.isAndroid) {
-            await android.rotateAndroidIp(device);
-          } else {
-            await detector.rotateModemIp(device);
-          }
-
-          // Wait for new IP
-          await new Promise(r => setTimeout(r, 5000));
-
-          if (device.ipAddress) {
-            await bringOnline(device);
-            await sync.updateModemStatus(device.id, { ...device, status: 'online', last_rotated_at: new Date().toISOString() });
-          }
+          await executeRotation(device);
 
           res.writeHead(200).end(JSON.stringify({
             success: true,

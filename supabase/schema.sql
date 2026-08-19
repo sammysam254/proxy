@@ -26,9 +26,13 @@ CREATE TABLE IF NOT EXISTS modems (
   model            TEXT,                              -- Device model (e.g. "Samsung Galaxy A54")
   android_version  TEXT,                              -- Android OS version
   battery          INTEGER,                           -- Battery % 0-100
+  rotate_requested_at TIMESTAMPTZ,                    -- Trigger for real-time IP rotation
   last_seen   TIMESTAMPTZ DEFAULT NOW(),
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure rotate_requested_at column exists if table was already created
+ALTER TABLE modems ADD COLUMN IF NOT EXISTS rotate_requested_at TIMESTAMPTZ;
 
 -- Ensure device_path has unique constraint if table already exists
 DO $$

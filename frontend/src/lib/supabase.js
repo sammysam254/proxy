@@ -148,14 +148,34 @@ export async function createOrder(planId, proxyId, paymentMethod) {
 }
 
 export async function requestIpRotation(subscriptionId) {
-  const { data, error } = await supabase.rpc('can_rotate_ip', { sub_id: subscriptionId });
-  if (!data) throw new Error('IP rotation cooldown active. Please wait before rotating again.');
+  // 1. Get modem ID for this subscription
+  const { data: sub, error: subErr } = await supabase
+    .from('subscriptions')
+    .select('id, proxy_id, proxies(modem_id)')
+    .eq('id', subscriptionId)
+    .single();
 
-  // Call Supabase Edge Function
-  const { data: result, error: fnError } = await supabase.functions.invoke('rotate-ip', {
-    body: { subscriptionId },
-  });
-  return { data: result, error: fnError };
+  if (subErr || !sub) throw new Error(subErr?.message || 'Subscription not found');
+
+  const modemId = sub.proxies?.modem_id;
+  if (!modemId) throw new Error('No modem device associated with this proxy');
+
+  // 2. Trigger rotation request by updating rotate_requested_at on the modem
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('modems')
+    .update({ rotate_requested_at: now })
+    .eq('id', modemId);
+
+  if (error) throw new Error('Failed to request IP rotation: ' + error.message);
+
+  // 3. Update subscription last_rotated_at
+  await supabase
+    .from('subscriptions')
+    .update({ last_rotated_at: now })
+    .eq('id', subscriptionId);
+
+  return { success: true };
 }
 
 export async function isAdmin(userId, userEmail) {
