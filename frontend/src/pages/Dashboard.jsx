@@ -73,6 +73,28 @@ function useCountdown(targetDate) {
   return timeLeft;
 }
 
+function formatBandwidth(gbUsed, gbLimit) {
+  const used = parseFloat(gbUsed || 0);
+  let usedFormatted = '';
+
+  if (used === 0) {
+    usedFormatted = '0 MB';
+  } else if (used < 0.001) {
+    const kb = Math.max(1, Math.round(used * 1024 * 1024));
+    usedFormatted = `${kb} KB`;
+  } else if (used < 1.0) {
+    const mb = (used * 1024).toFixed(1);
+    usedFormatted = `${mb} MB`;
+  } else {
+    usedFormatted = `${used.toFixed(2)} GB`;
+  }
+
+  if (gbLimit) {
+    return `${usedFormatted} / ${gbLimit} GB`;
+  }
+  return `${usedFormatted} used (Unlimited)`;
+}
+
 function ProxyCredCard({ sub }) {
   const [expanded, setExpanded] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -166,11 +188,7 @@ function ProxyCredCard({ sub }) {
           borderRadius: '6px',
         }}>
           <Database size={14} />
-          {sub.gb_limit ? (
-            <span>{(sub.gb_used || 0).toFixed(2)} / {sub.gb_limit} GB</span>
-          ) : (
-            <span>{(sub.gb_used || 0).toFixed(2)} GB used (Unlimited)</span>
-          )}
+          <span>{formatBandwidth(sub.gb_used, sub.gb_limit)}</span>
         </div>
       </div>
 
