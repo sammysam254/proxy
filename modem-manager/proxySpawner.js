@@ -38,6 +38,30 @@ function isAuthorized(modemId, username, password) {
   return false;
 }
 
+// ─── Socket Stream Forwarder with 100% Accurate Byte Tracking ─────────────────
+function forwardStreams(clientSocket, serverSocket, devicePath) {
+  clientSocket.on('data', (chunk) => {
+    recordBandwidth(devicePath, 0, chunk.length);
+    if (!serverSocket.destroyed) {
+      serverSocket.write(chunk);
+    }
+  });
+
+  serverSocket.on('data', (chunk) => {
+    recordBandwidth(devicePath, chunk.length, 0);
+    if (!clientSocket.destroyed) {
+      clientSocket.write(chunk);
+    }
+  });
+
+  clientSocket.on('end', () => { if (!serverSocket.destroyed) serverSocket.end(); });
+  serverSocket.on('end', () => { if (!clientSocket.destroyed) clientSocket.end(); });
+  clientSocket.on('close', () => { if (!serverSocket.destroyed) serverSocket.destroy(); });
+  serverSocket.on('close', () => { if (!clientSocket.destroyed) clientSocket.destroy(); });
+  clientSocket.on('error', () => { if (!serverSocket.destroyed) serverSocket.destroy(); });
+  serverSocket.on('error', () => { if (!clientSocket.destroyed) clientSocket.destroy(); });
+}
+
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
 function createHttpProxy(modem, port) {
   const exitIp  = modem.ipAddress;
@@ -78,12 +102,18 @@ function createHttpProxy(modem, port) {
 
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res);
-      proxyRes.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
+      proxyRes.on('data', chunk => {
+        recordBandwidth(modem.devicePath, chunk.length, 0);
+        res.write(chunk);
+      });
+      proxyRes.on('end', () => res.end());
     });
 
-    req.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
-    req.pipe(proxyReq);
+    req.on('data', chunk => {
+      recordBandwidth(modem.devicePath, 0, chunk.length);
+      proxyReq.write(chunk);
+    });
+    req.on('end', () => proxyReq.end());
 
     proxyReq.on('error', () => {
       if (!res.headersSent) res.writeHead(502);
@@ -121,16 +151,13 @@ function createHttpProxy(modem, port) {
       localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
     }, () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-      if (head && head.length > 0) serverSocket.write(head);
-      clientSocket.pipe(serverSocket);
-      serverSocket.pipe(clientSocket);
+      if (head && head.length > 0) {
+        recordBandwidth(modem.devicePath, 0, head.length);
+        serverSocket.write(head);
+      }
     });
 
-    clientSocket.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
-    serverSocket.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
-
-    serverSocket.on('error', () => clientSocket.destroy());
-    clientSocket.on('error', () => serverSocket.destroy());
+    forwardStreams(clientSocket, serverSocket, modem.devicePath);
   });
 
   server.listen(port, '0.0.0.0', () => {
@@ -154,7 +181,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         const nmethods = firstChunk[1];
         const methods  = firstChunk.slice(2, 2 + nmethods);
         const creds    = credStore.get(modemId);
-        const reqAuth  = creds && creds.length > 0;
+        const reqAuth  = (creds && creds.length > 0) || credStore.size > 0;
 
         if (reqAuth) {
           // Tell client to use Username/Password auth (0x02)
@@ -192,14 +219,9 @@ function createSocksProxy(modem, port, isSocks4 = false) {
           localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
         }, () => {
           socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
-          socket.pipe(outbound);
-          outbound.pipe(socket);
         });
 
-        socket.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
-        outbound.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
-        outbound.on('error', () => socket.destroy());
-        socket.on('error', () => outbound.destroy());
+        forwardStreams(socket, outbound, modem.devicePath);
       } else {
         socket.destroy();
       }
@@ -252,15 +274,9 @@ function handleSocks5Request(socket, modem, exitIp) {
       // SOCKS5 success response
       const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
       socket.write(resp);
-      socket.pipe(outbound);
-      outbound.pipe(socket);
     });
 
-    socket.on('data', chunk => recordBandwidth(modem.devicePath, 0, chunk.length));
-    outbound.on('data', chunk => recordBandwidth(modem.devicePath, chunk.length, 0));
-
-    outbound.on('error', () => socket.destroy());
-    socket.on('error', () => outbound.destroy());
+    forwardStreams(socket, outbound, modem.devicePath);
   });
 }
 
