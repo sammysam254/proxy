@@ -94,7 +94,7 @@ set SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 (
     echo VPS_HOST=%VPS_HOST%
-    echo VPS_USER=ubuntu
+    echo VPS_USER=opc
     echo VPS_SSH_PORT=22
     echo VPS_SSH_KEY=%SSH_KEY_PATH:\=/%
     echo SUPABASE_URL=%SUPABASE_URL%
