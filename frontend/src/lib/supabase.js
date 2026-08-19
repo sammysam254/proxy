@@ -63,6 +63,10 @@ export async function getAvailableProxies() {
 }
 
 export async function getMySubscriptions() {
+  const { data: sess } = await supabase.auth.getSession();
+  const userId = sess?.session?.user?.id;
+  if (!userId) return { data: [], error: null };
+
   const { data, error } = await supabase
     .from('subscriptions')
     .select(`
@@ -73,6 +77,7 @@ export async function getMySubscriptions() {
       ),
       plans ( name, duration_days, gb_limit )
     `)
+    .eq('customer_id', userId)
     .order('created_at', { ascending: false });
   return { data, error };
 }
