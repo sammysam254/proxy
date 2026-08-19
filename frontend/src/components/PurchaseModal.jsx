@@ -70,12 +70,15 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       const { data: order, error } = await createOrder(plan.id, selProxy.id, 'paystack');
       if (error) throw error;
 
-      // 2. Initialize Paystack
+      // 2. Initialize Paystack in KES (1 USD = 133 KES)
       const { data: sess } = await supabase.auth.getSession();
       const email = sess?.session?.user?.email || 'customer@proxicell.com';
       const liveKey = PAYSTACK_PUBLIC_KEY || 'pk_live_558e1ed8114c63c09b135b1523443ecfffb60524';
       const refCode = 'PK_' + order.id.replace(/-/g, '').substring(0, 10) + '_' + Date.now();
-      const amountCents = Math.round(parseFloat(plan.price_usd) * 100);
+      
+      const usdAmount = parseFloat(plan.price_usd);
+      const kesAmount = Math.round(usdAmount * 133);
+      const amountSubunits = kesAmount * 100; // Paystack takes subunits (cents)
 
       // Method A: PaystackPop v2 SDK
       if (typeof window.PaystackPop !== 'undefined' && typeof window.PaystackPop === 'function') {
@@ -84,8 +87,8 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           paystack.newTransaction({
             key:       liveKey,
             email:     email,
-            amount:    amountCents,
-            currency:  'USD',
+            amount:    amountSubunits,
+            currency:  'KES',
             reference: refCode,
             onSuccess: (transaction) => {
               activateSubscription(order.id, plan.id, selProxy.id, 'paystack', transaction.reference || transaction.trxref)
@@ -114,8 +117,8 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         const handler = window.PaystackPop.setup({
           key:       liveKey,
           email:     email,
-          amount:    amountCents,
-          currency:  'USD',
+          amount:    amountSubunits,
+          currency:  'KES',
           ref:       refCode,
           callback: function(response) {
             activateSubscription(order.id, plan.id, selProxy.id, 'paystack', response.reference || response.trxref)
@@ -290,8 +293,8 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
               <label className="input-label">Payment Method</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 {[
-                  { key: 'paystack', label: 'Card / Bank',  icon: <CreditCard size={18} />,  sub: 'Instant in-page' },
-                  { key: 'crypto',   label: 'Crypto',        icon: <Bitcoin size={18} />,     sub: 'USDT, BTC & more' },
+                  { key: 'paystack', label: 'Card / M-Pesa',  icon: <CreditCard size={18} />,  sub: `KES ${(Math.round(parseFloat(plan.price_usd) * 133)).toLocaleString()} (Paystack)` },
+                  { key: 'crypto',   label: 'Crypto',        icon: <Bitcoin size={18} />,     sub: `$${parseFloat(plan.price_usd).toFixed(0)} (USDT, BTC)` },
                 ].map(m => (
                   <button
                     key={m.key}
@@ -363,7 +366,9 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
             >
               {loading
                 ? <><div className="loader" style={{ width: 18, height: 18 }} /> Processing...</>
-                : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with {payMethod === 'paystack' ? 'Card / Bank' : 'Crypto'} <ChevronRight size={18} /></>
+                : payMethod === 'paystack'
+                  ? <>Pay KES {(Math.round(parseFloat(plan.price_usd) * 133)).toLocaleString()} ($${parseFloat(plan.price_usd).toFixed(0)}) with Card / M-Pesa <ChevronRight size={18} /></>
+                  : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with Crypto <ChevronRight size={18} /></>
               }
             </button>
           </>
