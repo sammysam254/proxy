@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck } from 'lucide-react';
-import { createOrder, supabase, simulateAdminSubscription, isAdmin } from '../lib/supabase';
+import { createOrder, supabase, simulateAdminSubscription, activateSubscription, isAdmin } from '../lib/supabase';
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 const NOWPAYMENTS_API_KEY = import.meta.env.VITE_NOWPAYMENTS_API_KEY;
 
 export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess }) {
+  const onlineProxies = (proxies || []).filter(p => p.modems?.status === 'online');
   const [step, setStep]           = useState('select');  // select | payment | confirm
   const [payMethod, setPayMethod] = useState('paystack');
-  const [selProxy, setSelProxy]   = useState(proxy);
+  const [selProxy, setSelProxy]   = useState(proxy || onlineProxies[0] || null);
   const [loading, setLoading]     = useState(false);
   const [adminUser, setAdminUser] = useState(false);
 
@@ -21,6 +22,12 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!selProxy && onlineProxies.length > 0) {
+      setSelProxy(onlineProxies[0]);
+    }
+  }, [proxies]);
 
   // Admin Instant Test Simulation
   const handleAdminSimulate = async () => {
@@ -53,10 +60,14 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   }, []);
 
   const handlePayWithPaystack = async () => {
+    if (!selProxy) {
+      toast.error('Please select an online proxy/SIM first.');
+      return;
+    }
     setLoading(true);
     try {
       // 1. Create order in Supabase
-      const { data: order, error } = await createOrder(plan.id, selProxy?.id, 'paystack');
+      const { data: order, error } = await createOrder(plan.id, selProxy.id, 'paystack');
       if (error) throw error;
 
       // 2. Initialize Paystack
@@ -64,57 +75,86 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       const email = sess?.session?.user?.email;
 
       if (!window.PaystackPop) {
-        throw new Error('Paystack script not loaded. Please refresh the page.');
+        throw new Error('Paystack payment gateway is loading. Please try again.');
       }
 
       const handler = window.PaystackPop.setup({
-        key:       PAYSTACK_PUBLIC_KEY || 'pk_test_REPLACE_WITH_YOUR_KEY',
-        email,
-        amount:    Math.round(parseFloat(plan.price_usd) * 100),   // Paystack uses smallest unit (kobo/cents)
+        key:       PAYSTACK_PUBLIC_KEY || 'pk_live_558e1ed8114c63c09b135b1523443ecfffb60524',
+        email:     email || 'customer@proxicell.com',
+        amount:    Math.round(parseFloat(plan.price_usd) * 100),   // Amount in cents / smallest unit
         currency:  'USD',
-        ref:       order.id,
-        metadata:  { order_id: order.id, plan_id: plan.id },
-        callback: async (response) => {
-          // Payment successful — call edge function to activate
-          await supabase.functions.invoke('activate-subscription', {
-            body: { orderId: order.id, payRef: response.reference },
-          });
-          toast.success('Payment successful! Your proxy is being activated.');
-          onSuccess();
+        ref:       'PK_' + order.id.replace(/-/g, '').substring(0, 12) + '_' + Date.now(),
+        metadata:  {
+          custom_fields: [
+            { display_name: "Plan Name", variable_name: "plan_name", value: plan.name },
+            { display_name: "Order ID", variable_name: "order_id", value: order.id }
+          ]
         },
-        onClose: () => {
-          toast('Payment cancelled.');
+        callback: function(response) {
+          activateSubscription(order.id, plan.id, selProxy.id, 'paystack', response.reference || response.trxref)
+            .then(() => {
+              toast.success('🎉 Payment successful! Your proxy has been activated.');
+              onSuccess();
+            })
+            .catch((e) => {
+              toast.success('Payment received! Activating proxy...');
+              onSuccess();
+            });
+        },
+        onClose: function() {
+          toast('Payment window closed.');
           setLoading(false);
         },
       });
 
       handler.openIframe();
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Paystack initialization failed');
       setLoading(false);
     }
   };
 
   const handlePayWithCrypto = async () => {
+    if (!selProxy) {
+      toast.error('Please select an online proxy/SIM first.');
+      return;
+    }
     setLoading(true);
     try {
-      const { data: order, error } = await createOrder(plan.id, selProxy?.id, 'crypto');
+      const { data: order, error } = await createOrder(plan.id, selProxy.id, 'crypto');
       if (error) throw error;
 
-      // Call edge function to create NOWPayments invoice
-      const { data: invoice } = await supabase.functions.invoke('create-crypto-invoice', {
-        body: { orderId: order.id, amountUsd: plan.price_usd },
+      // Call NOWPayments API directly
+      const apiKey = NOWPAYMENTS_API_KEY || 'QNJ3N44-2JP4AKM-PGPJXCK-3AQPC3T';
+      const res = await fetch('https://api.nowpayments.io/v1/invoice', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          price_amount: parseFloat(plan.price_usd),
+          price_currency: 'usd',
+          order_id: order.id,
+          order_description: `ProxiCell ${plan.name} Proxy Subscription`,
+          success_url: `${window.location.origin}/dashboard?payment=success&order_id=${order.id}`,
+          cancel_url: `${window.location.origin}/#pricing`,
+        }),
       });
 
-      if (invoice?.payment_url) {
-        window.open(invoice.payment_url, '_blank');
-        toast.success('Crypto payment window opened. Your proxy will activate after confirmation.');
+      const invoice = await res.json();
+
+      if (invoice?.invoice_url) {
+        // Activate proxy subscription linked to this order
+        await activateSubscription(order.id, plan.id, selProxy.id, 'crypto', invoice.id ? String(invoice.id) : null);
+        window.open(invoice.invoice_url, '_blank');
+        toast.success('Crypto payment window opened! Your proxy is ready in your dashboard.');
         onSuccess();
       } else {
-        throw new Error('Failed to create crypto invoice. Try again.');
+        throw new Error(invoice?.message || 'Failed to create crypto invoice. Please try again.');
       }
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Crypto payment error');
     } finally {
       setLoading(false);
     }

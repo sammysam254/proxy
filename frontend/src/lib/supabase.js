@@ -191,12 +191,11 @@ export async function isAdmin(userId, userEmail) {
   return data?.is_admin === true || data?.email?.toLowerCase() === 'sammyseth260@gmail.com';
 }
 
-export async function simulateAdminSubscription(planId, proxyId) {
+export async function activateSubscription(orderId, planId, proxyId, paymentMethod, paymentRef) {
   const { data: sess } = await supabase.auth.getSession();
   const user = sess?.session?.user;
-  if (!user) throw new Error('You must be signed in to simulate a rental.');
+  if (!user) throw new Error('You must be signed in.');
 
-  // Ensure customer record exists
   await ensureCustomerRecord(user.id, user.email, user.user_metadata?.full_name);
 
   const { data: plan } = await supabase.from('plans').select('*').eq('id', planId).single();
@@ -224,26 +223,27 @@ export async function simulateAdminSubscription(planId, proxyId) {
       gb_limit:        plan?.gb_limit || null,
       gb_used:         0,
       status:          'active',
-      payment_method:  'manual',
-      payment_ref:     `ADMIN_TEST_${Date.now()}`,
+      payment_method:  paymentMethod,
+      payment_ref:     paymentRef || `TX_${Date.now()}`,
     })
     .select()
     .single();
 
   if (subErr) throw subErr;
 
-  // 2. Insert completed order for tracking
-  await supabase.from('orders').insert({
-    customer_id:     user.id,
-    plan_id:         planId,
-    proxy_id:        proxyId,
-    amount_usd:      plan?.price_usd || 0,
-    payment_method:  'manual',
-    payment_status:  'paid',
-    payment_ref:     `ADMIN_TEST_${Date.now()}`,
-    subscription_id: sub.id,
-    paid_at:         new Date().toISOString(),
-  });
+  // 2. Update order if exists
+  if (orderId) {
+    await supabase.from('orders').update({
+      payment_status:  'paid',
+      payment_ref:     paymentRef,
+      subscription_id: sub.id,
+      paid_at:         new Date().toISOString(),
+    }).eq('id', orderId);
+  }
 
   return sub;
+}
+
+export async function simulateAdminSubscription(planId, proxyId) {
+  return activateSubscription(null, planId, proxyId, 'manual', `ADMIN_TEST_${Date.now()}`);
 }
