@@ -72,42 +72,71 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
 
       // 2. Initialize Paystack
       const { data: sess } = await supabase.auth.getSession();
-      const email = sess?.session?.user?.email;
+      const email = sess?.session?.user?.email || 'customer@proxicell.com';
+      const liveKey = PAYSTACK_PUBLIC_KEY || 'pk_live_558e1ed8114c63c09b135b1523443ecfffb60524';
+      const refCode = 'PK_' + order.id.replace(/-/g, '').substring(0, 10) + '_' + Date.now();
+      const amountCents = Math.round(parseFloat(plan.price_usd) * 100);
 
-      if (!window.PaystackPop) {
-        throw new Error('Paystack payment gateway is loading. Please try again.');
+      // Method A: PaystackPop v2 SDK
+      if (typeof window.PaystackPop !== 'undefined' && typeof window.PaystackPop === 'function') {
+        try {
+          const paystack = new window.PaystackPop();
+          paystack.newTransaction({
+            key:       liveKey,
+            email:     email,
+            amount:    amountCents,
+            currency:  'USD',
+            reference: refCode,
+            onSuccess: (transaction) => {
+              activateSubscription(order.id, plan.id, selProxy.id, 'paystack', transaction.reference || transaction.trxref)
+                .then(() => {
+                  toast.success('🎉 Payment successful! Your proxy has been activated.');
+                  onSuccess();
+                })
+                .catch(() => {
+                  toast.success('Payment received! Activating proxy...');
+                  onSuccess();
+                });
+            },
+            onCancel: () => {
+              toast('Payment cancelled.');
+              setLoading(false);
+            },
+          });
+          return;
+        } catch (e) {
+          console.warn('Paystack v2 transaction error, trying setup fallback:', e);
+        }
       }
 
-      const handler = window.PaystackPop.setup({
-        key:       PAYSTACK_PUBLIC_KEY || 'pk_live_558e1ed8114c63c09b135b1523443ecfffb60524',
-        email:     email || 'customer@proxicell.com',
-        amount:    Math.round(parseFloat(plan.price_usd) * 100),   // Amount in cents / smallest unit
-        currency:  'USD',
-        ref:       'PK_' + order.id.replace(/-/g, '').substring(0, 12) + '_' + Date.now(),
-        metadata:  {
-          custom_fields: [
-            { display_name: "Plan Name", variable_name: "plan_name", value: plan.name },
-            { display_name: "Order ID", variable_name: "order_id", value: order.id }
-          ]
-        },
-        callback: function(response) {
-          activateSubscription(order.id, plan.id, selProxy.id, 'paystack', response.reference || response.trxref)
-            .then(() => {
-              toast.success('🎉 Payment successful! Your proxy has been activated.');
-              onSuccess();
-            })
-            .catch((e) => {
-              toast.success('Payment received! Activating proxy...');
-              onSuccess();
-            });
-        },
-        onClose: function() {
-          toast('Payment window closed.');
-          setLoading(false);
-        },
-      });
-
-      handler.openIframe();
+      // Method B: PaystackPop setup fallback
+      if (window.PaystackPop && window.PaystackPop.setup) {
+        const handler = window.PaystackPop.setup({
+          key:       liveKey,
+          email:     email,
+          amount:    amountCents,
+          currency:  'USD',
+          ref:       refCode,
+          callback: function(response) {
+            activateSubscription(order.id, plan.id, selProxy.id, 'paystack', response.reference || response.trxref)
+              .then(() => {
+                toast.success('🎉 Payment successful! Your proxy has been activated.');
+                onSuccess();
+              })
+              .catch(() => {
+                toast.success('Payment received! Activating proxy...');
+                onSuccess();
+              });
+          },
+          onClose: function() {
+            toast('Payment window closed.');
+            setLoading(false);
+          },
+        });
+        handler.openIframe();
+      } else {
+        throw new Error('Payment gateway is loading. Please try again in 5 seconds.');
+      }
     } catch (err) {
       toast.error(err.message || 'Paystack initialization failed');
       setLoading(false);
@@ -159,8 +188,6 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       setLoading(false);
     }
   };
-
-  const onlineProxies = proxies.filter(p => p.modems?.status === 'online');
 
   return (
     <div className="modal-backdrop" onClick={handleBackdrop}>
