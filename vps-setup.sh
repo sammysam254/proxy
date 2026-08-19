@@ -24,22 +24,31 @@ echo -e "${NC}"
 # Max number of modems you plan to support
 MAX_MODEMS="${MAX_MODEMS:-20}"
 
-step "Updating System"
-apt-get update -qq
-apt-get upgrade -y -qq
-log "System updated."
+# Detect Package Manager
+if command -v dnf &>/dev/null; then
+  PKG_MGR="dnf"
+  PKG_INSTALL="dnf install -y -q"
+elif command -v yum &>/dev/null; then
+  PKG_MGR="yum"
+  PKG_INSTALL="yum install -y -q"
+elif command -v apt-get &>/dev/null; then
+  PKG_MGR="apt-get"
+  PKG_INSTALL="apt-get install -y -qq"
+else
+  PKG_MGR="unknown"
+fi
 
-step "Installing Packages"
-apt-get install -y -qq \
-  nginx \
-  autossh \
-  ufw \
-  iptables \
-  iptables-persistent \
-  net-tools \
-  curl \
-  jq \
-  unzip
+step "Installing Packages ($PKG_MGR)"
+
+if [ "$PKG_MGR" = "dnf" ] || [ "$PKG_MGR" = "yum" ]; then
+  # Oracle Linux / RHEL / CentOS
+  $PKG_INSTALL epel-release 2>/dev/null || true
+  $PKG_INSTALL nginx iptables iptables-services net-tools curl jq unzip firewalld autossh 2>/dev/null || true
+else
+  # Ubuntu / Debian
+  apt-get update -qq
+  $PKG_INSTALL nginx autossh ufw iptables iptables-persistent net-tools curl jq unzip
+fi
 
 log "Packages installed."
 
@@ -62,32 +71,53 @@ echo "ClientAliveCountMax 10"  >> "$SSH_CFG" 2>/dev/null || true
 systemctl reload sshd
 log "SSH configured for reverse tunnels."
 
-step "Configuring Firewall (ufw)"
+step "Configuring Firewall"
 
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 22/tcp    comment "SSH"
-ufw allow 80/tcp    comment "HTTP"
-ufw allow 443/tcp   comment "HTTPS"
+if command -v firewalld &>/dev/null || systemctl is-active firewalld &>/dev/null; then
+  systemctl enable --now firewalld 2>/dev/null || true
+  firewall-cmd --permanent --add-port=22/tcp 2>/dev/null || true
+  firewall-cmd --permanent --add-port=80/tcp 2>/dev/null || true
+  firewall-cmd --permanent --add-port=443/tcp 2>/dev/null || true
+  for i in $(seq 0 $((MAX_MODEMS - 1))); do
+    firewall-cmd --permanent --add-port=$((41000 + i))/tcp 2>/dev/null || true
+    firewall-cmd --permanent --add-port=$((42000 + i))/tcp 2>/dev/null || true
+    firewall-cmd --permanent --add-port=$((43000 + i))/tcp 2>/dev/null || true
+  done
+  firewall-cmd --reload 2>/dev/null || true
+  log "firewalld configured."
+elif command -v ufw &>/dev/null; then
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow 22/tcp    comment "SSH"
+  ufw allow 80/tcp    comment "HTTP"
+  ufw allow 443/tcp   comment "HTTPS"
+  for i in $(seq 0 $((MAX_MODEMS - 1))); do
+    ufw allow $((41000 + i))/tcp comment "HTTP proxy modem $i"
+    ufw allow $((42000 + i))/tcp comment "SOCKS4 proxy modem $i"
+    ufw allow $((43000 + i))/tcp comment "SOCKS5 proxy modem $i"
+  done
+  ufw --force enable
+  log "ufw configured."
+else
+  # Direct iptables
+  iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+  for i in $(seq 0 $((MAX_MODEMS - 1))); do
+    iptables -I INPUT -p tcp --dport $((41000 + i)) -j ACCEPT
+    iptables -I INPUT -p tcp --dport $((42000 + i)) -j ACCEPT
+    iptables -I INPUT -p tcp --dport $((43000 + i)) -j ACCEPT
+  done
+fi
 
-# Open proxy ports for each modem (HTTP, SOCKS4, SOCKS5)
-# HTTP:   410XX
-# SOCKS4: 420XX  
-# SOCKS5: 430XX
-for i in $(seq 0 $((MAX_MODEMS - 1))); do
-  ufw allow $((41000 + i))/tcp comment "HTTP proxy modem $i"
-  ufw allow $((42000 + i))/tcp comment "SOCKS4 proxy modem $i"
-  ufw allow $((43000 + i))/tcp comment "SOCKS5 proxy modem $i"
-done
-
-ufw --force enable
 log "Firewall configured. Opened ports for $MAX_MODEMS modems."
 
 step "Configuring Nginx"
 
+NGINX_USER="www-data"
+id -u nginx &>/dev/null && NGINX_USER="nginx"
+
 # Main config
-cat > /etc/nginx/nginx.conf << 'NGINXEOF'
-user www-data;
+cat > /etc/nginx/nginx.conf << NGINXEOF
+user $NGINX_USER;
 worker_processes auto;
 pid /run/nginx.pid;
 
