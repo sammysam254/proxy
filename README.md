@@ -25,11 +25,13 @@ bash vps-setup.sh
 
 ### Step 2: Set Up Local Machine (where modems plug in)
 ```bash
-# Run as root on your local Linux machine (or VirtualBox Ubuntu)
-sudo VPS_HOST=YOUR_VPS_IP \
-     SUPABASE_URL=https://xxx.supabase.co \
-     SUPABASE_SERVICE_KEY=your_service_key \
-     bash setup.sh
+# Option A: One-liner directly from GitHub
+curl -fsSL https://raw.githubusercontent.com/sammysam254/proxy/main/setup.sh -o setup.sh && sudo bash setup.sh
+
+# Option B: Clone repo first
+git clone https://github.com/sammysam254/proxy.git
+cd proxy
+sudo bash setup.sh
 ```
 
 ### Step 3: Supabase Setup

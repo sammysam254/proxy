@@ -319,21 +319,31 @@ EOF
 chmod 600 "$APP_DIR/.env"
 log ".env file created."
 
-# ─── Copy modem manager files ─────────────────────────────
+# ─── Set up application from GitHub or local directory ───
+step "Fetching Application Files from GitHub"
+
+REPO_URL="${REPO_URL:-https://github.com/sammysam254/proxy.git}"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-if [ -d "$SCRIPT_DIR/modem-manager" ]; then
+if [ -d "$SCRIPT_DIR/modem-manager" ] && [ -f "$SCRIPT_DIR/modem-manager/index.js" ]; then
+  info "Copying files from local directory ($SCRIPT_DIR)..."
   cp -r "$SCRIPT_DIR/modem-manager/"* "$APP_DIR/modem-manager/"
-  log "Modem manager files copied."
+  log "Local files copied."
 else
-  warn "modem-manager directory not found next to setup.sh — skipping copy."
+  info "Cloning latest code from $REPO_URL..."
+  TEMP_CLONE="/tmp/proxicell-clone-$$"
+  rm -rf "$TEMP_CLONE"
+  git clone --depth 1 "$REPO_URL" "$TEMP_CLONE"
+  cp -r "$TEMP_CLONE/modem-manager/"* "$APP_DIR/modem-manager/"
+  rm -rf "$TEMP_CLONE"
+  log "Cloned repository and installed modem-manager."
 fi
 
 # ─── Install Node.js dependencies ─────────────────────────
 step "Installing Node.js Dependencies"
 
 cd "$APP_DIR/modem-manager"
-npm install --silent 2>/dev/null || warn "npm install failed — check package.json"
+npm install --silent 2>/dev/null || npm install
 log "Dependencies installed."
 
 # ─── iptables rules (for bandwidth counting) ──────────────
