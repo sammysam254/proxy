@@ -26,6 +26,53 @@ function CopyBtn({ value, label }) {
   );
 }
 
+function calculateTimeLeft(targetDate) {
+  if (!targetDate) return null;
+  const diff = new Date(targetDate).getTime() - Date.now();
+  if (diff <= 0) {
+    return { isExpired: true, text: 'Expired', fullText: 'Expired', days: 0, hours: 0, minutes: 0 };
+  }
+
+  const totalMinutes = Math.floor(diff / (1000 * 60));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0 || days > 0) parts.push(`${hours}h`);
+  parts.push(`${minutes}m`);
+
+  const fullParts = [];
+  if (days > 0) fullParts.push(`${days} day${days !== 1 ? 's' : ''}`);
+  if (hours > 0 || days > 0) fullParts.push(`${hours} hr${hours !== 1 ? 's' : ''}`);
+  fullParts.push(`${minutes} min${minutes !== 1 ? 's' : ''}`);
+
+  return {
+    isExpired: false,
+    text: `${parts.join(' ')} remaining`,
+    fullText: `${fullParts.join(', ')} remaining`,
+    days,
+    hours,
+    minutes,
+  };
+}
+
+function useCountdown(targetDate) {
+  const [timeLeft, setTimeLeft] = useState(() => calculateTimeLeft(targetDate));
+
+  useEffect(() => {
+    if (!targetDate) return;
+    setTimeLeft(calculateTimeLeft(targetDate));
+    const interval = setInterval(() => {
+      setTimeLeft(calculateTimeLeft(targetDate));
+    }, 10000); // tick every 10 seconds
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  return timeLeft;
+}
+
 function ProxyCredCard({ sub }) {
   const [expanded, setExpanded] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -37,9 +84,7 @@ function ProxyCredCard({ sub }) {
   const isExpired = sub.status === 'expired';
   const isActive  = sub.status === 'active';
 
-  const expiresIn = sub.expires_at
-    ? Math.max(0, Math.ceil((new Date(sub.expires_at) - new Date()) / 86400000))
-    : null;
+  const countdown = useCountdown(sub.expires_at);
 
   const gbPercent = sub.gb_limit
     ? Math.min(100, (sub.gb_used / sub.gb_limit) * 100)
@@ -101,12 +146,18 @@ function ProxyCredCard({ sub }) {
         </div>
       </div>
 
-      {/* Plan info */}
-      <div className="flex gap-md wrap">
-        {expiresIn !== null && (
-          <div className="flex items-center gap-sm text-sm text-muted">
+      {/* Plan info & Time Remaining */}
+      <div className="flex gap-md wrap items-center" style={{ marginTop: '8px' }}>
+        {countdown && (
+          <div className="flex items-center gap-sm text-sm" style={{
+            color: countdown.isExpired ? 'var(--clr-danger, #ef4444)' : 'var(--clr-accent, #3b82f6)',
+            background: 'rgba(59, 130, 246, 0.08)',
+            padding: '4px 10px',
+            borderRadius: '6px',
+            fontWeight: 500
+          }}>
             <Clock size={14} />
-            {isExpired ? 'Expired' : `${expiresIn} day${expiresIn !== 1 ? 's' : ''} remaining`}
+            <span>{countdown.fullText}</span>
           </div>
         )}
         {sub.gb_limit && (
