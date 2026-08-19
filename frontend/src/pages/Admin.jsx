@@ -538,7 +538,7 @@ export default function Admin({ session }) {
   useEffect(() => { checkAdmin(); }, [session]);
 
   async function checkAdmin() {
-    const admin = await isAdmin(session.user.id);
+    const admin = await isAdmin(session?.user?.id, session?.user?.email);
     if (!admin) { setAuthorized(false); setLoading(false); return; }
     setAuthorized(true);
     loadData();

@@ -29,7 +29,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
 
   useEffect(() => {
     if (session?.user?.id) {
-      isAdmin(session.user.id).then(setAdminUser);
+      isAdmin(session.user.id, session.user.email).then(setAdminUser);
     }
   }, [session]);
 

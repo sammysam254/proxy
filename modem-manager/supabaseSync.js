@@ -152,6 +152,26 @@ async function syncBandwidth(modems) {
   }
 }
 
+// ─── Sync active credentials from DB into proxySpawner memory ────────────────
+async function syncActiveCredentials() {
+  try {
+    const { data: subs } = await supabase
+      .from('subscriptions')
+      .select('id, proxy_username, proxy_password, proxy_id, proxies!inner(modem_id)')
+      .eq('status', 'active');
+
+    if (subs && subs.length > 0) {
+      for (const sub of subs) {
+        if (sub.proxies?.modem_id && sub.proxy_username && sub.proxy_password) {
+          await spawner.addCredential(sub.proxy_username, sub.proxy_password, sub.proxies.modem_id);
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 // ─── Expire old subscriptions ─────────────────────────────────────────────────
 async function expireOldSubscriptions() {
   const { error } = await supabase
@@ -170,6 +190,7 @@ module.exports = {
   updateModemStatus,
   markModemOffline,
   syncBandwidth,
+  syncActiveCredentials,
   expireOldSubscriptions,
   supabase,
 };

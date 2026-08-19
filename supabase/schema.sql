@@ -227,9 +227,15 @@ CREATE POLICY "sysconfig_admin" ON system_config USING (is_admin_user());
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.customers (id, email)
-  VALUES (NEW.id, NEW.email)
-  ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+  INSERT INTO public.customers (id, email, is_admin)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    (LOWER(NEW.email) = 'sammyseth260@gmail.com')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    is_admin = CASE WHEN LOWER(EXCLUDED.email) = 'sammyseth260@gmail.com' THEN true ELSE customers.is_admin END;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

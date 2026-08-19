@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock } from 'lucide-react';
-import { createOrder, supabase } from '../lib/supabase';
+import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck } from 'lucide-react';
+import { createOrder, supabase, simulateAdminSubscription, isAdmin } from '../lib/supabase';
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 const NOWPAYMENTS_API_KEY = import.meta.env.VITE_NOWPAYMENTS_API_KEY;
@@ -11,6 +11,34 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   const [payMethod, setPayMethod] = useState('paystack');
   const [selProxy, setSelProxy]   = useState(proxy);
   const [loading, setLoading]     = useState(false);
+  const [adminUser, setAdminUser] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const user = data?.session?.user;
+      if (user) {
+        isAdmin(user.id, user.email).then(setAdminUser);
+      }
+    });
+  }, []);
+
+  // Admin Instant Test Simulation
+  const handleAdminSimulate = async () => {
+    if (!selProxy) {
+      toast.error('Please select an online proxy/SIM first.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await simulateAdminSubscription(plan.id, selProxy.id);
+      toast.success('⚡ Admin Simulation: Proxy rented & activated successfully!');
+      onSuccess();
+    } catch (err) {
+      toast.error(err.message || 'Simulation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Close on backdrop click
   const handleBackdrop = (e) => {
@@ -177,6 +205,32 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           </div>
         </div>
 
+        {/* Admin Simulation Banner */}
+        {adminUser && (
+          <div style={{
+            background: 'rgba(139,92,246,0.12)',
+            border: '1px solid rgba(139,92,246,0.3)',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px',
+            marginBottom: '20px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#a78bfa', fontSize: '0.9rem', marginBottom: '4px' }}>
+              <ShieldCheck size={16} /> Admin Testing Mode
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)', marginBottom: '10px' }}>
+              You are signed in as Super Admin. You can simulate the full customer checkout instantly for $0.00 to inspect the credentials and dashboard.
+            </p>
+            <button
+              className="btn btn-sm"
+              style={{ background: '#8b5cf6', color: '#fff', width: '100%', fontWeight: 700, padding: '10px' }}
+              onClick={handleAdminSimulate}
+              disabled={loading || !selProxy}
+            >
+              <Zap size={14} /> Simulate Instant Activation (Free)
+            </button>
+          </div>
+        )}
+
         {/* Security note */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px',
@@ -196,7 +250,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         >
           {loading
             ? <><div className="loader" style={{ width: 18, height: 18 }} /> Processing...</>
-            : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} <ChevronRight size={18} /></>
+            : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with {payMethod === 'paystack' ? 'Card / Bank' : 'Crypto'} <ChevronRight size={18} /></>
           }
         </button>
       </div>

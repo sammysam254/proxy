@@ -223,8 +223,9 @@ async function runCycle() {
     // ── 5. Print status table ──────────────────────────────────────────────
     printStatusTable();
 
-    // ── 6. Expire overdue subscriptions ───────────────────────────────────
+    // ── 6. Expire overdue subscriptions & sync credentials ───────────────
     await sync.expireOldSubscriptions().catch(() => {});
+    await sync.syncActiveCredentials().catch(() => {});
 
   } catch (err) {
     log.error('Cycle failed:', err.message, err.stack);
