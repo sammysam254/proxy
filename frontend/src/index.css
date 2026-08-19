@@ -615,11 +615,55 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .proxy-chip.socks4 { background: rgba(59,130,246,0.15); color: var(--clr-accent); }
 .proxy-chip.socks5 { background: rgba(139,92,246,0.15); color: var(--clr-accent-2); }
 
-/* ─── Responsive ─────────────────────────────────────────── */
+/* ─── Responsive Design System ──────────────────────────── */
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
 @media (max-width: 768px) {
-  .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .container { padding: 0 var(--space-md); }
-  .modal { padding: var(--space-lg); border-radius: var(--radius-lg); }
-  .hero { padding: 60px 0 50px; }
-  .nav-links { display: none; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; }
+  .stats-grid { grid-template-columns: 1fr 1fr !important; gap: var(--space-sm) !important; }
+  .container { padding: 0 var(--space-md) !important; }
+  .container-sm { padding: 0 var(--space-md) !important; }
+  
+  .hero { padding: 50px 0 40px !important; }
+  .hero-title { font-size: 2.2rem !important; line-height: 1.15 !important; }
+  .hero-subtitle { font-size: 0.95rem !important; margin-bottom: 24px !important; }
+  
+  .btn-xl { padding: 12px 24px !important; font-size: 0.95rem !important; }
+  
+  .modal {
+    padding: var(--space-md) !important;
+    border-radius: var(--radius-lg) !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    margin: 12px !important;
+  }
+  
+  /* Table horizontal scroll wrapper for mobile */
+  .table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  .pricing-card {
+    padding: var(--space-lg) var(--space-md) !important;
+  }
+
+  .price-amount {
+    font-size: 2.4rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr !important; }
+  .hero-title { font-size: 1.85rem !important; }
+  .btn-full { width: 100% !important; }
+  .input-group label { font-size: 0.8rem !important; }
+  
+  /* Ensure connection details and buttons stack gracefully */
+  .connection-box {
+    padding: 12px !important;
+  }
 }

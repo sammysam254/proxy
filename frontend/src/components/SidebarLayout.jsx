@@ -8,8 +8,14 @@ import {
 import { signOut, isAdmin } from '../lib/supabase';
 
 const CUSTOMER_NAV = [
+  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
   { to: '/dashboard',          icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
   { to: '/dashboard/settings', icon: <Settings size={18} />,        label: 'Settings' },
+];
+
+const GUEST_NAV = [
+  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/auth',               icon: <Users size={18} />,           label: 'Sign In / Register' },
 ];
 
 const ADMIN_NAV = [
@@ -41,8 +47,11 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
     navigate('/');
   };
 
-  const navItems = adminMode ? ADMIN_NAV : CUSTOMER_NAV;
-  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
+  const navItems = adminMode ? ADMIN_NAV : (session ? CUSTOMER_NAV : GUEST_NAV);
+  const isActive = (path) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
 
   const SidebarContent = () => (
     <div style={{
@@ -81,7 +90,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
         }}>
-          {adminMode ? 'Admin Panel' : 'My Account'}
+          {adminMode ? 'Admin Panel' : (session ? 'My Account' : 'Navigation')}
         </div>
       )}
 
@@ -136,69 +145,57 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
           );
         })}
 
-        {/* Divider + cross-links */}
-        <div style={{ height: '1px', background: 'var(--clr-border)', margin: '10px 2px' }} />
-
-        <Link
-          to="/"
-          style={{
-            display: 'flex', alignItems: 'center',
-            gap: collapsed ? 0 : '10px',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? '10px' : '10px 12px',
-            borderRadius: 'var(--radius-md)',
-            textDecoration: 'none',
-            fontSize: '0.9rem',
-            color: 'var(--clr-text-2)',
-            transition: 'var(--transition)',
-          }}
-        >
-          <Home size={18} style={{ flexShrink: 0 }} />
-          {!collapsed && <span>Storefront</span>}
-        </Link>
-
+        {/* Admin Switch Link */}
         {adminUser && !adminMode && (
-          <Link
-            to="/admin"
-            style={{
-              display: 'flex', alignItems: 'center',
-              gap: collapsed ? 0 : '10px',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              padding: collapsed ? '10px' : '10px 12px',
-              borderRadius: 'var(--radius-md)',
-              textDecoration: 'none',
-              fontSize: '0.9rem',
-              color: 'var(--clr-text-2)',
-              transition: 'var(--transition)',
-            }}
-          >
-            <Shield size={18} style={{ flexShrink: 0 }} />
-            {!collapsed && <span>Admin Panel</span>}
-          </Link>
+          <>
+            <div style={{ height: '1px', background: 'var(--clr-border)', margin: '10px 2px' }} />
+            <Link
+              to="/admin"
+              style={{
+                display: 'flex', alignItems: 'center',
+                gap: collapsed ? 0 : '10px',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                padding: collapsed ? '10px' : '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                textDecoration: 'none',
+                fontSize: '0.9rem',
+                color: 'var(--clr-accent)',
+                background: 'rgba(139,92,246,0.1)',
+                border: '1px solid rgba(139,92,246,0.2)',
+                transition: 'var(--transition)',
+              }}
+            >
+              <Shield size={18} style={{ flexShrink: 0 }} />
+              {!collapsed && <span style={{ fontWeight: 600 }}>Admin Panel</span>}
+            </Link>
+          </>
         )}
 
         {adminMode && (
-          <Link
-            to="/dashboard"
-            style={{
-              display: 'flex', alignItems: 'center',
-              gap: collapsed ? 0 : '10px',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              padding: collapsed ? '10px' : '10px 12px',
-              borderRadius: 'var(--radius-md)',
-              textDecoration: 'none',
-              fontSize: '0.9rem',
-              color: 'var(--clr-text-2)',
-              transition: 'var(--transition)',
-            }}
-          >
-            <LayoutDashboard size={18} style={{ flexShrink: 0 }} />
-            {!collapsed && <span>Customer View</span>}
-          </Link>
+          <>
+            <div style={{ height: '1px', background: 'var(--clr-border)', margin: '10px 2px' }} />
+            <Link
+              to="/dashboard"
+              style={{
+                display: 'flex', alignItems: 'center',
+                gap: collapsed ? 0 : '10px',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                padding: collapsed ? '10px' : '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                textDecoration: 'none',
+                fontSize: '0.9rem',
+                color: 'var(--clr-text-2)',
+                transition: 'var(--transition)',
+              }}
+            >
+              <LayoutDashboard size={18} style={{ flexShrink: 0 }} />
+              {!collapsed && <span>Customer View</span>}
+            </Link>
+          </>
         )}
       </nav>
 
-      {/* User + Sign out */}
+      {/* User + Sign out / Sign in */}
       <div style={{
         padding: collapsed ? '12px 10px 0' : '12px 10px 0',
         borderTop: '1px solid var(--clr-border)',
@@ -207,51 +204,74 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
         flexDirection: 'column',
         gap: '8px',
       }}>
-        {!collapsed && (
-          <div style={{
-            padding: '10px 12px',
-            background: 'var(--clr-surface)',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.8rem',
-          }}>
-            <div style={{ color: 'var(--clr-text-3)', marginBottom: '2px', fontSize: '0.7rem' }}>Signed in as</div>
-            <div style={{
-              color: 'var(--clr-text)',
-              fontWeight: 600,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: '100%',
-            }}>
-              {session?.user?.email}
-            </div>
+        {session ? (
+          <>
+            {!collapsed && (
+              <div style={{
+                padding: '10px 12px',
+                background: 'var(--clr-surface)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.8rem',
+              }}>
+                <div style={{ color: 'var(--clr-text-3)', marginBottom: '2px', fontSize: '0.7rem' }}>Signed in as</div>
+                <div style={{
+                  color: 'var(--clr-text)',
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '100%',
+                }}>
+                  {session?.user?.email}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={handleSignOut}
+              title="Sign Out"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: collapsed ? 0 : '8px',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                padding: collapsed ? '10px' : '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--clr-text-2)',
+                fontSize: '0.9rem',
+                fontFamily: 'inherit',
+                width: '100%',
+                transition: 'var(--transition)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = 'var(--clr-red)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--clr-text-2)'; }}
+            >
+              <LogOut size={18} style={{ flexShrink: 0 }} />
+              {!collapsed && <span>Sign Out</span>}
+            </button>
+          </>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <Link
+              to="/auth"
+              className="btn btn-secondary btn-sm"
+              style={{ width: '100%', padding: '8px', fontSize: '0.85rem' }}
+            >
+              {!collapsed ? 'Sign In' : <LogOut size={16} />}
+            </Link>
+            {!collapsed && (
+              <Link
+                to="/auth?tab=signup"
+                className="btn btn-primary btn-sm"
+                style={{ width: '100%', padding: '8px', fontSize: '0.85rem' }}
+              >
+                Get Started
+              </Link>
+            )}
           </div>
         )}
-        <button
-          onClick={handleSignOut}
-          title="Sign Out"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: collapsed ? 0 : '8px',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? '10px' : '10px 12px',
-            borderRadius: 'var(--radius-md)',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--clr-text-2)',
-            fontSize: '0.9rem',
-            fontFamily: 'inherit',
-            width: '100%',
-            transition: 'var(--transition)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = 'var(--clr-red)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--clr-text-2)'; }}
-        >
-          <LogOut size={18} style={{ flexShrink: 0 }} />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
       </div>
     </div>
   );

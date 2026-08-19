@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getPlans, getAvailableProxies } from '../lib/supabase';
 import PurchaseModal from '../components/PurchaseModal';
+import SidebarLayout from '../components/SidebarLayout';
 
 export default function Storefront({ session }) {
   const [plans, setPlans] = useState([]);
@@ -43,7 +44,6 @@ export default function Storefront({ session }) {
       return;
     }
     setSelectedPlan(plan);
-    // Pre-select first online proxy
     const onlineProxy = proxies.find(p => p.modems?.status === 'online');
     setSelectedProxy(onlineProxy || proxies[0] || null);
   };
@@ -71,246 +71,264 @@ export default function Storefront({ session }) {
   ];
 
   return (
-    <main>
-      {/* ─── Hero ─────────────────────────────────────────────────── */}
-      <section className="hero">
-        <div className="container">
-          {/* Live stats badge */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-            <div className="badge badge-online" style={{ padding: '6px 16px', fontSize: '0.85rem' }}>
-              <span className="dot" />
-              {stats.online} proxies online right now
-            </div>
-          </div>
-
-          <h1 className="hero-title">
-            Real SIM Card Proxies.<br />
-            <span className="text-gradient">True Mobile IPs.</span>
-          </h1>
-
-          <p className="hero-subtitle">
-            Route your traffic through real 4G/5G SIM cards.
-            HTTP, SOCKS4, and SOCKS5 proxies — globally accessible,
-            impossible to detect as datacenter IPs.
-          </p>
-
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a href="#pricing" className="btn btn-primary btn-xl">
-              View Pricing <ChevronRight size={18} />
-            </a>
-            {!session && (
-              <Link to="/auth" className="btn btn-secondary btn-xl">
-                Sign In
-              </Link>
-            )}
-          </div>
-
-          {/* Live stats row */}
-          <div style={{
-            display: 'flex', gap: '40px', justifyContent: 'center',
-            marginTop: '48px', flexWrap: 'wrap',
-          }}>
-            {[
-              { val: stats.total,              label: 'Total Proxies' },
-              { val: stats.online,             label: 'Live Now' },
-              { val: stats.types.length || 3,  label: 'Proxy Types' },
-              { val: '4G/5G',                  label: 'Network Type' },
-            ].map(({ val, label }) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
-                  {val}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)', marginTop: '2px' }}>
-                  {label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Proxy Types ──────────────────────────────────────────── */}
-      <section style={{ padding: '60px 0' }}>
-        <div className="container">
-          <h2 style={{ textAlign: 'center', fontSize: '2rem', marginBottom: '8px' }}>
-            All Proxy Types Included
-          </h2>
-          <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '40px' }}>
-            Every plan includes HTTP, SOCKS4, and SOCKS5 endpoints
-          </p>
-
-          <div className="grid-3">
-            {PROXY_TYPES.map(pt => (
-              <div key={pt.name} className="card" style={{ textAlign: 'center' }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 14,
-                  background: `${pt.color}20`, margin: '0 auto 16px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.5rem', fontWeight: 700, color: pt.color,
-                  fontFamily: 'JetBrains Mono, monospace',
-                }}>
-                  {pt.name.split('/')[0][0]}
-                </div>
-                <h3 style={{ marginBottom: '8px' }}>{pt.name}</h3>
-                <p style={{ color: 'var(--clr-text-2)', fontSize: '0.9rem' }}>{pt.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Pricing ──────────────────────────────────────────────── */}
-      <section id="pricing" style={{ padding: '60px 0 80px' }}>
-        <div className="container">
-          <h2 style={{ textAlign: 'center', fontSize: '2rem', marginBottom: '8px' }}>
-            Simple, Transparent Pricing
-          </h2>
-          <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '48px' }}>
-            Pay per GB or choose a time-based plan. No hidden fees.
-          </p>
-
-          <div className="grid-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-            {plans.map((plan, i) => (
-              <div
-                key={plan.id}
-                className={`pricing-card ${plan.name === 'Monthly' ? 'featured' : ''}`}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--clr-accent)' }}>
-                  {PLAN_ICONS[plan.name] || <Wifi size={24} />}
-                  <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{plan.name}</span>
-                </div>
-
-                <div>
-                  <span className="price-amount">
-                    ${parseFloat(plan.price_usd).toFixed(0)}
-                  </span>
-                  <span className="price-unit">
-                    {plan.gb_limit ? ` / ${plan.gb_limit}GB` : plan.duration_days === 1 ? '/day' : plan.duration_days === 7 ? '/week' : '/month'}
-                  </span>
-                </div>
-
-                <p style={{ color: 'var(--clr-text-2)', fontSize: '0.9rem' }}>
-                  {plan.description}
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {FEATURES.slice(0, 4).map(f => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--clr-text-2)' }}>
-                      <Check size={14} color="var(--clr-green)" style={{ flexShrink: 0 }} />
-                      {f}
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  className="btn btn-primary btn-full"
-                  onClick={() => handleSelectPlan(plan)}
-                >
-                  Get Started
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Features ─────────────────────────────────────────────── */}
-      <section style={{ padding: '60px 0', borderTop: '1px solid var(--clr-border)' }}>
-        <div className="container">
-          <div className="grid-2" style={{ gap: '60px', alignItems: 'center' }}>
-            <div>
-              <h2 style={{ fontSize: '2.2rem', marginBottom: '16px' }}>
-                Why Mobile Proxies?
-              </h2>
-              <p style={{ color: 'var(--clr-text-2)', marginBottom: '28px' }}>
-                Unlike datacenter proxies, real SIM card IPs come from mobile carrier
-                networks. They're trusted by every website and bypass most anti-bot systems.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {FEATURES.map(f => (
-                  <div key={f} className="flex items-center gap-sm">
-                    <div style={{
-                      width: 24, height: 24, borderRadius: 8,
-                      background: 'rgba(16,185,129,0.15)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      <Check size={13} color="var(--clr-green)" />
-                    </div>
-                    <span style={{ fontSize: '0.95rem' }}>{f}</span>
-                  </div>
-                ))}
+    <SidebarLayout session={session} adminMode={false}>
+      <div style={{ width: '100%', overflowX: 'hidden' }}>
+        {/* ─── Hero ─────────────────────────────────────────────────── */}
+        <section className="hero">
+          <div className="container">
+            {/* Live stats badge */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+              <div className="badge badge-online" style={{ padding: '6px 16px', fontSize: '0.85rem' }}>
+                <span className="dot" />
+                {stats.online} proxies online right now
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h1 className="hero-title">
+              Real SIM Card Proxies.<br />
+              <span className="text-gradient">True Mobile IPs.</span>
+            </h1>
+
+            <p className="hero-subtitle">
+              Route your traffic through real 4G/5G SIM cards.
+              HTTP, SOCKS4, and SOCKS5 proxies — globally accessible,
+              impossible to detect as datacenter IPs.
+            </p>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <a href="#pricing" className="btn btn-primary btn-xl">
+                View Pricing <ChevronRight size={18} />
+              </a>
+              {!session ? (
+                <Link to="/auth" className="btn btn-secondary btn-xl">
+                  Sign In
+                </Link>
+              ) : (
+                <Link to="/dashboard" className="btn btn-secondary btn-xl">
+                  Go to Dashboard
+                </Link>
+              )}
+            </div>
+
+            {/* Live stats row */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: '20px',
+              maxWidth: '700px',
+              margin: '40px auto 0',
+            }}>
               {[
-                { icon: <Server size={22} />, title: 'Real Hardware',     desc: 'Physical USB modems with real SIM cards — not virtual or shared IPs.' },
-                { icon: <Lock size={22} />,   title: 'Authenticated',     desc: 'Each subscription gets unique username + password credentials.' },
-                { icon: <RefreshCw size={22} />, title: 'IP Rotation',    desc: 'Request a new IP by reconnecting the modem. Once per hour.' },
-                { icon: <Globe size={22} />,  title: 'Works Everywhere',  desc: 'Compatible with every browser, proxy tool, and automation framework.' },
-              ].map(({ icon, title, desc }) => (
-                <div key={title} className="card" style={{ flexDirection: 'row', gap: '16px', padding: '16px', display: 'flex', alignItems: 'flex-start' }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    background: 'rgba(59,130,246,0.1)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--clr-accent)', flexShrink: 0,
-                  }}>{icon}</div>
-                  <div>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{title}</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--clr-text-2)' }}>{desc}</div>
+                { val: stats.total,              label: 'Total Proxies' },
+                { val: stats.online,             label: 'Live Now' },
+                { val: stats.types.length || 3,  label: 'Proxy Types' },
+                { val: '4G/5G',                  label: 'Network Type' },
+              ].map(({ val, label }) => (
+                <div key={label} className="card" style={{ padding: '16px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--clr-text)' }}>
+                    {val}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)', marginTop: '2px', fontWeight: 500 }}>
+                    {label}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ─── CTA ──────────────────────────────────────────────────── */}
-      <section style={{ padding: '80px 0', textAlign: 'center' }}>
-        <div className="container-sm">
-          <h2 style={{ fontSize: '2.5rem', marginBottom: '16px' }}>
-            Ready to get started?
-          </h2>
-          <p style={{ color: 'var(--clr-text-2)', marginBottom: '32px', fontSize: '1.1rem' }}>
-            Create an account in seconds and get your first proxy running.
-          </p>
-          <Link to="/auth?tab=signup" className="btn btn-primary btn-xl">
-            Create Free Account <ChevronRight size={20} />
-          </Link>
-        </div>
-      </section>
+        {/* ─── Proxy Types ──────────────────────────────────────────── */}
+        <section style={{ padding: '50px 0' }}>
+          <div className="container">
+            <h2 style={{ textAlign: 'center', fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', marginBottom: '8px' }}>
+              All Proxy Types Included
+            </h2>
+            <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '36px', fontSize: '0.95rem' }}>
+              Every plan includes HTTP, SOCKS4, and SOCKS5 endpoints
+            </p>
 
-      {/* ─── Footer ───────────────────────────────────────────────── */}
-      <footer style={{
-        borderTop: '1px solid var(--clr-border)',
-        padding: '32px 0',
-        textAlign: 'center',
-        color: 'var(--clr-text-3)',
-        fontSize: '0.875rem',
-      }}>
-        <div className="container">
-          <div className="flex items-center justify-center gap-md" style={{ marginBottom: '16px' }}>
-            <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
-            <span className="text-gradient" style={{ fontWeight: 700 }}>ProxiCell</span>
+            <div className="grid grid-3" style={{ gap: '20px' }}>
+              {PROXY_TYPES.map(pt => (
+                <div key={pt.name} className="card" style={{ padding: '24px' }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 'var(--radius-md)',
+                    background: `${pt.color}20`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginBottom: '16px', color: pt.color,
+                  }}>
+                    <Server size={22} />
+                  </div>
+                  <h3 style={{ marginBottom: '8px', fontSize: '1.2rem' }}>{pt.name}</h3>
+                  <p className="text-muted text-sm">{pt.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <p>© {new Date().getFullYear()} ProxiCell. Real mobile proxies for professionals.</p>
-        </div>
-      </footer>
+        </section>
 
-      {/* ─── Purchase Modal ───────────────────────────────────────── */}
-      {selectedPlan && (
-        <PurchaseModal
-          plan={selectedPlan}
-          proxy={selectedProxy}
-          proxies={proxies}
-          onClose={() => setSelectedPlan(null)}
-          onSuccess={() => { setSelectedPlan(null); window.location.href = '/dashboard'; }}
-        />
-      )}
-    </main>
+        {/* ─── Features ─────────────────────────────────────────────── */}
+        <section style={{ padding: '60px 0', background: 'var(--clr-bg-2)' }}>
+          <div className="container">
+            <h2 style={{ textAlign: 'center', fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', marginBottom: '8px' }}>
+              Why ProxiCell Mobile Proxies?
+            </h2>
+            <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '40px', fontSize: '0.95rem' }}>
+              Built on real 4G/5G mobile carriers with dedicated hardware
+            </p>
+
+            <div className="grid grid-3" style={{ gap: '20px' }}>
+              {[
+                {
+                  icon: <Zap size={24} color="#3b82f6" />,
+                  title: 'Real Hardware SIM Cards',
+                  desc: 'Every proxy is backed by an actual SIM card connected to a cellular tower — not simulated or emulated.',
+                },
+                {
+                  icon: <RefreshCw size={24} color="#10b981" />,
+                  title: 'Instant IP Rotation',
+                  desc: 'Trigger airplane mode on the SIM modem to receive a fresh, clean mobile IP from the carrier in seconds.',
+                },
+                {
+                  icon: <Lock size={24} color="#8b5cf6" />,
+                  title: 'Zero Detection Risk',
+                  desc: 'Websites and anti-bot systems see regular mobile phone traffic. Perfect for web automation, scraping, and social media.',
+                },
+                {
+                  icon: <Globe size={24} color="#f59e0b" />,
+                  title: 'Global Access',
+                  desc: 'Connect from anywhere in the world. Traffic routes directly through your assigned mobile proxy port.',
+                },
+                {
+                  icon: <Activity size={24} color="#06b6d4" />,
+                  title: 'Real-Time Bandwidth Stats',
+                  desc: 'Track exact byte consumption live down to the megabyte with automatic accounting and renewal alerts.',
+                },
+                {
+                  icon: <Shield size={24} color="#ec4899" />,
+                  title: 'Dedicated Port Allocation',
+                  desc: 'Your port is exclusively assigned to your plan. Full isolation from other network traffic.',
+                },
+              ].map(f => (
+                <div key={f.title} className="card" style={{ padding: '24px' }}>
+                  <div style={{ marginBottom: '14px' }}>{f.icon}</div>
+                  <h3 style={{ marginBottom: '8px', fontSize: '1.1rem' }}>{f.title}</h3>
+                  <p className="text-muted text-sm">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Pricing ──────────────────────────────────────────────── */}
+        <section id="pricing" style={{ padding: '70px 0' }}>
+          <div className="container">
+            <h2 style={{ textAlign: 'center', fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', marginBottom: '8px' }}>
+              Simple, Transparent Pricing
+            </h2>
+            <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '44px', fontSize: '0.95rem' }}>
+              Choose the plan that fits your workflow. Instant provisioning upon payment.
+            </p>
+
+            <div className="grid grid-4" style={{ gap: '20px' }}>
+              {plans.map(plan => {
+                const isFeatured = plan.name === 'Weekly' || plan.name === 'Monthly';
+                return (
+                  <div
+                    key={plan.id}
+                    className={`pricing-card ${isFeatured ? 'featured' : ''}`}
+                    style={{ display: 'flex', flexDirection: 'column' }}
+                  >
+                    <div style={{ color: 'var(--clr-accent)', marginBottom: '8px' }}>
+                      {PLAN_ICONS[plan.name] || <Shield size={24} />}
+                    </div>
+
+                    <div style={{ fontWeight: 800, fontSize: '1.3rem' }}>{plan.name}</div>
+                    <p className="text-muted text-sm" style={{ minHeight: '36px' }}>{plan.description}</p>
+
+                    <div style={{ margin: '14px 0' }}>
+                      <span className="price-amount">${parseFloat(plan.price_usd).toFixed(0)}</span>
+                      <span className="price-unit">
+                        {plan.duration_days ? ` / ${plan.duration_days}d` : ' / GB'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px', flex: 1 }}>
+                      {FEATURES.map(f => (
+                        <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                          <Check size={14} color="var(--clr-green)" style={{ flexShrink: 0 }} />
+                          <span>{f}</span>
+                        </div>
+                      ))}
+                      {plan.gb_limit && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                          <Check size={14} color="var(--clr-green)" style={{ flexShrink: 0 }} />
+                          <span><strong>{plan.gb_limit} GB</strong> data included</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      className={`btn ${isFeatured ? 'btn-primary' : 'btn-secondary'} btn-full`}
+                      onClick={() => handleSelectPlan(plan)}
+                      style={{ padding: '12px' }}
+                    >
+                      Get Started <ChevronRight size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ─── CTA ──────────────────────────────────────────────────── */}
+        <section style={{
+          padding: '70px 0',
+          background: 'var(--grad-hero)',
+          textAlign: 'center',
+          borderTop: '1px solid var(--clr-border)',
+        }}>
+          <div className="container-sm">
+            <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', marginBottom: '16px' }}>
+              Ready to Upgrade Your Proxy Setup?
+            </h2>
+            <p className="hero-subtitle" style={{ marginBottom: '32px' }}>
+              Get started with undetectable mobile IPs powered by real SIM hardware.
+            </p>
+            <Link to="/auth?tab=signup" className="btn btn-primary btn-xl">
+              Create Free Account <ChevronRight size={20} />
+            </Link>
+          </div>
+        </section>
+
+        {/* ─── Footer ───────────────────────────────────────────────── */}
+        <footer style={{
+          borderTop: '1px solid var(--clr-border)',
+          padding: '32px 0',
+          textAlign: 'center',
+          color: 'var(--clr-text-3)',
+          fontSize: '0.875rem',
+        }}>
+          <div className="container">
+            <div className="flex items-center justify-center gap-md" style={{ marginBottom: '12px' }}>
+              <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
+              <span className="text-gradient" style={{ fontWeight: 700 }}>ProxiCell</span>
+            </div>
+            <p>© {new Date().getFullYear()} ProxiCell. Real mobile proxies for professionals.</p>
+          </div>
+        </footer>
+
+        {/* ─── Purchase Modal ───────────────────────────────────────── */}
+        {selectedPlan && (
+          <PurchaseModal
+            plan={selectedPlan}
+            proxy={selectedProxy}
+            proxies={proxies}
+            onClose={() => setSelectedPlan(null)}
+            onSuccess={() => { setSelectedPlan(null); window.location.href = '/dashboard'; }}
+          />
+        )}
+      </div>
+    </SidebarLayout>
   );
 }

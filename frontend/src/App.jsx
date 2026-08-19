@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
-import Navbar from './components/Navbar';
 import Storefront from './pages/Storefront';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
@@ -49,7 +48,6 @@ export default function App() {
           },
         }}
       />
-      <Navbar session={session} />
       <Routes>
         <Route path="/"          element={<Storefront session={session} />} />
         <Route path="/auth"      element={session ? <Navigate to="/dashboard" /> : <AuthPage />} />
