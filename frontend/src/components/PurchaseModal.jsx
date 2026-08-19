@@ -146,7 +146,8 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
   };
 
-  const [cryptoInvoiceUrl, setCryptoInvoiceUrl] = useState(null);
+  const [cryptoInvoiceUrl, setCryptoInvoiceUrl]     = useState(null);
+  const [pendingCryptoData, setPendingCryptoData] = useState(null);
 
   const handlePayWithCrypto = async () => {
     if (!selProxy) {
@@ -179,15 +180,40 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       const invoice = await res.json();
 
       if (invoice?.invoice_url) {
-        // Activate proxy subscription linked to this order
-        await activateSubscription(order.id, plan.id, selProxy.id, 'crypto', invoice.id ? String(invoice.id) : null);
+        // Save pending order details — do NOT activate subscription until payment is completed
+        setPendingCryptoData({
+          orderId:   order.id,
+          planId:    plan.id,
+          proxyId:   selProxy.id,
+          invoiceId: invoice.id ? String(invoice.id) : null,
+        });
         setCryptoInvoiceUrl(invoice.invoice_url);
-        toast.success('Crypto payment loaded! Complete checkout below.');
+        toast.success('Crypto invoice created! Complete payment below to activate proxy.');
       } else {
         throw new Error(invoice?.message || 'Failed to create crypto invoice. Please try again.');
       }
     } catch (err) {
       toast.error(err.message || 'Crypto payment error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmCryptoPayment = async () => {
+    if (!pendingCryptoData) return;
+    setLoading(true);
+    try {
+      await activateSubscription(
+        pendingCryptoData.orderId,
+        pendingCryptoData.planId,
+        pendingCryptoData.proxyId,
+        'crypto',
+        pendingCryptoData.invoiceId
+      );
+      toast.success('🎉 Payment confirmed! Your proxy credentials are now active.');
+      onSuccess();
+    } catch (err) {
+      toast.error('Could not activate proxy: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -233,20 +259,21 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
             <div className="flex gap-sm">
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => setCryptoInvoiceUrl(null)}
+                onClick={() => {
+                  setCryptoInvoiceUrl(null);
+                  setPendingCryptoData(null);
+                }}
                 style={{ flex: 1 }}
               >
-                ← Back
+                ← Cancel
               </button>
               <button
                 className="btn btn-primary btn-sm"
-                onClick={() => {
-                  toast.success('🎉 Proxy ready in your dashboard!');
-                  onSuccess();
-                }}
+                onClick={handleConfirmCryptoPayment}
+                disabled={loading}
                 style={{ flex: 2 }}
               >
-                I've Completed Payment →
+                {loading ? 'Activating Proxy...' : 'I\'ve Completed Payment →'}
               </button>
             </div>
           </div>
