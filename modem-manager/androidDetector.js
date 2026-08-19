@@ -88,40 +88,52 @@ async function getAndroidTetheredInterface(serial) {
       const { stdout } = await execAsync('netsh interface ipv4 show addresses', { timeout: 4000 });
       const blocks = stdout.split(/Configuration for interface /);
 
-      // Pass 1: Look specifically for secondary adapters with Default Gateway (active tethering)
+      // IPs that are definitely NOT a SIM card / USB tethering
+      const isVirtualIp = (ip) => {
+        if (!ip) return true;
+        if (ip.startsWith('169.254.')) return true;  // APIPA / link-local
+        if (ip.startsWith('127.'))     return true;  // loopback
+        if (ip.startsWith('192.168.56.')) return true; // VirtualBox host-only
+        if (ip.startsWith('192.168.57.')) return true; // VirtualBox alt
+        if (ip.startsWith('192.168.99.')) return true; // Docker / VMware
+        if (ip.startsWith('172.28.'))   return true;  // WSL2 / Hyper-V
+        if (ip.startsWith('172.29.'))   return true;
+        if (ip.startsWith('172.30.'))   return true;
+        if (ip.startsWith('172.31.'))   return true;
+        return false;
+      };
+
+      const isVirtualName = (name) =>
+        /loopback|tailscale|virtualbox|vmware|vethernet|wsl|hyper-v|docker/i.test(name);
+
+      // Pass 1: adapter with a Default Gateway (real routed tethering connection)
       for (const block of blocks) {
         if (!block.trim()) continue;
         const nameMatch = block.match(/^"([^"]+)"/);
         const ifaceName = nameMatch ? nameMatch[1] : '';
 
-        // Skip virtual interfaces and loopback
-        if (/loopback|tailscale|virtualbox|vmware|vEthernet/i.test(ifaceName)) continue;
+        if (isVirtualName(ifaceName)) continue;
         if (ifaceName.toLowerCase() === 'ethernet') continue; // skip primary LAN
 
         const ipMatch = block.match(/IP Address:\s+([\d.]+)/i);
         const gwMatch = block.match(/Default Gateway:\s+([\d.]+)/i);
 
-        if (ipMatch && gwMatch && !ipMatch[1].startsWith('169.254.') && !ipMatch[1].startsWith('127.')) {
-          return {
-            iface: ifaceName,
-            ipAddress: ipMatch[1].trim(),
-          };
+        if (ipMatch && gwMatch && !isVirtualIp(ipMatch[1])) {
+          return { iface: ifaceName, ipAddress: ipMatch[1].trim() };
         }
       }
 
-      // Pass 2: Look for any NDIS / Cellular / Android named adapter with valid IP
+      // Pass 2: any non-virtual adapter with a valid IP (tethering w/o gateway)
       for (const block of blocks) {
         const nameMatch = block.match(/^"([^"]+)"/);
         const ifaceName = nameMatch ? nameMatch[1] : '';
-        if (/loopback|tailscale|virtualbox|vmware|vEthernet/i.test(ifaceName)) continue;
+
+        if (isVirtualName(ifaceName)) continue;
         if (ifaceName.toLowerCase() === 'ethernet') continue;
 
         const ipMatch = block.match(/IP Address:\s+([\d.]+)/i);
-        if (ipMatch && !ipMatch[1].startsWith('169.254.') && !ipMatch[1].startsWith('127.')) {
-          return {
-            iface: ifaceName,
-            ipAddress: ipMatch[1].trim(),
-          };
+        if (ipMatch && !isVirtualIp(ipMatch[1])) {
+          return { iface: ifaceName, ipAddress: ipMatch[1].trim() };
         }
       }
     } catch {}

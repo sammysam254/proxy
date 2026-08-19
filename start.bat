@@ -98,6 +98,16 @@ echo ================================================================
 echo.
 
 cd /d "%PROJ_DIR%modem-manager"
+
+:: ─── 6a. Pull latest code from GitHub ───
+echo [*] Checking for updates from GitHub...
+cd /d "%PROJ_DIR%"
+git pull --ff-only --quiet 2>nul && echo [OK] Updated to latest version. || echo [--] Offline or already up to date.
+cd /d "%PROJ_DIR%modem-manager"
+
+:: ─── 6b. Re-install deps if package.json changed ───
+call npm install --silent 2>nul
+
 node index.js
 
 echo.
