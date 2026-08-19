@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck } from 'lucide-react';
+import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { createOrder, supabase, simulateAdminSubscription, activateSubscription, isAdmin } from '../lib/supabase';
 import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
 
@@ -158,15 +158,57 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   };
 
   const [showUsdtCheckout, setShowUsdtCheckout] = useState(false);
-  const [usdtNetwork, setUsdtNetwork]           = useState('TRC20'); // TRC20 | BEP20 | ERC20 | POLYGON
-  const [cryptoInvoiceUrl, setCryptoInvoiceUrl] = useState(null);
+  const [usdtNetwork, setUsdtNetwork]           = useState('BEP20'); // BEP20 (default lowest fee) | TRC20 | POLYGON | ERC20
+  const [cryptoPayment, setCryptoPayment]       = useState(null); // { payment_id, pay_address, pay_amount, payment_status, actually_paid }
   const [pendingCryptoData, setPendingCryptoData] = useState(null);
+  const [verifying, setVerifying]               = useState(false);
+  const [partialPayment, setPartialPayment]     = useState(null); // { paid, remaining }
 
-  const USDT_ADDRESSES = {
-    TRC20:   'TWMc4qXkGe57U6x87pY4F6Q2mN8K3sB9jA',
-    BEP20:   '0x83B38c8Eb3686D32490e55728a3fFF70984950e1',
-    ERC20:   '0x83B38c8Eb3686D32490e55728a3fFF70984950e1',
-    POLYGON: '0x83B38c8Eb3686D32490e55728a3fFF70984950e1',
+  const NETWORK_MAP = {
+    BEP20:   { code: 'usdtbsc',   label: 'BEP20',   name: 'BNB Smart Chain', note: 'Fast & Low Fee' },
+    TRC20:   { code: 'usdttrc20', label: 'TRC20',   name: 'Tron Network',    note: 'Lowest Fee' },
+    POLYGON: { code: 'usdtmatic', label: 'Polygon', name: 'Polygon Network', note: 'Fast & Cheap' },
+    ERC20:   { code: 'usdterc20', label: 'ERC20',   name: 'Ethereum',        note: 'High Gas' },
+  };
+
+  const createCryptoPayment = async (networkKey, orderId) => {
+    const net = NETWORK_MAP[networkKey] || NETWORK_MAP.BEP20;
+    const apiKey = NOWPAYMENTS_API_KEY || 'QNJ3N44-2JP4AKM-PGPJXCK-3AQPC3T';
+
+    const res = await fetch('https://api.nowpayments.io/v1/payment', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        price_amount: parseFloat(plan.price_usd),
+        price_currency: 'usd',
+        pay_currency: net.code,
+        order_id: orderId,
+        order_description: `Vertex Proxies ${plan.name} Proxy Subscription`,
+      }),
+    });
+
+    const data = await res.json();
+    if (data && data.payment_id && data.pay_address) {
+      setCryptoPayment(data);
+      return data;
+    } else {
+      // Fallback if direct coin endpoint had minimal limit error
+      const invRes = await fetch('https://api.nowpayments.io/v1/invoice', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          price_amount: parseFloat(plan.price_usd),
+          price_currency: 'usd',
+          order_id: orderId,
+          order_description: `Vertex Proxies ${plan.name} Proxy Subscription`,
+        }),
+      });
+      const invData = await invRes.json();
+      return invData;
+    }
   };
 
   const handlePayWithCrypto = async () => {
@@ -176,40 +218,22 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
     setLoading(true);
     playClickSound();
+    setPartialPayment(null);
+
     try {
       const { data: order, error } = await createOrder(plan.id, selProxy.id, 'crypto');
       if (error) throw error;
 
-      // Save pending order details
       setPendingCryptoData({
-        orderId:   order.id,
-        planId:    plan.id,
-        proxyId:   selProxy.id,
+        orderId: order.id,
+        planId:  plan.id,
+        proxyId: selProxy.id,
       });
 
-      // Also create NOWPayments invoice in background
-      const apiKey = NOWPAYMENTS_API_KEY || 'QNJ3N44-2JP4AKM-PGPJXCK-3AQPC3T';
-      fetch('https://api.nowpayments.io/v1/invoice', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          price_amount: parseFloat(plan.price_usd),
-          price_currency: 'usd',
-          order_id: order.id,
-          order_description: `Vertex Proxies ${plan.name} Proxy Subscription`,
-          success_url: `${window.location.origin}/dashboard?payment=success&order_id=${order.id}`,
-          cancel_url: `${window.location.origin}/#pricing`,
-        }),
-      }).then(r => r.json()).then(inv => {
-        if (inv?.invoice_url) setCryptoInvoiceUrl(inv.invoice_url);
-      }).catch(() => {});
-
+      await createCryptoPayment(usdtNetwork, order.id);
       setShowUsdtCheckout(true);
       playClickSound();
-      toast.success('USDT payment ready! Select your preferred network.');
+      toast.success('USDT payment gateway ready! Send funds to activate.');
     } catch (err) {
       playErrorSound();
       toast.error(err.message || 'Crypto payment error');
@@ -218,36 +242,112 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
   };
 
-  const handleConfirmCryptoPayment = async () => {
-    if (!pendingCryptoData) return;
-    setLoading(true);
+  const handleNetworkSwitch = async (netKey) => {
+    setUsdtNetwork(netKey);
+    setPartialPayment(null);
     playClickSound();
+
+    if (pendingCryptoData?.orderId) {
+      setLoading(true);
+      try {
+        await createCryptoPayment(netKey, pendingCryptoData.orderId);
+      } catch (e) {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleVerifyCryptoPayment = async () => {
+    if (!pendingCryptoData) return;
+    setVerifying(true);
+    playClickSound();
+
     try {
-      await activateSubscription(
-        pendingCryptoData.orderId,
-        pendingCryptoData.planId,
-        pendingCryptoData.proxyId,
-        'crypto',
-        `USDT_${usdtNetwork}_${Date.now()}`
-      );
-      playSuccessSound();
-      toast.success('🎉 Payment confirmed! Your proxy credentials are now active.');
-      onSuccess();
+      const apiKey = NOWPAYMENTS_API_KEY || 'QNJ3N44-2JP4AKM-PGPJXCK-3AQPC3T';
+      const paymentId = cryptoPayment?.payment_id;
+
+      if (!paymentId) {
+        throw new Error('No active payment session found. Please try generating invoice again.');
+      }
+
+      // Check live status on blockchain via NOWPayments
+      const res = await fetch(`https://api.nowpayments.io/v1/payment/${paymentId}`, {
+        headers: { 'x-api-key': apiKey },
+      });
+      const statusData = await res.json();
+
+      const status = statusData?.payment_status?.toLowerCase();
+      const actuallyPaid = parseFloat(statusData?.actually_paid || 0);
+      const payAmount    = parseFloat(statusData?.pay_amount || plan.price_usd);
+
+      // Case 1: Payment Confirmed / Completed
+      if (['finished', 'confirmed', 'sending', 'completed'].includes(status)) {
+        await activateSubscription(
+          pendingCryptoData.orderId,
+          pendingCryptoData.planId,
+          pendingCryptoData.proxyId,
+          'crypto',
+          String(paymentId)
+        );
+        playSuccessSound();
+        toast.success('🎉 Blockchain payment confirmed! Your proxy credentials are now active.');
+        onSuccess();
+        return;
+      }
+
+      // Case 2: Partial Payment Detected
+      if (status === 'partially_paid' || (actuallyPaid > 0 && actuallyPaid < payAmount)) {
+        const remaining = Math.max(0, payAmount - actuallyPaid).toFixed(4);
+        setPartialPayment({
+          paid: actuallyPaid,
+          required: payAmount,
+          remaining: remaining,
+        });
+        playErrorSound();
+        toast.error(`⚠️ Partial payment detected: ${actuallyPaid} USDT paid. Please send the remaining ${remaining} USDT balance to activate.`, { duration: 6000 });
+        return;
+      }
+
+      // Case 3: Still waiting for blockchain confirmation
+      if (status === 'waiting') {
+        playErrorSound();
+        toast('⏳ Payment not detected on blockchain yet. Transactions take 1–3 minutes to confirm on-chain. Please retry after sending funds.', {
+          icon: '⏳',
+          duration: 5000,
+        });
+        return;
+      }
+
+      // Case 4: Expired or Failed
+      if (status === 'expired' || status === 'failed') {
+        playErrorSound();
+        toast.error('❌ This payment session expired. Please choose a network to generate a new payment address.');
+        await createCryptoPayment(usdtNetwork, pendingCryptoData.orderId);
+        return;
+      }
+
+      toast(`Payment status: ${statusData?.payment_status || 'Checking'}. Please check back in a minute.`);
     } catch (err) {
       playErrorSound();
-      toast.error('Could not activate proxy: ' + err.message);
+      toast.error('Verification check error: ' + err.message);
     } finally {
-      setLoading(false);
+      setVerifying(false);
     }
   };
 
   const copyToClipboard = (text, label) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(String(text));
     playClickSound();
     toast.success(`Copied ${label}!`, { duration: 1500 });
   };
 
-  const currentAddress = USDT_ADDRESSES[usdtNetwork] || USDT_ADDRESSES.TRC20;
+  const currentAddress = cryptoPayment?.pay_address || '0x83B38c8Eb3686D32490e55728a3fFF70984950e1';
+  const currentAmount  = cryptoPayment?.pay_amount
+    ? parseFloat(cryptoPayment.pay_amount).toFixed(4)
+    : parseFloat(plan.price_usd).toFixed(2);
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(currentAddress)}`;
 
   return (
@@ -274,30 +374,56 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
             <div style={{ marginBottom: '16px' }}>
               <label className="input-label" style={{ marginBottom: '8px' }}>Select USDT Network</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                {[
-                  { key: 'TRC20', label: 'TRC20', note: 'Tron (Lowest Fee)' },
-                  { key: 'BEP20', label: 'BEP20', note: 'BSC' },
-                  { key: 'ERC20', label: 'ERC20', note: 'Ethereum' },
-                  { key: 'POLYGON', label: 'Polygon', note: 'MATIC' },
-                ].map(net => (
-                  <button
-                    key={net.key}
-                    type="button"
-                    onClick={() => { playClickSound(); setUsdtNetwork(net.key); }}
-                    className={`btn btn-sm ${usdtNetwork === net.key ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{
-                      padding: '8px 4px',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      flexDirection: 'column',
-                      borderRadius: 'var(--radius-md)',
-                    }}
-                  >
-                    {net.label}
-                  </button>
-                ))}
+                {Object.keys(NETWORK_MAP).map(key => {
+                  const net = NETWORK_MAP[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleNetworkSwitch(key)}
+                      className={`btn btn-sm ${usdtNetwork === key ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{
+                        padding: '8px 4px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        flexDirection: 'column',
+                        borderRadius: 'var(--radius-md)',
+                      }}
+                    >
+                      {net.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Partial payment alert */}
+            {partialPayment && (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px 16px',
+                marginBottom: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b', fontWeight: 700, fontSize: '0.9rem', marginBottom: '6px' }}>
+                  <AlertTriangle size={16} /> Partial Payment Detected
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--clr-text-2)', marginBottom: '10px', lineHeight: 1.4 }}>
+                  You paid <strong>{partialPayment.paid} USDT</strong> out of <strong>{partialPayment.required} USDT</strong>.
+                  <br />
+                  Remaining balance to activate proxy: <strong style={{ color: '#f59e0b', fontSize: '0.95rem' }}>{partialPayment.remaining} USDT</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(partialPayment.remaining, 'Remaining Balance')}
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: '100%', borderColor: '#f59e0b', color: '#f59e0b' }}
+                >
+                  Copy Remaining Balance ({partialPayment.remaining} USDT)
+                </button>
+              </div>
+            )}
 
             {/* High-Contrast QR Code Card */}
             <div style={{
@@ -323,7 +449,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                 }}
               />
               <div style={{ color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', marginTop: '6px' }}>
-                USDT ({usdtNetwork})
+                USDT ({NETWORK_MAP[usdtNetwork]?.label || usdtNetwork})
               </div>
             </div>
 
@@ -334,12 +460,12 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                 <div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>Exact Amount to Send</div>
                   <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--clr-accent)' }}>
-                    {parseFloat(plan.price_usd).toFixed(2)} USDT
+                    {currentAmount} USDT
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => copyToClipboard(parseFloat(plan.price_usd).toFixed(2), 'Amount')}
+                  onClick={() => copyToClipboard(currentAmount, 'Amount')}
                   className="btn btn-secondary btn-sm"
                   style={{ padding: '6px 12px' }}
                 >
@@ -350,7 +476,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
               {/* Address */}
               <div className="card" style={{ padding: '12px 14px', background: 'var(--clr-surface-2)' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)', marginBottom: '4px' }}>
-                  USDT ({usdtNetwork}) Deposit Address
+                  USDT ({NETWORK_MAP[usdtNetwork]?.label || usdtNetwork}) Deposit Address
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <div style={{
@@ -378,41 +504,37 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
             </div>
 
             {/* Actions */}
-            <div className="flex gap-sm" style={{ marginBottom: cryptoInvoiceUrl ? '10px' : '0' }}>
+            <div className="flex gap-sm" style={{ marginBottom: '10px' }}>
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => {
                   setShowUsdtCheckout(false);
                   setPendingCryptoData(null);
+                  setPartialPayment(null);
                 }}
                 style={{ flex: 1 }}
               >
                 ← Back
               </button>
               <button
-                className="btn btn-primary btn-sm"
-                onClick={handleConfirmCryptoPayment}
-                disabled={loading}
+                className={`btn btn-primary btn-sm ${verifying ? 'btn-loading' : ''}`}
+                onClick={handleVerifyCryptoPayment}
+                disabled={verifying || loading}
                 style={{ flex: 2, padding: '12px' }}
               >
-                {loading ? 'Activating Proxy...' : 'I\'ve Sent the USDT →'}
+                {verifying ? (
+                  <>
+                    <div className="loader" style={{ width: 16, height: 16 }} />
+                    Checking Blockchain...
+                  </>
+                ) : (
+                  'I\'ve Sent the USDT (Verify Payment) →'
+                )}
               </button>
             </div>
-
-            {cryptoInvoiceUrl && (
-              <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                <a
-                  href={cryptoInvoiceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', textDecoration: 'underline' }}
-                >
-                  Open NOWPayments Gateway Page ↗
-                </a>
-              </div>
-            )}
           </div>
         ) : (
+
 
           <>
             {/* Plan summary */}
