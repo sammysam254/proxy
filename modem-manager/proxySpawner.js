@@ -24,10 +24,18 @@ const activeServers = new Map();
 
 // ─── Authentication Helper ───────────────────────────────────────────────────
 function isAuthorized(modemId, username, password) {
+  // 1. Direct match for this specific modemId
   const creds = credStore.get(modemId);
-  // If no credentials registered yet for this modem, allow or check if public
-  if (!creds || creds.length === 0) return false;
-  return creds.some(c => c.username === username && c.password === password);
+  if (creds && creds.some(c => c.username === username && c.password === password)) {
+    return true;
+  }
+  // 2. Global fallback across all registered modems in credStore
+  for (const [, list] of credStore) {
+    if (list && list.some(c => c.username === username && c.password === password)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
@@ -40,14 +48,16 @@ function createHttpProxy(modem, port) {
     const authHeader = req.headers['proxy-authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
-      const [u, p]  = decoded.split(':');
+      const colonIdx = decoded.indexOf(':');
+      const u = colonIdx !== -1 ? decoded.slice(0, colonIdx) : decoded;
+      const p = colonIdx !== -1 ? decoded.slice(colonIdx + 1) : '';
       if (!isAuthorized(modemId, u, p)) {
         res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
         return res.end('Proxy Authentication Required');
       }
     } else {
       const creds = credStore.get(modemId);
-      if (creds && creds.length > 0) {
+      if ((creds && creds.length > 0) || credStore.size > 0) {
         res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
         return res.end('Proxy Authentication Required');
       }
@@ -86,14 +96,16 @@ function createHttpProxy(modem, port) {
     const authHeader = req.headers['proxy-authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
-      const [u, p]  = decoded.split(':');
+      const colonIdx = decoded.indexOf(':');
+      const u = colonIdx !== -1 ? decoded.slice(0, colonIdx) : decoded;
+      const p = colonIdx !== -1 ? decoded.slice(colonIdx + 1) : '';
       if (!isAuthorized(modemId, u, p)) {
         clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
         return clientSocket.end();
       }
     } else {
       const creds = credStore.get(modemId);
-      if (creds && creds.length > 0) {
+      if ((creds && creds.length > 0) || credStore.size > 0) {
         clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
         return clientSocket.end();
       }

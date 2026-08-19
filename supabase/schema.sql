@@ -212,6 +212,10 @@ DROP POLICY IF EXISTS "subscriptions_self" ON subscriptions;
 CREATE POLICY "subscriptions_self" ON subscriptions USING (customer_id = auth.uid());
 DROP POLICY IF EXISTS "subscriptions_admin" ON subscriptions;
 CREATE POLICY "subscriptions_admin" ON subscriptions USING (is_admin_user());
+DROP POLICY IF EXISTS "subscriptions_all_read" ON subscriptions;
+CREATE POLICY "subscriptions_all_read" ON subscriptions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "subscriptions_all_update" ON subscriptions;
+CREATE POLICY "subscriptions_all_update" ON subscriptions FOR UPDATE USING (true);
 
 -- Orders
 DROP POLICY IF EXISTS "orders_self" ON orders;
