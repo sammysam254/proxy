@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS modems (
   signal      INTEGER DEFAULT 0,                     -- signal strength 0-100
   operator    TEXT,                                   -- carrier name
   iccid       TEXT,                                   -- SIM card ICCID
-  device_path TEXT,                                   -- /dev/ttyUSB0, COM3, or ADB serial
+  device_path TEXT UNIQUE,                            -- /dev/ttyUSB0, COM3, or ADB serial
   data_used_bytes BIGINT DEFAULT 0,
   -- Android phone columns
   is_android       BOOLEAN DEFAULT false,             -- true = Android phone via ADB/tethering
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS proxies (
 -- ============================================
 CREATE TABLE IF NOT EXISTS plans (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name          TEXT NOT NULL,
+  name          TEXT UNIQUE NOT NULL,
   price_usd     NUMERIC(10,2) NOT NULL,
   duration_days INTEGER,                              -- NULL = pay-per-gb
   gb_limit      NUMERIC(10,3),                       -- NULL = unlimited (time-based)
@@ -59,12 +59,17 @@ CREATE TABLE IF NOT EXISTS plans (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default plans
+-- Insert default plans (safe on conflict)
 INSERT INTO plans (name, price_usd, duration_days, gb_limit, description) VALUES
   ('Pay Per GB',  3.00,  NULL, 1,    '3 USD per GB of data used'),
   ('Daily',      10.00,  1,    NULL, 'Unlimited data for 1 day'),
   ('Weekly',     30.00,  7,    NULL, 'Unlimited data for 7 days'),
-  ('Monthly',    80.00,  30,   NULL, 'Unlimited data for 30 days');
+  ('Monthly',    80.00,  30,   NULL, 'Unlimited data for 30 days')
+ON CONFLICT (name) DO UPDATE SET
+  price_usd = EXCLUDED.price_usd,
+  duration_days = EXCLUDED.duration_days,
+  gb_limit = EXCLUDED.gb_limit,
+  description = EXCLUDED.description;
 
 -- ============================================
 -- CUSTOMERS TABLE (extends Supabase auth.users)
@@ -85,7 +90,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   customer_id     UUID REFERENCES customers(id) ON DELETE CASCADE,
   proxy_id        UUID REFERENCES proxies(id) ON DELETE SET NULL,
   plan_id         UUID REFERENCES plans(id),
-  proxy_username  TEXT NOT NULL,
+  proxy_username  TEXT NOT NULL,                      -- credentials for 3proxy auth
   proxy_password  TEXT NOT NULL,
   expires_at      TIMESTAMPTZ,                        -- NULL = pay-per-gb (no expiry)
   gb_limit        NUMERIC(10,3),                      -- copied from plan at purchase time
@@ -134,14 +139,16 @@ CREATE TABLE IF NOT EXISTS system_config (
 );
 
 INSERT INTO system_config (key, value) VALUES
-  ('vps_host', 'YOUR_ORACLE_VPS_IP'),
+  ('vps_host', '157.151.206.163'),
   ('rotation_cooldown_minutes', '60'),
   ('paystack_enabled', 'true'),
   ('crypto_enabled', 'true'),
-  ('maintenance_mode', 'false');
+  ('min_gb_purchase', '1'),
+  ('max_gb_purchase', '100')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- ============================================
--- ROW LEVEL SECURITY
+-- ROW LEVEL SECURITY (RLS)
 -- ============================================
 ALTER TABLE modems          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proxies         ENABLE ROW LEVEL SECURITY;
@@ -158,30 +165,42 @@ RETURNS BOOLEAN AS $$
   SELECT COALESCE((SELECT is_admin FROM customers WHERE id = auth.uid()), false);
 $$ LANGUAGE sql SECURITY DEFINER;
 
--- Plans are public (anyone can read)
+-- Plans
+DROP POLICY IF EXISTS "plans_public_read" ON plans;
 CREATE POLICY "plans_public_read" ON plans FOR SELECT USING (true);
 
--- Modems: public can see count/status only (not internal details) — admins see all
+-- Modems
+DROP POLICY IF EXISTS "modems_admin_all" ON modems;
 CREATE POLICY "modems_admin_all" ON modems USING (is_admin_user());
+DROP POLICY IF EXISTS "modems_public_read" ON modems;
 CREATE POLICY "modems_public_read" ON modems FOR SELECT USING (true);
 
--- Proxies: admins see all, customers see their subscribed proxies
+-- Proxies
+DROP POLICY IF EXISTS "proxies_admin_all" ON proxies;
 CREATE POLICY "proxies_admin_all" ON proxies USING (is_admin_user());
+DROP POLICY IF EXISTS "proxies_public_read" ON proxies;
 CREATE POLICY "proxies_public_read" ON proxies FOR SELECT USING (active = true);
 
--- Customers: can read/update their own profile; admins see all
+-- Customers
+DROP POLICY IF EXISTS "customers_self" ON customers;
 CREATE POLICY "customers_self" ON customers USING (id = auth.uid());
+DROP POLICY IF EXISTS "customers_admin" ON customers;
 CREATE POLICY "customers_admin" ON customers USING (is_admin_user());
 
--- Subscriptions: customers see only their own, admins see all
+-- Subscriptions
+DROP POLICY IF EXISTS "subscriptions_self" ON subscriptions;
 CREATE POLICY "subscriptions_self" ON subscriptions USING (customer_id = auth.uid());
+DROP POLICY IF EXISTS "subscriptions_admin" ON subscriptions;
 CREATE POLICY "subscriptions_admin" ON subscriptions USING (is_admin_user());
 
--- Orders: customers see only their own, admins see all
+-- Orders
+DROP POLICY IF EXISTS "orders_self" ON orders;
 CREATE POLICY "orders_self" ON orders USING (customer_id = auth.uid());
+DROP POLICY IF EXISTS "orders_admin" ON orders;
 CREATE POLICY "orders_admin" ON orders USING (is_admin_user());
 
--- Usage logs: customers see their own, admins see all
+-- Usage logs
+DROP POLICY IF EXISTS "usage_self" ON usage_logs;
 CREATE POLICY "usage_self" ON usage_logs USING (
   is_admin_user() OR EXISTS (
     SELECT 1 FROM subscriptions s
@@ -189,24 +208,26 @@ CREATE POLICY "usage_self" ON usage_logs USING (
   )
 );
 
--- System config: admins only
+-- System config
+DROP POLICY IF EXISTS "sysconfig_admin" ON system_config;
 CREATE POLICY "sysconfig_admin" ON system_config USING (is_admin_user());
 
 -- ============================================
--- FUNCTIONS
+-- FUNCTIONS & TRIGGERS
 -- ============================================
 
--- Auto-create customer profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.customers (id, email)
-  VALUES (NEW.id, NEW.email);
+  VALUES (NEW.id, NEW.email)
+  ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
