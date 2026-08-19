@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+dist/
+.env
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Build artifacts
+frontend/dist/
+frontend/.env
+
+# 3proxy config (generated at runtime)
+proxy-configs/
+logs/
+
+# SSH keys
+*.pem
+*.key
+*_tunnel
+*_tunnel.pub

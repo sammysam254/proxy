@@ -1,0 +1,18 @@
+{
+  "name": "proxicell-modem-manager",
+  "version": "1.0.0",
+  "description": "ProxiCell — USB Modem detection, 3proxy management, and VPS tunnel management",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "axios": "^1.7.7",
+    "chalk": "^4.1.2",
+    "uuid": "^10.0.0"
+  }
+}
