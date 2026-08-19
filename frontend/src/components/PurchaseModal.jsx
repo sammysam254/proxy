@@ -143,6 +143,8 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
   };
 
+  const [cryptoInvoiceUrl, setCryptoInvoiceUrl] = useState(null);
+
   const handlePayWithCrypto = async () => {
     if (!selProxy) {
       toast.error('Please select an online proxy/SIM first.');
@@ -176,9 +178,8 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       if (invoice?.invoice_url) {
         // Activate proxy subscription linked to this order
         await activateSubscription(order.id, plan.id, selProxy.id, 'crypto', invoice.id ? String(invoice.id) : null);
-        window.open(invoice.invoice_url, '_blank');
-        toast.success('Crypto payment window opened! Your proxy is ready in your dashboard.');
-        onSuccess();
+        setCryptoInvoiceUrl(invoice.invoice_url);
+        toast.success('Crypto payment loaded! Complete checkout below.');
       } else {
         throw new Error(invoice?.message || 'Failed to create crypto invoice. Please try again.');
       }
@@ -191,136 +192,184 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
 
   return (
     <div className="modal-backdrop" onClick={handleBackdrop}>
-      <div className="modal">
+      <div className="modal" style={{ maxWidth: cryptoInvoiceUrl ? '560px' : '480px', width: '92%' }}>
         {/* Header */}
-        <div className="flex justify-between items-center" style={{ marginBottom: '24px' }}>
+        <div className="flex justify-between items-center" style={{ marginBottom: '20px' }}>
           <div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '2px' }}>Purchase Plan</h2>
-            <p className="text-muted text-sm">Complete your proxy subscription</p>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '2px' }}>
+              {cryptoInvoiceUrl ? 'Complete Crypto Payment' : 'Purchase Plan'}
+            </h2>
+            <p className="text-muted text-sm">
+              {cryptoInvoiceUrl ? 'Pay with USDT, BTC, ETH or other crypto' : 'Complete your proxy subscription'}
+            </p>
           </div>
           <button className="btn btn-ghost btn-sm modal-close" onClick={onClose} style={{ position: 'relative', top: 'auto', right: 'auto' }}>
             <X size={18} />
           </button>
         </div>
 
-        {/* Plan summary */}
-        <div className="card card-accent" style={{ marginBottom: '20px' }}>
-          <div className="flex justify-between items-center">
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{plan.name} Plan</div>
-              <div className="text-muted text-sm">{plan.description}</div>
+        {cryptoInvoiceUrl ? (
+          <div>
+            <div style={{
+              width: '100%',
+              height: '520px',
+              borderRadius: 'var(--radius-md)',
+              overflow: 'hidden',
+              border: '1px solid var(--clr-border)',
+              background: '#fff',
+              marginBottom: '16px',
+            }}>
+              <iframe
+                src={cryptoInvoiceUrl}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="NOWPayments Crypto Checkout"
+                allow="payment"
+              />
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>${parseFloat(plan.price_usd).toFixed(0)}</div>
-          </div>
-        </div>
 
-        {/* Proxy selector */}
-        <div className="input-group" style={{ marginBottom: '20px' }}>
-          <label className="input-label">
-            <Wifi size={13} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-            Select Proxy / SIM Card
-          </label>
-          {onlineProxies.length > 0 ? (
-            <select
-              className="input select"
-              value={selProxy?.id || ''}
-              onChange={e => setSelProxy(onlineProxies.find(p => p.id === e.target.value))}
-            >
-              {onlineProxies.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.modems?.label} — {p.proxy_type?.toUpperCase()} — {p.modems?.operator || 'Mobile'}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div className="card" style={{ padding: '12px 16px', color: 'var(--clr-text-2)', fontSize: '0.9rem' }}>
-              No proxies online right now. Please try again shortly.
-            </div>
-          )}
-        </div>
-
-        {/* Payment method */}
-        <div className="input-group" style={{ marginBottom: '24px' }}>
-          <label className="input-label">Payment Method</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {[
-              { key: 'paystack', label: 'Card / Bank',  icon: <CreditCard size={18} />,  sub: 'Powered by Paystack' },
-              { key: 'crypto',   label: 'Crypto',        icon: <Bitcoin size={18} />,     sub: 'USDT, BTC & more' },
-            ].map(m => (
+            <div className="flex gap-sm">
               <button
-                key={m.key}
-                onClick={() => setPayMethod(m.key)}
-                style={{
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: `1px solid ${payMethod === m.key ? 'var(--clr-accent)' : 'var(--clr-border)'}`,
-                  background: payMethod === m.key ? 'var(--clr-accent-glow)' : 'var(--clr-surface)',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'var(--transition)',
-                  color: 'var(--clr-text)',
-                  fontFamily: 'inherit',
-                }}
+                className="btn btn-ghost btn-sm"
+                onClick={() => setCryptoInvoiceUrl(null)}
+                style={{ flex: 1 }}
               >
-                <div style={{ color: payMethod === m.key ? 'var(--clr-accent)' : 'var(--clr-text-2)', marginBottom: '6px' }}>
-                  {m.icon}
-                </div>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{m.label}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>{m.sub}</div>
+                ← Back
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Admin Simulation Banner */}
-        {adminUser && (
-          <div style={{
-            background: 'rgba(139,92,246,0.12)',
-            border: '1px solid rgba(139,92,246,0.3)',
-            borderRadius: 'var(--radius-md)',
-            padding: '14px',
-            marginBottom: '20px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#a78bfa', fontSize: '0.9rem', marginBottom: '4px' }}>
-              <ShieldCheck size={16} /> Admin Testing Mode
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  toast.success('🎉 Proxy ready in your dashboard!');
+                  onSuccess();
+                }}
+                style={{ flex: 2 }}
+              >
+                I've Completed Payment →
+              </button>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)', marginBottom: '10px' }}>
-              You are signed in as Super Admin. You can simulate the full customer checkout instantly for $0.00 to inspect the credentials and dashboard.
-            </p>
+          </div>
+        ) : (
+          <>
+            {/* Plan summary */}
+            <div className="card card-accent" style={{ marginBottom: '20px' }}>
+              <div className="flex justify-between items-center">
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{plan.name} Plan</div>
+                  <div className="text-muted text-sm">{plan.description}</div>
+                </div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>${parseFloat(plan.price_usd).toFixed(0)}</div>
+              </div>
+            </div>
+
+            {/* Proxy selector */}
+            <div className="input-group" style={{ marginBottom: '20px' }}>
+              <label className="input-label">
+                <Wifi size={13} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                Select Proxy / SIM Card
+              </label>
+              {onlineProxies.length > 0 ? (
+                <select
+                  className="input select"
+                  value={selProxy?.id || ''}
+                  onChange={e => setSelProxy(onlineProxies.find(p => p.id === e.target.value))}
+                >
+                  {onlineProxies.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.modems?.label} — {p.proxy_type?.toUpperCase()} — {p.modems?.operator || 'Mobile'}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="card" style={{ padding: '12px 16px', color: 'var(--clr-text-2)', fontSize: '0.9rem' }}>
+                  No proxies online right now. Please try again shortly.
+                </div>
+              )}
+            </div>
+
+            {/* Payment method */}
+            <div className="input-group" style={{ marginBottom: '24px' }}>
+              <label className="input-label">Payment Method</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {[
+                  { key: 'paystack', label: 'Card / Bank',  icon: <CreditCard size={18} />,  sub: 'Instant in-page' },
+                  { key: 'crypto',   label: 'Crypto',        icon: <Bitcoin size={18} />,     sub: 'USDT, BTC & more' },
+                ].map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => setPayMethod(m.key)}
+                    style={{
+                      padding: '14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${payMethod === m.key ? 'var(--clr-accent)' : 'var(--clr-border)'}`,
+                      background: payMethod === m.key ? 'var(--clr-accent-glow)' : 'var(--clr-surface)',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'var(--transition)',
+                      color: 'var(--clr-text)',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <div style={{ color: payMethod === m.key ? 'var(--clr-accent)' : 'var(--clr-text-2)', marginBottom: '6px' }}>
+                      {m.icon}
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{m.label}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>{m.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Admin Simulation Banner */}
+            {adminUser && (
+              <div style={{
+                background: 'rgba(139,92,246,0.12)',
+                border: '1px solid rgba(139,92,246,0.3)',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px',
+                marginBottom: '20px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#a78bfa', fontSize: '0.9rem', marginBottom: '4px' }}>
+                  <ShieldCheck size={16} /> Admin Testing Mode
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)', marginBottom: '10px' }}>
+                  You are signed in as Super Admin. You can simulate the full customer checkout instantly for $0.00 to inspect the credentials and dashboard.
+                </p>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: '#8b5cf6', color: '#fff', width: '100%', fontWeight: 700, padding: '10px' }}
+                  onClick={handleAdminSimulate}
+                  disabled={loading || !selProxy}
+                >
+                  <Zap size={14} /> Simulate Instant Activation (Free)
+                </button>
+              </div>
+            )}
+
+            {/* Security note */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '0.8rem', color: 'var(--clr-text-3)',
+              marginBottom: '20px',
+            }}>
+              <Lock size={13} />
+              Payments are processed securely inside this window. Credentials activate immediately.
+            </div>
+
+            {/* Action button */}
             <button
-              className="btn btn-sm"
-              style={{ background: '#8b5cf6', color: '#fff', width: '100%', fontWeight: 700, padding: '10px' }}
-              onClick={handleAdminSimulate}
+              className="btn btn-primary btn-full"
+              style={{ padding: '16px', fontSize: '1rem' }}
+              onClick={payMethod === 'paystack' ? handlePayWithPaystack : handlePayWithCrypto}
               disabled={loading || !selProxy}
             >
-              <Zap size={14} /> Simulate Instant Activation (Free)
+              {loading
+                ? <><div className="loader" style={{ width: 18, height: 18 }} /> Processing...</>
+                : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with {payMethod === 'paystack' ? 'Card / Bank' : 'Crypto'} <ChevronRight size={18} /></>
+              }
             </button>
-          </div>
+          </>
         )}
-
-        {/* Security note */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          fontSize: '0.8rem', color: 'var(--clr-text-3)',
-          marginBottom: '20px',
-        }}>
-          <Lock size={13} />
-          Payments are processed securely. Credentials are delivered instantly after confirmation.
-        </div>
-
-        {/* Action button */}
-        <button
-          className="btn btn-primary btn-full"
-          style={{ padding: '16px', fontSize: '1rem' }}
-          onClick={payMethod === 'paystack' ? handlePayWithPaystack : handlePayWithCrypto}
-          disabled={loading || !selProxy}
-        >
-          {loading
-            ? <><div className="loader" style={{ width: 18, height: 18 }} /> Processing...</>
-            : <>Pay ${parseFloat(plan.price_usd).toFixed(2)} with {payMethod === 'paystack' ? 'Card / Bank' : 'Crypto'} <ChevronRight size={18} /></>
-          }
-        </button>
       </div>
     </div>
   );
 }
+
