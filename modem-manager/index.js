@@ -430,6 +430,14 @@ function startWebhookServer() {
     });
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      log.warn(`Webhook port ${port} is already bound by another instance.`);
+    } else {
+      log.error('Webhook server error:', err.message);
+    }
+  });
+
   server.listen(port, '127.0.0.1', () => {
     log.ok(`Webhook server listening on 127.0.0.1:${port}`);
   });

@@ -21,14 +21,14 @@ const VPS_USER      = process.env.VPS_USER || 'opc';
 const VPS_SSH_PORT  = parseInt(process.env.VPS_SSH_PORT || '22');
 
 function getSshKeyPath() {
+  const homeKey = path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel');
+  if (fs.existsSync(homeKey)) return homeKey;
+
   const envKey = process.env.VPS_SSH_KEY;
   if (envKey && fs.existsSync(envKey)) return envKey;
 
   const bundledKey = path.join(__dirname, 'keys', 'proxicell_tunnel');
   if (fs.existsSync(bundledKey)) return bundledKey;
-
-  const homeKey = path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel');
-  if (fs.existsSync(homeKey)) return homeKey;
 
   return envKey || bundledKey;
 }
@@ -184,9 +184,12 @@ async function removeTunnelPorts(modem) {
 // ─── Check tunnel health ─────────────────────────────────────────────────────
 async function checkTunnelHealth() {
   if (!VPS_HOST) return false;
+  if (tunnelProcess && !tunnelProcess.killed) return true;
+
   try {
+    const keyPath = getSshKeyPath();
     await execAsync(
-      `ssh -i ${VPS_SSH_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=5 ` +
+      `ssh -i "${keyPath}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 ` +
       `-p ${VPS_SSH_PORT} ${VPS_USER}@${VPS_HOST} echo ok`,
       { timeout: 8000 }
     );
