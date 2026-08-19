@@ -357,24 +357,27 @@ async function detectAndroidDevices() {
 async function rotateAndroidIp(device) {
   const serial = device.adbSerial;
   if (!serial) {
-    // If no ADB, try bouncing the interface
-    if (device.interface) {
-      const execAsync = promisify(exec);
-      await execAsync(`ip link set ${device.interface} down`).catch(() => {});
-      await new Promise(r => setTimeout(r, 2000));
-      await execAsync(`ip link set ${device.interface} up`).catch(() => {});
+    // If no ADB, try bouncing the interface on Windows/Linux
+    if (process.platform === 'win32' && device.interface) {
+      await execAsync(`netsh interface set interface "${device.interface}" disable`).catch(() => {});
       await new Promise(r => setTimeout(r, 3000));
+      await execAsync(`netsh interface set interface "${device.interface}" enable`).catch(() => {});
+      await new Promise(r => setTimeout(r, 5000));
     }
-    return;
+    return device.ipAddress;
   }
 
-  // Toggle airplane mode ON then OFF to get new IP
-  await adbCmd(`-s ${serial} shell settings put global airplane_mode_on 1`);
-  await adbCmd(`-s ${serial} shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true`);
+  console.log(`[AndroidDetector] Rotating IP on ${serial} via Airplane Mode toggle...`);
+  // Modern Android command (Android 10 - Android 14+)
+  await adbCmd(`-s ${serial} shell cmd connectivity airplane-mode enable`).catch(() => {});
+  // Fallback broadcast
+  await adbCmd(`-s ${serial} shell settings put global airplane_mode_on 1`).catch(() => {});
+  await adbCmd(`-s ${serial} shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true`).catch(() => {});
   await new Promise(r => setTimeout(r, 4000));
 
-  await adbCmd(`-s ${serial} shell settings put global airplane_mode_on 0`);
-  await adbCmd(`-s ${serial} shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false`);
+  await adbCmd(`-s ${serial} shell cmd connectivity airplane-mode disable`).catch(() => {});
+  await adbCmd(`-s ${serial} shell settings put global airplane_mode_on 0`).catch(() => {});
+  await adbCmd(`-s ${serial} shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false`).catch(() => {});
   await new Promise(r => setTimeout(r, 6000));
 
   // Get new IP
@@ -383,6 +386,7 @@ async function rotateAndroidIp(device) {
     device.ipAddress = ifaceInfo.ipAddress;
   }
 
+  console.log(`[AndroidDetector] IP rotation complete on ${serial}. New local IP: ${device.ipAddress}`);
   return device.ipAddress;
 }
 
