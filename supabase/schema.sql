@@ -152,51 +152,45 @@ ALTER TABLE usage_logs      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_config   ENABLE ROW LEVEL SECURITY;
 
+-- Helper function to check if current user is admin (prevents RLS recursion)
+CREATE OR REPLACE FUNCTION is_admin_user()
+RETURNS BOOLEAN AS $$
+  SELECT COALESCE((SELECT is_admin FROM customers WHERE id = auth.uid()), false);
+$$ LANGUAGE sql SECURITY DEFINER;
+
 -- Plans are public (anyone can read)
 CREATE POLICY "plans_public_read" ON plans FOR SELECT USING (true);
 
 -- Modems: public can see count/status only (not internal details) — admins see all
-CREATE POLICY "modems_admin_all" ON modems USING (
-  EXISTS (SELECT 1 FROM customers WHERE id = auth.uid() AND is_admin = true)
-);
+CREATE POLICY "modems_admin_all" ON modems USING (is_admin_user());
 CREATE POLICY "modems_public_read" ON modems FOR SELECT USING (true);
 
 -- Proxies: admins see all, customers see their subscribed proxies
-CREATE POLICY "proxies_admin_all" ON proxies USING (
-  EXISTS (SELECT 1 FROM customers WHERE id = auth.uid() AND is_admin = true)
-);
+CREATE POLICY "proxies_admin_all" ON proxies USING (is_admin_user());
 CREATE POLICY "proxies_public_read" ON proxies FOR SELECT USING (active = true);
 
 -- Customers: can read/update their own profile; admins see all
 CREATE POLICY "customers_self" ON customers USING (id = auth.uid());
-CREATE POLICY "customers_admin" ON customers USING (
-  EXISTS (SELECT 1 FROM customers WHERE id = auth.uid() AND is_admin = true)
-);
+CREATE POLICY "customers_admin" ON customers USING (is_admin_user());
 
--- Subscriptions: customers see only their own
+-- Subscriptions: customers see only their own, admins see all
 CREATE POLICY "subscriptions_self" ON subscriptions USING (customer_id = auth.uid());
-CREATE POLICY "subscriptions_admin" ON subscriptions USING (
-  EXISTS (SELECT 1 FROM customers WHERE id = auth.uid() AND is_admin = true)
-);
+CREATE POLICY "subscriptions_admin" ON subscriptions USING (is_admin_user());
 
--- Orders: customers see only their own
+-- Orders: customers see only their own, admins see all
 CREATE POLICY "orders_self" ON orders USING (customer_id = auth.uid());
-CREATE POLICY "orders_admin" ON orders USING (
-  EXISTS (SELECT 1 FROM customers WHERE id = auth.uid() AND is_admin = true)
-);
+CREATE POLICY "orders_admin" ON orders USING (is_admin_user());
 
--- Usage logs: customers see their own
+-- Usage logs: customers see their own, admins see all
 CREATE POLICY "usage_self" ON usage_logs USING (
-  EXISTS (
+  is_admin_user() OR EXISTS (
     SELECT 1 FROM subscriptions s
     WHERE s.id = subscription_id AND s.customer_id = auth.uid()
   )
 );
 
 -- System config: admins only
-CREATE POLICY "sysconfig_admin" ON system_config USING (
-  EXISTS (SELECT 1 FROM customers WHERE id = auth.uid() AND is_admin = true)
-);
+CREATE POLICY "sysconfig_admin" ON system_config USING (is_admin_user());
 
 -- ============================================
 -- FUNCTIONS
