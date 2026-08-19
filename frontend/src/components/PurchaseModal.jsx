@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck } from 'lucide-react';
 import { createOrder, supabase, simulateAdminSubscription, activateSubscription, isAdmin } from '../lib/supabase';
+import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 const NOWPAYMENTS_API_KEY = import.meta.env.VITE_NOWPAYMENTS_API_KEY;
@@ -36,11 +37,14 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       return;
     }
     setLoading(true);
+    playClickSound();
     try {
       await simulateAdminSubscription(plan.id, selProxy.id);
+      playSuccessSound();
       toast.success('⚡ Admin Simulation: Proxy rented & activated successfully!');
       onSuccess();
     } catch (err) {
+      playErrorSound();
       toast.error(err.message || 'Simulation failed');
     } finally {
       setLoading(false);
@@ -93,15 +97,18 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
             onSuccess: (transaction) => {
               activateSubscription(order.id, plan.id, selProxy.id, 'paystack', transaction.reference || transaction.trxref)
                 .then(() => {
+                  playSuccessSound();
                   toast.success('🎉 Payment successful! Your proxy has been activated.');
                   onSuccess();
                 })
                 .catch(() => {
+                  playSuccessSound();
                   toast.success('Payment received! Activating proxy...');
                   onSuccess();
                 });
             },
             onCancel: () => {
+              playClickSound();
               toast('Payment cancelled.');
               setLoading(false);
             },
@@ -123,15 +130,18 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           callback: function(response) {
             activateSubscription(order.id, plan.id, selProxy.id, 'paystack', response.reference || response.trxref)
               .then(() => {
+                playSuccessSound();
                 toast.success('🎉 Payment successful! Your proxy has been activated.');
                 onSuccess();
               })
               .catch(() => {
+                playSuccessSound();
                 toast.success('Payment received! Activating proxy...');
                 onSuccess();
               });
           },
           onClose: function() {
+            playClickSound();
             toast('Payment window closed.');
             setLoading(false);
           },
@@ -141,6 +151,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         throw new Error('Payment gateway is loading. Please try again in 5 seconds.');
       }
     } catch (err) {
+      playErrorSound();
       toast.error(err.message || 'Paystack initialization failed');
       setLoading(false);
     }
@@ -155,6 +166,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       return;
     }
     setLoading(true);
+    playClickSound();
     try {
       const { data: order, error } = await createOrder(plan.id, selProxy.id, 'crypto');
       if (error) throw error;
@@ -188,11 +200,13 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           invoiceId: invoice.id ? String(invoice.id) : null,
         });
         setCryptoInvoiceUrl(invoice.invoice_url);
+        playClickSound();
         toast.success('Crypto invoice created! Complete payment below to activate proxy.');
       } else {
         throw new Error(invoice?.message || 'Failed to create crypto invoice. Please try again.');
       }
     } catch (err) {
+      playErrorSound();
       toast.error(err.message || 'Crypto payment error');
     } finally {
       setLoading(false);
@@ -202,6 +216,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   const handleConfirmCryptoPayment = async () => {
     if (!pendingCryptoData) return;
     setLoading(true);
+    playClickSound();
     try {
       await activateSubscription(
         pendingCryptoData.orderId,
@@ -210,9 +225,11 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         'crypto',
         pendingCryptoData.invoiceId
       );
+      playSuccessSound();
       toast.success('🎉 Payment confirmed! Your proxy credentials are now active.');
       onSuccess();
     } catch (err) {
+      playErrorSound();
       toast.error('Could not activate proxy: ' + err.message);
     } finally {
       setLoading(false);

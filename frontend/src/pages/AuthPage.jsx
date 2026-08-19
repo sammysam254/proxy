@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { signIn, signUp } from '../lib/supabase';
-import { Wifi, Eye, EyeOff } from 'lucide-react';
+import { Wifi, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
 
 export default function AuthPage() {
   const [params]   = useSearchParams();
@@ -18,21 +19,25 @@ export default function AuthPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    playClickSound();
 
     try {
       if (tab === 'signin') {
         const { error } = await signIn(email, password);
         if (error) throw error;
+        playSuccessSound();
         toast.success('Welcome back!');
         navigate('/dashboard');
       } else {
         if (!name.trim()) throw new Error('Please enter your name.');
         const { error } = await signUp(email, password, name);
         if (error) throw error;
-        toast.success('Account created! Check your email to verify.');
+        playSuccessSound();
+        toast.success('Account created! Welcome to ProxiCell.');
         navigate('/dashboard');
       }
     } catch (err) {
+      playErrorSound();
       toast.error(err.message || 'Something went wrong.');
     } finally {
       setLoading(false);

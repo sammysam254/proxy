@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { getMySubscriptions, requestIpRotation } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
+import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
 
 function CopyBtn({ value, label }) {
   const [copied, setCopied] = useState(false);
@@ -10,6 +11,8 @@ function CopyBtn({ value, label }) {
   const handleCopy = () => {
     navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
+      playClickSound();
+      toast.success(`Copied ${label}!`, { duration: 1500 });
       setTimeout(() => setCopied(false), 2000);
     });
   };
@@ -114,13 +117,16 @@ function ProxyCredCard({ sub }) {
 
   const handleRotate = async () => {
     setRotating(true);
+    playClickSound();
     try {
       await requestIpRotation(sub.id);
-      toast.success('IP rotation requested! New IP will be active in ~30 seconds.');
+      playSuccessSound();
+      toast.success('🔄 IP rotation requested! New IP will be assigned in ~15-30 seconds.');
     } catch (e) {
-      toast.error(e.message);
+      playErrorSound();
+      toast.error('Rotation failed: ' + e.message);
     } finally {
-      setRotating(false);
+      setTimeout(() => setRotating(false), 3000);
     }
   };
 
@@ -272,12 +278,12 @@ function ProxyCredCard({ sub }) {
       {isActive && (
         <div className="flex gap-sm">
           <button
-            className="btn btn-secondary btn-sm"
+            className={`btn btn-secondary btn-sm ${rotating ? 'btn-loading' : ''}`}
             onClick={handleRotate}
             disabled={rotating}
           >
-            <RefreshCw size={14} className={rotating ? 'spinning' : ''} />
-            Rotate IP
+            <RefreshCw size={14} className={rotating ? 'spin-icon' : ''} />
+            <span>{rotating ? 'Rotating IP...' : 'Rotate IP'}</span>
           </button>
         </div>
       )}

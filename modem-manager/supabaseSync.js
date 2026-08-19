@@ -121,7 +121,7 @@ async function syncBandwidth(modems) {
 
       if (subs && subs.length > 0) {
         const gbUsed = totalBytes / (1024 ** 3);
-        const gbUsedFormatted = parseFloat(gbUsed.toFixed(3));
+        const gbUsedFormatted = parseFloat(gbUsed.toFixed(6));
 
         // Update all active subscriptions with the current GB used
         for (const sub of subs) {
