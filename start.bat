@@ -2,14 +2,23 @@
 setlocal EnableExtensions
 title ProxiCell Modem Manager - Running
 
-:: Add common paths for Node.js, Git, and tools to PATH
-set "PATH=C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\node;%USERPROFILE%\AppData\Roaming\npm;C:\Program Files\Git\cmd;C:\Program Files\Git\bin;%~dp0modem-manager\bin;%~dp0modem-manager\bin\platform-tools;%PATH%"
+:: Determine project root directory (current directory or C:\proxy)
+set "PROJ_DIR=%~dp0"
+if not exist "%PROJ_DIR%modem-manager\index.js" (
+    if exist "C:\proxy\modem-manager\index.js" (
+        set "PROJ_DIR=C:\proxy\"
+    )
+)
 
-cd /d "%~dp0"
+:: Add paths for Node.js, Git, adb, and 3proxy to PATH
+set "PATH=C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\node;%USERPROFILE%\AppData\Roaming\npm;C:\Program Files\Git\cmd;C:\Program Files\Git\bin;%PROJ_DIR%modem-manager\bin;%PROJ_DIR%modem-manager\bin\platform-tools;%PATH%"
+
+cd /d "%PROJ_DIR%"
 
 echo ================================================================
 echo   ProxiCell Modem Manager — Windows Launcher
 echo ================================================================
+echo [*] Project Folder: %PROJ_DIR%
 echo.
 
 :: Check Node.js
@@ -23,11 +32,11 @@ if errorlevel 1 (
 )
 
 :: Check if modem-manager dependencies are installed
-if not exist "%~dp0modem-manager\node_modules" (
+if not exist "%PROJ_DIR%modem-manager\node_modules" (
     echo [*] Installing required Node.js modules in modem-manager...
-    cd /d "%~dp0modem-manager"
+    cd /d "%PROJ_DIR%modem-manager"
     call npm install
-    cd /d "%~dp0"
+    cd /d "%PROJ_DIR%"
     echo [OK] Dependencies installed.
     echo.
 )
@@ -37,7 +46,7 @@ echo [*] Polling every 30s for USB modems and Android phones.
 echo [*] Press Ctrl+C to stop.
 echo.
 
-cd /d "%~dp0modem-manager"
+cd /d "%PROJ_DIR%modem-manager"
 node index.js
 
 echo.
