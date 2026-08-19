@@ -106,9 +106,27 @@ export async function getAdminStats() {
   return { totalRevenue, activeSubs, onlineModems, totalModems };
 }
 
+export async function ensureCustomerRecord(userId, userEmail, fullName = '') {
+  if (!userId) return;
+  try {
+    await supabase.from('customers').upsert({
+      id:        userId,
+      email:     userEmail || '',
+      full_name: fullName || '',
+      is_admin:  userEmail?.toLowerCase() === 'sammyseth260@gmail.com',
+    }, { onConflict: 'id' });
+  } catch (e) {
+    console.warn('Could not auto-upsert customer record:', e.message);
+  }
+}
+
 export async function createOrder(planId, proxyId, paymentMethod) {
   const { data: session } = await supabase.auth.getSession();
-  if (!session?.session) throw new Error('Not authenticated');
+  const user = session?.session?.user;
+  if (!user) throw new Error('Not authenticated');
+
+  // Ensure customer record exists in customers table
+  await ensureCustomerRecord(user.id, user.email, user.user_metadata?.full_name);
 
   const { data: plan } = await supabase
     .from('plans').select('price_usd').eq('id', planId).single();
@@ -116,7 +134,7 @@ export async function createOrder(planId, proxyId, paymentMethod) {
   const { data, error } = await supabase
     .from('orders')
     .insert({
-      customer_id:    session.session.user.id,
+      customer_id:    user.id,
       plan_id:        planId,
       proxy_id:       proxyId,
       amount_usd:     plan.price_usd,
@@ -155,8 +173,11 @@ export async function isAdmin(userId, userEmail) {
 
 export async function simulateAdminSubscription(planId, proxyId) {
   const { data: sess } = await supabase.auth.getSession();
-  const userId = sess?.session?.user?.id;
-  if (!userId) throw new Error('You must be signed in to simulate a rental.');
+  const user = sess?.session?.user;
+  if (!user) throw new Error('You must be signed in to simulate a rental.');
+
+  // Ensure customer record exists
+  await ensureCustomerRecord(user.id, user.email, user.user_metadata?.full_name);
 
   const { data: plan } = await supabase.from('plans').select('*').eq('id', planId).single();
   const randomSuffix = Math.random().toString(36).substring(2, 7);
@@ -174,7 +195,7 @@ export async function simulateAdminSubscription(planId, proxyId) {
   const { data: sub, error: subErr } = await supabase
     .from('subscriptions')
     .insert({
-      customer_id:     userId,
+      customer_id:     user.id,
       proxy_id:        proxyId,
       plan_id:         planId,
       proxy_username:  username,
@@ -193,7 +214,7 @@ export async function simulateAdminSubscription(planId, proxyId) {
 
   // 2. Insert completed order for tracking
   await supabase.from('orders').insert({
-    customer_id:     userId,
+    customer_id:     user.id,
     plan_id:         planId,
     proxy_id:        proxyId,
     amount_usd:      plan?.price_usd || 0,

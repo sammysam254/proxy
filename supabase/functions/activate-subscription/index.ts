@@ -4,6 +4,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { v4 as uuid } from 'https://esm.sh/uuid@10';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -13,8 +18,12 @@ const LOCAL_MACHINE_URL = Deno.env.get('LOCAL_MACHINE_WEBHOOK_URL')!;
 const WEBHOOK_SECRET    = Deno.env.get('WEBHOOK_SECRET')!;
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
   }
 
   const { orderId, payRef } = await req.json();

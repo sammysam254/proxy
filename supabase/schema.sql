@@ -98,6 +98,14 @@ CREATE TABLE IF NOT EXISTS customers (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Sync all existing auth.users into customers table
+INSERT INTO customers (id, email, is_admin)
+SELECT id, email, (LOWER(email) = 'sammyseth260@gmail.com')
+FROM auth.users
+ON CONFLICT (id) DO UPDATE SET
+  email = EXCLUDED.email,
+  is_admin = CASE WHEN LOWER(EXCLUDED.email) = 'sammyseth260@gmail.com' THEN true ELSE customers.is_admin END;
+
 -- ============================================
 -- SUBSCRIPTIONS TABLE
 -- ============================================
