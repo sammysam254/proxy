@@ -1,130 +1,102 @@
 @echo off
-setlocal EnableDelayedExpansion
-title ProxiCell — Windows Modem Proxy Setup
+title ProxiCell - Windows Modem Proxy Setup
 
 echo ================================================================
-echo    ____             _  ____     _ _ 
-echo   ^|  _ \ _ __ _____  _(_)/ ___^|___^| ^| ^|
-echo   ^| ^|_) ^| '__/ _ \ \/ / ^| ^|   / _ \ ^| ^|
-echo   ^|  __/^| ^| ^| (_) ^>  ^< ^| ^| ^|__^|  __/ ^| ^|
-echo   ^|_^|   ^|_^|  \___/_/\_\_^|\____\___^|_^|_^|
-echo.
-echo    Modem Proxy System — Native Windows Setup
+echo           ProxiCell - Modem Proxy System Setup
 echo ================================================================
 echo.
 
-set "SCRIPT_DIR=%~dp0"
+set SCRIPT_DIR=%~dp0
 cd /d "%SCRIPT_DIR%"
 
-set "APP_DIR=%SCRIPT_DIR%"
-set "BIN_DIR=%SCRIPT_DIR%modem-manager\bin"
+set BIN_DIR=%SCRIPT_DIR%modem-manager\bin
 if not exist "%BIN_DIR%" mkdir "%BIN_DIR%"
 
-echo [*] Setup folder: %SCRIPT_DIR%
+echo [*] Working Directory: %SCRIPT_DIR%
 echo.
 
-:: ─── 1. Check Node.js ───────────────────────────────────────────
+REM --- 1. Check Node.js ---
 echo [*] Checking Node.js...
 where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [!] Node.js not found in PATH.
-    echo     Please install Node.js (LTS) from: https://nodejs.org
-    echo.
-    pause
-    exit /b 1
-) else (
-    for /f "tokens=*" %%i in ('node -v') do set "NODE_VER=%%i"
-    echo [v] Node.js is installed: !NODE_VER!
-)
+if errorlevel 1 goto node_missing
+for /f "tokens=*" %%i in ('node -v') do set NODE_VER=%%i
+echo [OK] Node.js is installed: %NODE_VER%
+goto node_done
 
-:: ─── 2. Check Git ───────────────────────────────────────────────
+:node_missing
+echo [ERROR] Node.js is not installed or not in your PATH.
+echo Please download and install Node.js from https://nodejs.org
+echo After installing, run setup.bat again.
+echo.
+pause
+exit /b 1
+
+:node_done
+
+REM --- 2. Check Git ---
 echo [*] Checking Git...
 where git >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [!] Note: Git is not found in PATH. Recommended for updates.
+if errorlevel 1 (
+    echo [NOTE] Git is not found in PATH.
 ) else (
-    echo [v] Git is installed.
+    echo [OK] Git is installed.
 )
 
-:: ─── 3. Download 3proxy Windows Binary ───────────────────────────
+REM --- 3. 3proxy Windows Binary ---
 echo [*] Checking 3proxy for Windows...
-if not exist "%BIN_DIR%\3proxy.exe" (
-    echo [*] Downloading 3proxy Windows 64-bit binary...
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $wc = New-Object System.Net.WebClient; $wc.DownloadFile('https://github.com/3proxy/3proxy/releases/download/0.9.4/3proxy-0.9.4-x64.zip', '%BIN_DIR%\3proxy.zip'); Expand-Archive -Path '%BIN_DIR%\3proxy.zip' -DestinationPath '%BIN_DIR%\tmp' -Force; Copy-Item '%BIN_DIR%\tmp\bin64\3proxy.exe' '%BIN_DIR%\3proxy.exe' -Force; Remove-Item '%BIN_DIR%\3proxy.zip' -Force; Remove-Item '%BIN_DIR%\tmp' -Recurse -Force; Write-Host '[v] 3proxy downloaded successfully.' } catch { Write-Host '[!] Note: Could not download 3proxy zip automatically: ' $_.Exception.Message }"
-)
+if exist "%BIN_DIR%\3proxy.exe" goto proxy_ready
 
-if exist "%BIN_DIR%\3proxy.exe" (
-    echo [v] 3proxy binary ready: %BIN_DIR%\3proxy.exe
-) else (
-    echo [!] 3proxy will be invoked from system PATH.
-)
+echo [*] Downloading 3proxy 64-bit binary...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/3proxy/3proxy/releases/download/0.9.4/3proxy-0.9.4-x64.zip' -OutFile '%BIN_DIR%\3proxy.zip'; Expand-Archive -Path '%BIN_DIR%\3proxy.zip' -DestinationPath '%BIN_DIR%\tmp' -Force; Copy-Item '%BIN_DIR%\tmp\bin64\3proxy.exe' '%BIN_DIR%\3proxy.exe' -Force; Remove-Item '%BIN_DIR%\3proxy.zip' -Force; Remove-Item '%BIN_DIR%\tmp' -Recurse -Force"
 
-:: ─── 4. Check & Setup ADB (Android Debug Bridge) ────────────────
-echo [*] Checking Android Debug Bridge (adb)...
+:proxy_ready
+if exist "%BIN_DIR%\3proxy.exe" echo [OK] 3proxy ready: %BIN_DIR%\3proxy.exe
+
+REM --- 4. Android Debug Bridge (ADB) ---
+echo [*] Checking Android Debug Bridge...
 where adb >nul 2>&1
-if %errorlevel% neq 0 (
-    if not exist "%BIN_DIR%\platform-tools\adb.exe" (
-        echo [*] Downloading Google Android Platform Tools (ADB)...
-        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $wc = New-Object System.Net.WebClient; $wc.DownloadFile('https://dl.google.com/android/repository/platform-tools-latest-windows.zip', '%BIN_DIR%\adb.zip'); Expand-Archive -Path '%BIN_DIR%\adb.zip' -DestinationPath '%BIN_DIR%' -Force; Remove-Item '%BIN_DIR%\adb.zip' -Force; Write-Host '[v] ADB downloaded.' } catch { Write-Host '[!] Note: ADB download skipped: ' $_.Exception.Message }"
-    )
-    if exist "%BIN_DIR%\platform-tools\adb.exe" (
-        set "PATH=%BIN_DIR%\platform-tools;!PATH!"
-        echo [v] ADB ready: %BIN_DIR%\platform-tools\adb.exe
-    )
+if not errorlevel 1 goto adb_ready
+if exist "%BIN_DIR%\platform-tools\adb.exe" goto adb_ready
+
+echo [*] Downloading Google Android Platform Tools...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' -OutFile '%BIN_DIR%\adb.zip'; Expand-Archive -Path '%BIN_DIR%\adb.zip' -DestinationPath '%BIN_DIR%' -Force; Remove-Item '%BIN_DIR%\adb.zip' -Force"
+
+:adb_ready
+if exist "%BIN_DIR%\platform-tools\adb.exe" (
+    echo [OK] ADB is ready in %BIN_DIR%\platform-tools
 ) else (
-    echo [v] ADB is installed and available in PATH.
+    echo [OK] ADB is available in system PATH.
 )
 
-:: ─── 5. Prompt for Configuration ────────────────────────────────
+REM --- 5. SSH Key for VPS Tunnel ---
 echo.
-echo ================================================================
-echo    Configuration Settings
-echo ================================================================
-
-set "VPS_HOST=157.151.148.218"
-set "SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co"
-set "SUPABASE_SERVICE_KEY="
-
-set /p "INPUT_VPS=Oracle VPS Public IP [%VPS_HOST%]: "
-if not "!INPUT_VPS!"=="" set "VPS_HOST=!INPUT_VPS!"
-
-set /p "INPUT_SUBA=Supabase Project URL [%SUPABASE_URL%]: "
-if not "!INPUT_SUBA!"=="" set "SUPABASE_URL=!INPUT_SUBA!"
-
-set /p "SUPABASE_SERVICE_KEY=Supabase Service Role Key: "
-
-:: ─── 6. SSH Key Generation for VPS Tunnel ───────────────────────
-echo.
-echo [*] Setting up SSH Key for Oracle VPS Tunnel...
-
-set "SSH_DIR=%USERPROFILE%\.ssh"
+echo [*] Checking SSH Key for Oracle VPS Tunnel...
+set SSH_DIR=%USERPROFILE%\.ssh
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%"
-set "SSH_KEY_PATH=%SSH_DIR%\proxicell_tunnel"
+set SSH_KEY_PATH=%SSH_DIR%\proxicell_tunnel
 
 if not exist "%SSH_KEY_PATH%" (
-    echo [*] Generating SSH Key ed25519...
+    echo [*] Generating new SSH key...
     ssh-keygen -t ed25519 -f "%SSH_KEY_PATH%" -N "" -C "proxicell-windows-tunnel"
 )
 
 echo.
 echo ================================================================
-echo  IMPORTANT: ADD THIS PUBLIC KEY TO YOUR ORACLE VPS:
+echo  COPY THIS PUBLIC KEY TO YOUR ORACLE VPS:
 echo ================================================================
 echo.
-if exist "%SSH_KEY_PATH%.pub" (
-    type "%SSH_KEY_PATH%.pub"
-) else (
-    echo [!] Key at %SSH_KEY_PATH%.pub
-)
+if exist "%SSH_KEY_PATH%.pub" type "%SSH_KEY_PATH%.pub"
 echo.
-echo  Run on Oracle VPS:
-echo  echo "<the-public-key-above>" ^>^> ~/.ssh/authorized_keys
+echo  On your Oracle VPS, run:
+echo  echo "<paste-the-key-above>" ^>^> ~/.ssh/authorized_keys
 echo ================================================================
 echo.
-pause
 
-:: ─── 7. Write Environment Files ─────────────────────────────────
-set "ENV_FILE=%SCRIPT_DIR%.env"
+REM --- 6. Write Configuration ---
+set VPS_HOST=157.151.148.218
+set SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co
+set SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzZmlqemp6aW9hcmFnbmxvcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjMwNDksImV4cCI6MjEwMjY5OTA0OX0.Z-VBaoutWmZUW6S_G3SECl5ylWUfECs5iR7E4aMNASI
+
 (
     echo VPS_HOST=%VPS_HOST%
     echo VPS_USER=ubuntu
@@ -135,21 +107,20 @@ set "ENV_FILE=%SCRIPT_DIR%.env"
     echo APP_DIR=%SCRIPT_DIR:\=/%
     echo NODE_ENV=production
     echo LOG_LEVEL=info
-) > "%ENV_FILE%"
+) > "%SCRIPT_DIR%.env"
 
-echo [v] Configuration written to .env
+echo [OK] Configuration written to .env
 
-:: ─── 8. Install Node Dependencies in modem-manager ──────────────
+REM --- 7. Install Dependencies ---
 echo.
-echo [*] Installing Node.js dependencies for modem-manager...
+echo [*] Installing Node.js dependencies in modem-manager...
 cd /d "%SCRIPT_DIR%modem-manager"
 call npm install
-
-:: ─── 9. Setup Complete ──────────────────────────────────────────
 cd /d "%SCRIPT_DIR%"
+
 echo.
 echo ================================================================
-echo  [v] Setup Complete!
+echo  [OK] Setup Completed Successfully!
 echo.
 echo  To start the Proxy System anytime:
 echo  Double-click "start.bat"
