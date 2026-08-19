@@ -1,6 +1,10 @@
 @echo off
-setlocal EnableDelayedExpansion
-title ProxiCell Modem Manager
+setlocal EnableExtensions
+title ProxiCell Modem Manager - Running
+
+:: Add common paths for Node.js, Git, and tools to PATH
+set "PATH=C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\node;%USERPROFILE%\AppData\Roaming\npm;C:\Program Files\Git\cmd;C:\Program Files\Git\bin;%~dp0modem-manager\bin;%~dp0modem-manager\bin\platform-tools;%PATH%"
+
 cd /d "%~dp0"
 
 echo ================================================================
@@ -8,19 +12,11 @@ echo   ProxiCell Modem Manager — Windows Launcher
 echo ================================================================
 echo.
 
-:: Add bin tools (adb, 3proxy) to PATH if present
-if exist "%~dp0modem-manager\bin\platform-tools" (
-    set "PATH=%~dp0modem-manager\bin\platform-tools;!PATH!"
-)
-if exist "%~dp0modem-manager\bin" (
-    set "PATH=%~dp0modem-manager\bin;!PATH!"
-)
-
-:: Check if Node.js is installed
-where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Node.js is not installed or not in PATH.
-    echo Please install Node.js from https://nodejs.org or run setup.bat
+:: Check Node.js
+node -v >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Node.js is not found.
+    echo Please install Node.js from https://nodejs.org
     echo.
     pause
     exit /b 1
@@ -32,19 +28,12 @@ if not exist "%~dp0modem-manager\node_modules" (
     cd /d "%~dp0modem-manager"
     call npm install
     cd /d "%~dp0"
-    echo [v] Dependencies installed.
+    echo [OK] Dependencies installed.
     echo.
 )
 
-:: Check if .env file exists
-if not exist "%~dp0.env" (
-    if not exist "%~dp0modem-manager\.env" (
-        echo [!] Warning: .env file not found. Running setup.bat to configure...
-        call "%~dp0setup.bat"
-    )
-)
-
 echo [*] Starting Modem Manager service...
+echo [*] Polling every 30s for USB modems and Android phones.
 echo [*] Press Ctrl+C to stop.
 echo.
 
@@ -52,5 +41,5 @@ cd /d "%~dp0modem-manager"
 node index.js
 
 echo.
-echo [!] Modem Manager has stopped.
+echo [!] Modem Manager process has stopped.
 pause
