@@ -105,11 +105,23 @@ async function runCycle() {
     ]);
 
     androidDetected.forEach(d => { d.isAndroid = true; });
-    const detected = [...usbDetected, ...androidDetected];
+
+    // ── Deduplicate: if a Windows USB adapter and an ADB Android device share
+    //    the same IP, prefer the Android (ADB) entry — it has richer metadata.
+    const androidIps = new Set(androidDetected.filter(d => d.ipAddress).map(d => d.ipAddress));
+    const filteredUsb = usbDetected.filter(d => {
+      if (d.ipAddress && androidIps.has(d.ipAddress)) {
+        log.info(`Dedup: skipping USB adapter ${d.interface} (${d.ipAddress}) — already covered by Android ADB device`);
+        return false;
+      }
+      return true;
+    });
+
+    const detected = [...filteredUsb, ...androidDetected];
 
     const onlineCount  = detected.filter(d => d.ipAddress).length;
     const offlineCount = detected.length - onlineCount;
-    log.info(`Found: ${usbDetected.length} USB modem(s) + ${androidDetected.length} Android device(s)`);
+    log.info(`Found: ${filteredUsb.length} USB modem(s) + ${androidDetected.length} Android device(s)`);
     log.info(`Status: ${onlineCount} online, ${offlineCount} offline / no IP yet`);
 
     const detectedPaths = new Set(detected.map(d => d.devicePath));
@@ -276,6 +288,12 @@ async function main() {
   // Start persistent SSH tunnel to VPS
   await tunnel.startTunnel().catch(e => {
     log.warn('Tunnel start failed (will retry):', e.message);
+  });
+
+  // Clean up any duplicate modem records from previous restarts
+  log.info('Running startup cleanup...');
+  await sync.cleanupDuplicateModems().catch(e => {
+    log.warn('Startup cleanup failed (non-fatal):', e.message);
   });
 
   // Run first detection cycle immediately

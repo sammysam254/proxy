@@ -185,6 +185,65 @@ async function expireOldSubscriptions() {
   }
 }
 
+// ─── Startup cleanup: remove duplicate modem records ─────────────────────────
+//
+//  Problem: every time the modem manager restarts without ADB auth, it registers
+//  a new modem row (old devicePath had spaces, causing conflict-miss). This leaves
+//  ghost "offline" modems that confuse the admin panel and create orphan proxies.
+//
+//  Fix: on startup, find modems that share the same label AND same ip_address but
+//  have different IDs, keep the most recently-seen one, mark the rest offline and
+//  deactivate their proxies. This is idempotent and safe to run every boot.
+//
+async function cleanupDuplicateModems() {
+  try {
+    // Fetch all modems
+    const { data: modems, error } = await supabase
+      .from('modems')
+      .select('id, label, device_path, ip_address, status, last_seen')
+      .order('last_seen', { ascending: false });
+
+    if (error || !modems) return;
+
+    // Group by label (same physical device = same label)
+    const byLabel = new Map();
+    for (const m of modems) {
+      const key = m.label;
+      if (!byLabel.has(key)) byLabel.set(key, []);
+      byLabel.get(key).push(m);
+    }
+
+    let cleaned = 0;
+    for (const [label, group] of byLabel) {
+      if (group.length <= 1) continue;
+
+      // Keep the most recent (first after sort by last_seen desc), mark others offline
+      const [keep, ...stale] = group;
+      for (const s of stale) {
+        await supabase.from('modems').update({
+          status: 'offline',
+          last_seen: new Date().toISOString(),
+        }).eq('id', s.id);
+
+        // Deactivate their proxies so they don't show in the storefront
+        await supabase.from('proxies').update({ active: false }).eq('modem_id', s.id);
+
+        cleaned++;
+      }
+
+      if (cleaned > 0) {
+        console.log(`[SupabaseSync] Cleaned up ${stale.length} duplicate record(s) for: ${label}`);
+      }
+    }
+
+    if (cleaned === 0) {
+      console.log('[SupabaseSync] No duplicate modem records found.');
+    }
+  } catch (e) {
+    console.warn('[SupabaseSync] Cleanup error (non-fatal):', e.message);
+  }
+}
+
 module.exports = {
   upsertModem,
   updateModemStatus,
@@ -192,5 +251,6 @@ module.exports = {
   syncBandwidth,
   syncActiveCredentials,
   expireOldSubscriptions,
+  cleanupDuplicateModems,
   supabase,
 };

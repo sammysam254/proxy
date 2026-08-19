@@ -263,11 +263,17 @@ async function detectAndroidDevices() {
   const serials = await getAdbDevices();
   if (serials.length === 0) {
     // No ADB devices — but still scan for rndis interfaces from tethered phones
-    // (phone may have tethering but ADB not enabled)
+    // (phone may have tethering but ADB not enabled/authorized)
     const ifaceInfo = await getAndroidTetheredInterface(null);
     if (ifaceInfo) {
+      // Use a STABLE devicePath based on the interface name so we don't create
+      // a new DB record every time the manager restarts without ADB auth.
+      // Format: "tether:Ethernet_6" (spaces replaced so it's a clean key)
+      const stableKey  = ifaceInfo.iface.replace(/\s+/g, '_');
+      const devicePath = `android:tether:${stableKey}`;
+
       detected.push({
-        devicePath:     `android:tether:${ifaceInfo.iface}`,
+        devicePath,
         interface:      ifaceInfo.iface,
         ipAddress:      ifaceInfo.ipAddress,
         operator:       'Mobile Network',
@@ -283,6 +289,8 @@ async function detectAndroidDevices() {
         isAndroid:      true,
         portSet:        null,
       });
+      console.log(`[AndroidDetector] No ADB auth — tethering-only device on ${ifaceInfo.iface} (${ifaceInfo.ipAddress})`);
+      console.log(`[AndroidDetector] TIP: Unlock your phone and accept the "Allow USB debugging?" prompt for full info.`);
     }
     return detected;
   }
