@@ -49,7 +49,7 @@ if exist "%PROJ_DIR%modem-manager\keys\proxicell_tunnel" (
     )
 )
 icacls "%LOCAL_SSH_KEY%" /inheritance:r /grant:r "%USERNAME%:(R)" >nul 2>&1
-echo [OK] VPS Reverse Tunnel authorization keys synced & configured.
+echo [OK] VPS Reverse Tunnel authorization keys synced ^& configured.
 
 :: ─── 5. Auto-Configure Environment Variables (.env) ───
 (
