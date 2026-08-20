@@ -410,40 +410,45 @@ async function detectAndroidDevices() {
   return detected;
 }
 
-// ─── Rotate IP via ADB (toggle airplane mode) ─────────────────────────────────
+// ─── Rotate IP via ADB (toggle cellular data & airplane mode) ─────────────────
 async function rotateAndroidIp(device) {
   const serial = device.adbSerial;
-  if (!serial) {
-    // If no ADB, try bouncing the interface on Windows/Linux
+  console.log(`[AndroidDetector] Rotating cellular IP for ${device.label}...`);
+
+  if (serial) {
+    // 1. Cycle mobile cellular data (most reliable on Safaricom/Airtel to get a new PDP IP)
+    await adb(serial, 'svc data disable').catch(() => {});
+    await new Promise(r => setTimeout(r, 2500));
+    await adb(serial, 'svc data enable').catch(() => {});
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 2. Toggle Airplane Mode as secondary trigger
+    await adb(serial, 'cmd connectivity airplane-mode enable').catch(() => {});
+    await adb(serial, 'settings put global airplane_mode_on 1').catch(() => {});
+    await adb(serial, 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true').catch(() => {});
+    await new Promise(r => setTimeout(r, 3000));
+
+    await adb(serial, 'cmd connectivity airplane-mode disable').catch(() => {});
+    await adb(serial, 'settings put global airplane_mode_on 0').catch(() => {});
+    await adb(serial, 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false').catch(() => {});
+    await new Promise(r => setTimeout(r, 4000));
+  } else {
+    // Fallback: bounce the Windows network interface
     if (process.platform === 'win32' && device.interface) {
       await execAsync(`netsh interface set interface "${device.interface}" disable`).catch(() => {});
       await new Promise(r => setTimeout(r, 3000));
       await execAsync(`netsh interface set interface "${device.interface}" enable`).catch(() => {});
       await new Promise(r => setTimeout(r, 5000));
     }
-    return device.ipAddress;
   }
 
-  console.log(`[AndroidDetector] Rotating IP on ${serial} via Airplane Mode toggle...`);
-  // Modern Android command (Android 10 - Android 14+)
-  await adbCmd(`-s ${serial} shell cmd connectivity airplane-mode enable`).catch(() => {});
-  // Fallback broadcast
-  await adbCmd(`-s ${serial} shell settings put global airplane_mode_on 1`).catch(() => {});
-  await adbCmd(`-s ${serial} shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true`).catch(() => {});
-  await new Promise(r => setTimeout(r, 4000));
-
-  await adbCmd(`-s ${serial} shell cmd connectivity airplane-mode disable`).catch(() => {});
-  await adbCmd(`-s ${serial} shell settings put global airplane_mode_on 0`).catch(() => {});
-  await adbCmd(`-s ${serial} shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false`).catch(() => {});
-  await new Promise(r => setTimeout(r, 6000));
-
-  // Get new IP
+  // Refresh local interface IP
   const ifaceInfo = await getAndroidTetheredInterface(serial);
-  if (ifaceInfo) {
+  if (ifaceInfo && ifaceInfo.ipAddress) {
     device.ipAddress = ifaceInfo.ipAddress;
   }
 
-  console.log(`[AndroidDetector] IP rotation complete on ${serial}. New local IP: ${device.ipAddress}`);
+  console.log(`[AndroidDetector] Cellular rotation trigger sent for ${device.label}. Local interface IP: ${device.ipAddress}`);
   return device.ipAddress;
 }
 

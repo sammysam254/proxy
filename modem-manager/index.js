@@ -58,24 +58,68 @@ function assignPorts() {
   };
 }
 
+const https = require('https');
+
+// ─── Fetch Public SIM IP via local interface binding ────────────────────────
+function fetchPublicIp(localAddress) {
+  return new Promise((resolve) => {
+    if (!localAddress || localAddress === '0.0.0.0') return resolve(null);
+    const req = https.get('https://api.ipify.org?format=json', {
+      localAddress,
+      timeout: 5000,
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => (data += chunk));
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.ip || null);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on('error', () => {
+      const fallback = https.get('https://icanhazip.com', {
+        localAddress,
+        timeout: 5000,
+      }, (res2) => {
+        let text = '';
+        res2.on('data', chunk => (text += chunk));
+        res2.on('end', () => resolve(text.trim() || null));
+      });
+      fallback.on('error', () => resolve(null));
+    });
+  });
+}
+
 // ─── Bring a device fully online (start proxy + tunnel) ──────────────────────
 async function bringOnline(device) {
   log.ok(`[${device.isAndroid ? '📱 Android' : '📡 Modem'}] Bringing online: ${device.label}`);
-  log.ok(`  ↳ IP: ${device.ipAddress}  Interface: ${device.interface}`);
+  
+  // 1. Fetch public SIM IP
+  const publicIp = await fetchPublicIp(device.ipAddress);
+  device.publicIp = publicIp || device.ipAddress;
+
+  log.ok(`  ↳ Public SIM IP: ${device.publicIp} (Local Interface: ${device.ipAddress})`);
   log.ok(`  ↳ HTTP :${device.portSet.http}  SOCKS4 :${device.portSet.socks4}  SOCKS5 :${device.portSet.socks5}`);
   log.ok(`  ↳ VPS  HTTP :${device.portSet.publicHttp}  SOCKS4 :${device.portSet.publicSocks4}  SOCKS5 :${device.portSet.publicSocks5}`);
 
-  // 1. Start 3proxy for this device
+  // 2. Start proxy server for this device
   await spawner.startProxy(device);
 
-  // 2. Open reverse-tunnel ports on VPS
+  // 3. Open reverse-tunnel ports on VPS
   await tunnel.addTunnelPorts(device);
 
-  // 3. Update state
+  // 4. Update state & sync real public cellular IP with Supabase
   device.state = 'proxying';
-  await sync.updateModemStatus(device.id, { ...device, status: 'online' });
+  await sync.updateModemStatus(device.id, {
+    ...device,
+    ip_address: device.publicIp,
+    status: 'online',
+  });
 
-  log.ok(`✅ ${device.label} is LIVE — ${Object.keys(spawner).length > 0 ? '' : ''}proxies running`);
+  log.ok(`✅ ${device.label} is LIVE — Public IP: ${device.publicIp}`);
 }
 
 // ─── Take a device offline (stop proxy + tunnel) ──────────────────────────────
@@ -89,6 +133,7 @@ async function bringOffline(device, reason = 'disconnected') {
 
   device.state      = 'pending';
   device.ipAddress  = null;
+  device.publicIp   = null;
 
   await sync.updateModemStatus(device.id, { ...device, status: 'offline' });
 }
@@ -266,7 +311,7 @@ async function killPreviousInstances() {
 
       // 2. Kill any stale SSH reverse tunnels from previous runs
       try {
-        execSync(`powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*157.151.206.163*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 5000 });
+        execSync(`powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*64.227.3.211*' -or $_.CommandLine -like '*157.151.206.163*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 5000 });
       } catch {}
     }
   } catch (e) {
@@ -283,7 +328,7 @@ function printStatusTable() {
   }
 
   console.log(chalk.cyan('\n  ┌─────────────────────────────────────────────────────────────────────┐'));
-  console.log(chalk.cyan('  │ DEVICE                    │ TYPE    │ STATUS   │ IP              │ PORTS'));
+  console.log(chalk.cyan('  │ DEVICE                    │ TYPE    │ STATUS   │ PUBLIC IP       │ PORTS'));
   console.log(chalk.cyan('  ├─────────────────────────────────────────────────────────────────────┤'));
 
   for (const d of devices) {
@@ -291,7 +336,7 @@ function printStatusTable() {
     const status  = d.state === 'proxying'
       ? chalk.green('LIVE    ')
       : chalk.yellow('PENDING ');
-    const ip      = (d.ipAddress || 'no IP').padEnd(16);
+    const ip      = (d.publicIp || d.ipAddress || 'no IP').padEnd(16);
     const ports   = d.portSet
       ? `HTTP:${d.portSet.publicHttp} S4:${d.portSet.publicSocks4} S5:${d.portSet.publicSocks5}`
       : 'not assigned';
@@ -464,26 +509,38 @@ async function executeRotation(device) {
   try {
     log.info(`Rotating IP: ${device.label} (${device.isAndroid ? 'Android' : 'Modem'})...`);
 
-    // Bring offline, rotate, bring back online
+    // 1. Bring proxy offline during rotation
     await bringOffline(device, 'IP rotation');
 
+    // 2. Trigger rotation on hardware
     if (device.isAndroid) {
       await android.rotateAndroidIp(device);
     } else {
       await detector.rotateModemIp(device);
     }
 
-    // Wait for new IP
+    // 3. Wait for cellular network negotiation and local DHCP assignment
     await new Promise(r => setTimeout(r, 4000));
 
     if (device.ipAddress) {
+      // 4. Fetch the NEW public cellular SIM IP
+      const newPublicIp = await fetchPublicIp(device.ipAddress);
+      device.publicIp = newPublicIp || device.ipAddress;
+
+      // 5. Bring proxy back online with new IP
       await bringOnline(device);
-      await sync.updateModemStatus(device.id, {
-        ...device,
+
+      // 6. Explicitly update Supabase DB with the new public IP & clear rotate request flag
+      await sync.supabase.from('modems').update({
         status: 'online',
+        ip_address: device.publicIp,
+        rotate_requested_at: null,
         last_seen: new Date().toISOString(),
-      });
-      log.ok(`✅ IP rotated successfully for ${device.label}! New IP: ${device.ipAddress}`);
+      }).eq('id', device.id);
+
+      log.ok(`✅ IP rotated successfully for ${device.label}! New Public IP: ${device.publicIp}`);
+    } else {
+      log.warn(`No IP found for ${device.label} after rotation attempt.`);
     }
   } catch (e) {
     log.error(`IP rotation failed for ${device.label}:`, e.message);
