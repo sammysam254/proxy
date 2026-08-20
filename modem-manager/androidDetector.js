@@ -254,28 +254,40 @@ async function isTetheringEnabled(serial) {
   return ifaceInfo !== null;
 }
 
+// ─── Permanently configure default USB configuration to USB Tethering (RNDIS) ─
+async function configurePersistentUsbTethering(serial) {
+  try {
+    // Sets the permanent Android "Default USB configuration" to RNDIS + ADB
+    await adb(serial, 'svc usb setScreenUnlockedFunctions rndis,adb').catch(() => {});
+    await adb(serial, 'svc usb setScreenUnlockedFunctions rndis').catch(() => {});
+    await adb(serial, 'settings put global default_usb_mode rndis').catch(() => {});
+    await adb(serial, 'settings put secure default_usb_mode rndis').catch(() => {});
+    await adb(serial, 'settings put global usb_tethering 1').catch(() => {});
+    await adb(serial, 'settings put system usb_tethering 1').catch(() => {});
+    await adb(serial, 'settings put global tether_dun_required 0').catch(() => {});
+    await adb(serial, 'setprop persist.sys.usb.config rndis,adb').catch(() => {});
+    await adb(serial, 'setprop persist.sys.usb.config.default rndis,adb').catch(() => {});
+  } catch {}
+}
+
 // ─── Enable USB tethering via ADB (multi-method Android support) ─────────────
 async function enableTethering(serial) {
   console.log(`[AndroidDetector] Automatically triggering USB tethering on ${serial}...`);
   try {
-    // 1. Ensure cellular mobile data is enabled
+    // 1. Permanently configure default USB configuration on the phone
+    await configurePersistentUsbTethering(serial);
+
+    // 2. Ensure cellular mobile data is enabled
     await adb(serial, 'svc data enable').catch(() => {});
 
-    // 2. Try Android 11-14+ modular tethering commands
+    // 3. Try Android 11-14+ modular tethering commands
     await adb(serial, 'cmd tethering start-tethering 1').catch(() => {});
     await adb(serial, 'cmd tethering start-tethering usb').catch(() => {});
     await adb(serial, 'cmd connectivity start-tethering usb').catch(() => {});
 
-    // 3. Switch USB function to RNDIS + ADB (maintains ADB connection while enabling network)
+    // 4. Switch USB function to RNDIS + ADB (maintains ADB connection while enabling network)
     await adb(serial, 'svc usb setFunctions rndis,adb').catch(() => {});
-    await adb(serial, 'svc usb setScreenUnlockedFunctions rndis,adb').catch(() => {});
     await adb(serial, 'svc usb setFunctions rndis').catch(() => {});
-    await adb(serial, 'svc usb setScreenUnlockedFunctions rndis').catch(() => {});
-
-    // 4. System settings flags
-    await adb(serial, 'settings put global usb_tethering 1').catch(() => {});
-    await adb(serial, 'settings put system usb_tethering 1').catch(() => {});
-    await adb(serial, 'settings put global tether_dun_required 0').catch(() => {});
 
     // 5. Legacy service call fallbacks (Android 5 - 10)
     await adb(serial, 'service call connectivity 33 i32 1').catch(() => {});
