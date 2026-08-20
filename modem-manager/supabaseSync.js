@@ -155,6 +155,11 @@ async function syncBandwidth(modems) {
           if (sub.gb_limit && newGbUsed >= parseFloat(sub.gb_limit)) {
             updateData.status = 'expired';
             console.log(`[SupabaseSync] 📛 Subscription ${sub.id} expired (${newGbUsed.toFixed(4)} GB / ${sub.gb_limit} GB limit)`);
+            // ── Immediately revoke credentials so the user CANNOT connect anymore ──
+            if (sub.proxy_username && sub.proxies?.modem_id) {
+              await spawner.removeCredential(sub.proxy_username, sub.proxies.modem_id).catch(() => {});
+              console.log(`[SupabaseSync] 🔒 Credentials revoked for expired user '${sub.proxy_username}'`);
+            }
           }
 
           await supabase.from('subscriptions').update(updateData).eq('id', sub.id);
@@ -197,16 +202,36 @@ async function syncActiveCredentials() {
   }
 }
 
-// ─── Expire old subscriptions ─────────────────────────────────────────────────
+// ─── Expire old subscriptions AND revoke their credentials ──────────────────────────
 async function expireOldSubscriptions() {
-  const { error } = await supabase
+  // 1. Find subscriptions that have passed their expiry date
+  const { data: toExpire } = await supabase
     .from('subscriptions')
-    .update({ status: 'expired' })
+    .select('id, proxy_username, proxies(modem_id)')
     .lt('expires_at', new Date().toISOString())
     .eq('status', 'active');
 
-  if (error) {
-    console.warn('[SupabaseSync] Failed to expire subscriptions:', error.message);
+  if (toExpire && toExpire.length > 0) {
+    for (const sub of toExpire) {
+      // Revoke credentials immediately so connections are rejected NOW
+      if (sub.proxy_username && sub.proxies?.modem_id) {
+        await spawner.removeCredential(sub.proxy_username, sub.proxies.modem_id).catch(() => {});
+        console.log(`[SupabaseSync] 🔒 Revoked credentials for expired subscription: '${sub.proxy_username}'`);
+      }
+    }
+
+    // Mark all as expired in DB
+    const { error } = await supabase
+      .from('subscriptions')
+      .update({ status: 'expired' })
+      .lt('expires_at', new Date().toISOString())
+      .eq('status', 'active');
+
+    if (error) {
+      console.warn('[SupabaseSync] Failed to expire subscriptions:', error.message);
+    } else {
+      console.log(`[SupabaseSync] ⛔ Expired & blocked ${toExpire.length} subscription(s).`);
+    }
   }
 }
 

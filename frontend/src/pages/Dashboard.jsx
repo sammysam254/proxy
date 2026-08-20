@@ -330,7 +330,13 @@ export default function Dashboard({ session }) {
         .subscribe();
     }
 
+    // ── 5-second polling fallback ─────────────────────────────────────
+    // Ensures bandwidth updates even if Supabase Realtime isn't enabled
+    // on the subscriptions table in the Supabase dashboard.
+    const poll = setInterval(() => loadSubs(false), 5000);
+
     return () => {
+      clearInterval(poll);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }

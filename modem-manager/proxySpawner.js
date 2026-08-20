@@ -39,16 +39,18 @@ function isAuthorized(modemId, username, password) {
 }
 
 // ─── Socket Stream Forwarder with 100% Accurate Byte Tracking ─────────────────
-function forwardStreams(clientSocket, serverSocket, devicePath) {
+// NOTE: trackingKey is modem.id (Supabase UUID) — always consistent regardless of
+// device type (ADB serial, tether-only, USB modem, etc.)
+function forwardStreams(clientSocket, serverSocket, trackingKey) {
   clientSocket.on('data', (chunk) => {
-    recordBandwidth(devicePath, 0, chunk.length);
+    recordBandwidth(trackingKey, 0, chunk.length);
     if (!serverSocket.destroyed) {
       serverSocket.write(chunk);
     }
   });
 
   serverSocket.on('data', (chunk) => {
-    recordBandwidth(devicePath, chunk.length, 0);
+    recordBandwidth(trackingKey, chunk.length, 0);
     if (!clientSocket.destroyed) {
       clientSocket.write(chunk);
     }
@@ -64,8 +66,10 @@ function forwardStreams(clientSocket, serverSocket, devicePath) {
 
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
 function createHttpProxy(modem, port) {
-  const exitIp  = modem.ipAddress;
-  const modemId = modem.id || modem.devicePath;
+  const exitIp    = modem.ipAddress;
+  const modemId   = modem.id || modem.devicePath;
+  // Use modem.id as the bandwidth tracking key (consistent across all device types)
+  const trackKey  = modemId;
 
   const server = http.createServer((req, res) => {
     // 1. Check Auth for standard HTTP
@@ -103,14 +107,14 @@ function createHttpProxy(modem, port) {
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
       proxyRes.on('data', chunk => {
-        recordBandwidth(modem.devicePath, chunk.length, 0);
+        recordBandwidth(trackKey, chunk.length, 0);
         res.write(chunk);
       });
       proxyRes.on('end', () => res.end());
     });
 
     req.on('data', chunk => {
-      recordBandwidth(modem.devicePath, 0, chunk.length);
+      recordBandwidth(trackKey, 0, chunk.length);
       proxyReq.write(chunk);
     });
     req.on('end', () => proxyReq.end());
@@ -152,7 +156,7 @@ function createHttpProxy(modem, port) {
     }, () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head && head.length > 0) {
-        recordBandwidth(modem.devicePath, 0, head.length);
+        recordBandwidth(trackKey, 0, head.length);
         serverSocket.write(head);
       }
     });
@@ -165,7 +169,7 @@ function createHttpProxy(modem, port) {
       }
     });
 
-    forwardStreams(clientSocket, serverSocket, modem.devicePath);
+    forwardStreams(clientSocket, serverSocket, trackKey);
   });
 
   server.listen(port, '0.0.0.0', () => {
@@ -177,8 +181,9 @@ function createHttpProxy(modem, port) {
 
 // ─── SOCKS5 / SOCKS4 Proxy Server ───────────────────────────────────────────
 function createSocksProxy(modem, port, isSocks4 = false) {
-  const exitIp  = modem.ipAddress;
-  const modemId = modem.id || modem.devicePath;
+  const exitIp    = modem.ipAddress;
+  const modemId   = modem.id || modem.devicePath;
+  const trackKey  = modemId;
 
   const server = net.createServer((socket) => {
     socket.once('data', (firstChunk) => {
@@ -229,7 +234,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
           socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
         });
 
-        forwardStreams(socket, outbound, modem.devicePath);
+        forwardStreams(socket, outbound, trackKey);
       } else {
         socket.destroy();
       }
@@ -284,13 +289,13 @@ function handleSocks5Request(socket, modem, exitIp) {
       socket.write(resp);
     });
 
-    forwardStreams(socket, outbound, modem.devicePath);
+    forwardStreams(socket, outbound, trackKey);
   });
 }
 
 // ─── Bandwidth Tracking ───────────────────────────────────────────────────────
-function recordBandwidth(devicePath, bytesIn, bytesOut) {
-  const s = activeServers.get(devicePath);
+function recordBandwidth(trackingKey, bytesIn, bytesOut) {
+  const s = activeServers.get(trackingKey);
   if (s && s.bandwidth) {
     s.bandwidth.in  += bytesIn;
     s.bandwidth.out += bytesOut;
@@ -298,7 +303,9 @@ function recordBandwidth(devicePath, bytesIn, bytesOut) {
 }
 
 async function getModemBandwidth(modem) {
-  const s = activeServers.get(modem.devicePath);
+  // Key by modem.id (Supabase UUID) — consistent for all device types
+  const key = modem.id || modem.devicePath;
+  const s = activeServers.get(key);
   if (s && s.bandwidth) {
     return { bytesIn: s.bandwidth.in, bytesOut: s.bandwidth.out };
   }
@@ -316,7 +323,9 @@ async function startProxy(modem) {
   const socks4Srv = createSocksProxy(modem, socks4Port, true);
   const socks5Srv = createSocksProxy(modem, socks5Port, false);
 
-  activeServers.set(modem.devicePath, {
+  // Key by modem.id — always consistent regardless of device type
+  const key = modem.id || modem.devicePath;
+  activeServers.set(key, {
     servers: [httpSrv, socks4Srv, socks5Srv],
     bandwidth: { in: 0, out: 0 },
   });
@@ -325,12 +334,13 @@ async function startProxy(modem) {
 }
 
 async function stopProxy(modem) {
-  const s = activeServers.get(modem.devicePath);
+  const key = modem.id || modem.devicePath;
+  const s = activeServers.get(key);
   if (s && s.servers) {
     for (const srv of s.servers) {
       try { srv.close(); } catch {}
     }
-    activeServers.delete(modem.devicePath);
+    activeServers.delete(key);
   }
 }
 
