@@ -37,21 +37,19 @@ if errorlevel 1 (
 )
 echo [OK] Node.js runtime ready.
 
-:: ─── 4. Auto-Configure SSH Key for Oracle VPS Reverse Tunnel ───
+:: ─── 4. Auto-Configure / Sync SSH Keys for Oracle VPS Reverse Tunnel ───
 set "SSH_DIR=%USERPROFILE%\.ssh"
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%"
 set "LOCAL_SSH_KEY=%SSH_DIR%\proxicell_tunnel"
 
-if not exist "%LOCAL_SSH_KEY%" (
-    if exist "%PROJ_DIR%modem-manager\keys\proxicell_tunnel" (
-        copy /y "%PROJ_DIR%modem-manager\keys\proxicell_tunnel" "%LOCAL_SSH_KEY%" >nul
-        if exist "%PROJ_DIR%modem-manager\keys\proxicell_tunnel.pub" (
-            copy /y "%PROJ_DIR%modem-manager\keys\proxicell_tunnel.pub" "%LOCAL_SSH_KEY%.pub" >nul
-        )
+if exist "%PROJ_DIR%modem-manager\keys\proxicell_tunnel" (
+    copy /y "%PROJ_DIR%modem-manager\keys\proxicell_tunnel" "%LOCAL_SSH_KEY%" >nul
+    if exist "%PROJ_DIR%modem-manager\keys\proxicell_tunnel.pub" (
+        copy /y "%PROJ_DIR%modem-manager\keys\proxicell_tunnel.pub" "%LOCAL_SSH_KEY%.pub" >nul
     )
 )
 icacls "%LOCAL_SSH_KEY%" /inheritance:r /grant:r "%USERNAME%:(R)" >nul 2>&1
-echo [OK] VPS Reverse Tunnel authorization keys configured.
+echo [OK] VPS Reverse Tunnel authorization keys synced & configured.
 
 :: ─── 5. Auto-Configure Environment Variables (.env) ───
 (

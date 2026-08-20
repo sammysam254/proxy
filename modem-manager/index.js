@@ -224,11 +224,15 @@ async function runCycle() {
       }
     }
 
-    // ── 4. Rebuild 3proxy config to pick up any changes ───────────────────
+    // ── 4. Rebuild proxy engine config & verify VPS tunnel connection ────
     const proxying = [...registry.values()].filter(d => d.state === 'proxying');
     if (proxying.length > 0) {
       await spawner.reloadConfig().catch(e => {
-        log.error('3proxy reload error:', e.message);
+        log.error('Proxy reload error:', e.message);
+      });
+      // Always ensure VPS reverse SSH tunnel is connected on every single run
+      await tunnel.ensureTunnelConnected().catch(e => {
+        log.warn('VPS tunnel check error:', e.message);
       });
     }
 
@@ -295,6 +299,51 @@ function printStatusTable() {
   console.log(chalk.cyan('  └─────────────────────────────────────────────────────────────────────┘\n'));
 }
 
+// ─── Wait for at least one device to appear (boot-time race condition fix) ─────
+//
+//  After a reboot, Windows takes 10-60 seconds to assign DHCP IPs to USB/Android
+//  tethered adapters. If we scan immediately, ipconfig returns no device yet.
+//  This function retries detection until a device is found or the timeout expires.
+//
+async function waitForDevices(maxWaitMs = 120_000, intervalMs = 8_000) {
+  const deadline = Date.now() + maxWaitMs;
+  let attempt = 0;
+
+  while (Date.now() < deadline) {
+    attempt++;
+    log.info(`Boot scan attempt #${attempt} — waiting for USB/Android adapters to get IPs...`);
+
+    const [usbDevices, androidDevices] = await Promise.all([
+      detector.detectModems().catch(() => []),
+      android.detectAndroidDevices().catch(() => []),
+    ]);
+
+    const total = usbDevices.length + androidDevices.length;
+    const withIp = [...usbDevices, ...androidDevices].filter(d => d.ipAddress).length;
+
+    if (withIp > 0) {
+      log.ok(`✅ Found ${withIp} device(s) with live IPs after ${attempt} attempt(s). Proceeding!`);
+      return true;
+    }
+
+    if (total > 0) {
+      log.warn(`Found ${total} device(s) but none have IPs yet — waiting for DHCP...`);
+    } else {
+      log.warn('No devices found yet — adapter may not be ready. Retrying...');
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining > 0) {
+      const wait = Math.min(intervalMs, remaining);
+      log.info(`  ↳ Retrying in ${wait / 1000}s (${Math.round(remaining / 1000)}s remaining before timeout)`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+
+  log.warn(`⚠️  No devices with IPs found after ${maxWaitMs / 1000}s. Starting anyway — will detect on next cycle.`);
+  return false;
+}
+
 // ─── Startup ──────────────────────────────────────────────────────────────────
 async function main() {
   console.log(chalk.cyan.bold('\n  ╔══════════════════════════════════════════╗'));
@@ -306,9 +355,21 @@ async function main() {
   await killPreviousInstances();
 
   log.info('Starting up...');
-  log.info(`VPS Host:  ${process.env.VPS_HOST || '(not set)'}`);
-  log.info(`Supabase:  ${process.env.SUPABASE_URL || '(not set)'}`);
+  log.info(`VPS Host:    ${process.env.VPS_HOST || '(not set)'}`);
+  log.info(`VPS User:    ${process.env.VPS_USER || 'opc'}`);
+  log.info(`Supabase:    ${process.env.SUPABASE_URL || '(not set)'}`);
+  const pubKey = tunnel.getPublicKeyContent();
+  if (pubKey) {
+    log.info(`SSH PubKey:  ${pubKey}`);
+  }
   log.info('Watching for USB modems and Android phones every 30s');
+
+  // ── Boot-time adapter stabilization ────────────────────────────────────────
+  // Give Windows 5 seconds to finish initializing adapters before first scan,
+  // then retry up to 2 minutes if no IP is assigned yet.
+  log.info('Waiting 5s for network adapters to initialize...');
+  await new Promise(r => setTimeout(r, 5000));
+  await waitForDevices(120_000, 8_000);
 
   // Start persistent SSH tunnel to VPS
   await tunnel.startTunnel().catch(e => {

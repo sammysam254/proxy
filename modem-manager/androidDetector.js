@@ -241,22 +241,44 @@ async function getAndroidDeviceInfo(serial) {
 
 // ─── Check if USB tethering is enabled ───────────────────────────────────────
 async function isTetheringEnabled(serial) {
-  // Method 1: Check tethering state
-  const tetheringOut = await adb(serial, 'dumpsys connectivity | grep -i "usb tethering"');
+  // Method 1: Check usb functions
+  const funcs = await adb(serial, 'svc usb getFunctions').catch(() => null);
+  if (funcs && funcs.toLowerCase().includes('rndis')) return true;
+
+  // Method 2: Check tethering state via dumpsys
+  const tetheringOut = await adb(serial, 'dumpsys connectivity | grep -i "usb tethering"').catch(() => null);
   if (tetheringOut && tetheringOut.toLowerCase().includes('true')) return true;
 
-  // Method 2: Check if rndis interface shows up
+  // Method 3: Check if rndis interface shows up in OS
   const ifaceInfo = await getAndroidTetheredInterface(serial);
   return ifaceInfo !== null;
 }
 
-// ─── Enable USB tethering via ADB (requires root or specific Android versions) ─
+// ─── Enable USB tethering via ADB (modern Android + legacy fallbacks) ────────
 async function enableTethering(serial) {
-  // Try service call (works on some versions)
-  await adbCmd(`-s ${serial} shell service call connectivity 34 i32 1`).catch(() => {});
-  // Try settings (Android 6+)
-  await adbCmd(`-s ${serial} shell settings put global tether_dun_required 0`).catch(() => {});
-  await new Promise(r => setTimeout(r, 2000));
+  console.log(`[AndroidDetector] Automatically enabling USB tethering on ${serial}...`);
+  try {
+    // 1. Android 10 - 14+ native USB mode switch (works on Samsung, Xiaomi, Pixel, etc.)
+    await adb(serial, 'svc usb setFunctions rndis').catch(() => {});
+    await adb(serial, 'svc usb setScreenUnlockedFunctions rndis').catch(() => {});
+    
+    // 2. Ensure mobile data is ON
+    await adb(serial, 'svc data enable').catch(() => {});
+
+    // 3. Settings fallbacks
+    await adb(serial, 'settings put global usb_tethering 1').catch(() => {});
+    await adb(serial, 'settings put global tether_dun_required 0').catch(() => {});
+
+    // 4. Legacy service calls (Android 5-9 fallback)
+    await adb(serial, 'service call connectivity 33 i32 1').catch(() => {});
+    await adb(serial, 'service call connectivity 34 i32 1').catch(() => {});
+
+    // 5. Wait for Windows/Linux host to recognize RNDIS adapter and obtain DHCP IP
+    await new Promise(r => setTimeout(r, 4000));
+    console.log(`[AndroidDetector] USB tethering command sent to ${serial}`);
+  } catch (e) {
+    console.warn(`[AndroidDetector] Failed to enable tethering on ${serial}:`, e.message);
+  }
 }
 
 // ─── Main Android detection function ─────────────────────────────────────────

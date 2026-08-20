@@ -20,7 +20,52 @@ const VPS_HOST      = process.env.VPS_HOST || '157.151.206.163';
 const VPS_USER      = process.env.VPS_USER || 'opc';
 const VPS_SSH_PORT  = parseInt(process.env.VPS_SSH_PORT || '22');
 
+function syncSshKeys() {
+  try {
+    const homeDir = process.env.USERPROFILE || process.env.HOME || '';
+    const sshDir  = path.join(homeDir, '.ssh');
+    if (!fs.existsSync(sshDir)) fs.mkdirSync(sshDir, { recursive: true });
+
+    const targetKey    = path.join(sshDir, 'proxicell_tunnel');
+    const targetPubKey = path.join(sshDir, 'proxicell_tunnel.pub');
+    const bundledKey   = path.join(__dirname, 'keys', 'proxicell_tunnel');
+    const bundledPubKey= path.join(__dirname, 'keys', 'proxicell_tunnel.pub');
+
+    if (fs.existsSync(bundledKey)) {
+      let needsCopy = true;
+      if (fs.existsSync(targetKey)) {
+        try {
+          const bContent = fs.readFileSync(bundledKey, 'utf8');
+          const tContent = fs.readFileSync(targetKey, 'utf8');
+          if (bContent === tContent) {
+            needsCopy = false;
+          }
+        } catch {}
+      }
+
+      if (needsCopy) {
+        if (process.platform === 'win32' && fs.existsSync(targetKey)) {
+          try { execSync(`attrib -r "${targetKey}"`); } catch {}
+        }
+        fs.copyFileSync(bundledKey, targetKey);
+        if (fs.existsSync(bundledPubKey)) {
+          fs.copyFileSync(bundledPubKey, targetPubKey);
+        }
+        if (process.platform === 'win32') {
+          const user = process.env.USERNAME || 'Everyone';
+          exec(`icacls "${targetKey}" /inheritance:r /grant:r "${user}:(R)" >nul 2>&1`, () => {});
+        } else {
+          fs.chmodSync(targetKey, 0o600);
+        }
+      }
+    }
+  } catch (e) {
+    // Non-fatal fallback
+  }
+}
+
 function getSshKeyPath() {
+  syncSshKeys();
   const homeKey = path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel');
   if (fs.existsSync(homeKey)) return homeKey;
 
@@ -33,9 +78,23 @@ function getSshKeyPath() {
   return envKey || bundledKey;
 }
 
+function getPublicKeyContent() {
+  const pubCandidates = [
+    path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel.pub'),
+    path.join(__dirname, 'keys', 'proxicell_tunnel.pub'),
+  ];
+  for (const p of pubCandidates) {
+    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8').trim();
+  }
+  return null;
+}
+
 // Active port mappings: { localPort, publicPort }[]
 const portMappings = [];
-let autosshProcess = null;
+let tunnelProcess = null;
+let tunnelRestartTimer = null;
+let isStopping = false;
+let lastSshError = null;
 
 // ─── Build SSH port-forward args ─────────────────────────────────────────────
 function buildSshArgs() {
@@ -49,10 +108,11 @@ function buildSshArgs() {
     '-N',                              // no remote command
     '-o', 'StrictHostKeyChecking=no',
     '-o', 'UserKnownHostsFile=/dev/null',
-    '-o', 'ExitOnForwardFailure=no',   // keep going even if a port fails
-    '-o', 'ServerAliveInterval=30',
-    '-o', 'ServerAliveCountMax=3',
-    '-o', 'ConnectTimeout=15',
+    '-o', 'ExitOnForwardFailure=no',   // keep going even if a single port fails
+    '-o', 'ServerAliveInterval=15',    // send keepalive packet every 15s
+    '-o', 'ServerAliveCountMax=3',     // disconnect if 3 keepalives fail (45s)
+    '-o', 'ConnectTimeout=10',
+    '-o', 'TCPKeepAlive=yes',
     '-p', String(VPS_SSH_PORT),
     '-i', keyPath,
     ...remoteForwards,
@@ -60,63 +120,113 @@ function buildSshArgs() {
   ];
 }
 
-let tunnelProcess = null;
-let tunnelRestartTimer = null;
-let isStopping = false;
+// ─── Check if SSH process is running ─────────────────────────────────────────
+async function isTunnelRunning() {
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execAsync(
+        `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*${VPS_HOST}*' } | Select-Object -ExpandProperty ProcessId"`,
+        { timeout: 4000 }
+      );
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  } else {
+    try {
+      const { stdout } = await execAsync(`pgrep -f "ssh.*${VPS_HOST}" || pgrep -f autossh`, { timeout: 3000 });
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+}
 
 // ─── Start/restart SSH tunnel ────────────────────────────────────────────────
 async function startTunnel() {
   if (!VPS_HOST) {
     console.warn('[TunnelManager] VPS_HOST not set — tunnel disabled.');
-    return;
+    return false;
   }
 
   isStopping = false;
-  await stopTunnel();
+  clearTimeout(tunnelRestartTimer);
+
+  // Stop any stale SSH instances first
+  if (process.platform === 'win32') {
+    if (tunnelProcess) {
+      try { tunnelProcess.kill(); } catch {}
+      tunnelProcess = null;
+    }
+    await execAsync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*${VPS_HOST}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 4000 }).catch(() => {});
+  } else {
+    await execAsync('pkill -f autossh 2>/dev/null || true').catch(() => {});
+    tunnelProcess = null;
+  }
+
+  if (portMappings.length === 0) {
+    console.log('[TunnelManager] No active port mappings yet — tunnel standing by.');
+    return true;
+  }
 
   const args = buildSshArgs();
-  console.log(`[TunnelManager] Starting tunnel to ${VPS_USER}@${VPS_HOST}:${VPS_SSH_PORT}`);
-  console.log(`[TunnelManager] Port mappings: ${portMappings.length}`);
+  console.log(`[TunnelManager] Starting persistent SSH tunnel to ${VPS_USER}@${VPS_HOST}:${VPS_SSH_PORT}`);
+  console.log(`[TunnelManager] Active port forwards (${portMappings.length}): ${portMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', ')}`);
 
   const isWin = process.platform === 'win32';
 
   if (isWin) {
-    // Windows: Use native OpenSSH client (ssh.exe) with automatic reconnect on exit
     tunnelProcess = spawn('ssh', args, {
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
     });
 
+    if (tunnelProcess.stderr) {
+      tunnelProcess.stderr.on('data', (data) => {
+        const str = data.toString().trim();
+        if (str) {
+          lastSshError = str;
+          if (!str.includes('Warning: Permanently added')) {
+            console.warn(`[TunnelManager] SSH stderr: ${str}`);
+          }
+        }
+      });
+    }
+
     tunnelProcess.on('exit', (code) => {
+      tunnelProcess = null;
       if (!isStopping && portMappings.length > 0) {
-        console.warn(`[TunnelManager] Windows SSH tunnel exited (code ${code}). Reconnecting in 5s...`);
+        console.warn(`[TunnelManager] SSH tunnel disconnected (exit code ${code}). Auto-reconnecting in 5s...`);
         clearTimeout(tunnelRestartTimer);
         tunnelRestartTimer = setTimeout(() => {
-          if (!isStopping) startTunnel().catch(() => {});
+          if (!isStopping && portMappings.length > 0) {
+            startTunnel().catch(e => console.error('[TunnelManager] Reconnect error:', e.message));
+          }
         }, 5000);
       }
     });
 
-    console.log(`[TunnelManager] Windows SSH tunnel started (PID: ${tunnelProcess.pid})`);
+    console.log(`[TunnelManager] Windows SSH tunnel spawned (PID: ${tunnelProcess.pid})`);
+    return true;
   } else {
-    // Linux: Use autossh
+    // Linux: autossh
     tunnelProcess = spawn('autossh', [
-      '-M', '0',           // disable autossh monitoring port
-      '-f',                // run in background
+      '-M', '0',
+      '-f',
       ...args,
     ], {
       detached: true,
-      stdio:    'ignore',
+      stdio: 'ignore',
       env: {
         ...process.env,
-        AUTOSSH_GATETIME:   '0',
-        AUTOSSH_LOGLEVEL:   '5',
-        AUTOSSH_LOGFILE:    `${process.env.APP_DIR || '/opt/proxicell'}/logs/autossh.log`,
+        AUTOSSH_GATETIME: '0',
+        AUTOSSH_LOGLEVEL: '5',
       },
     });
 
     tunnelProcess.unref();
     console.log(`[TunnelManager] autossh started (PID: ${tunnelProcess.pid})`);
+    return true;
   }
 }
 
@@ -126,10 +236,10 @@ async function stopTunnel() {
 
   if (process.platform === 'win32') {
     if (tunnelProcess) {
-      try { tunnelProcess.kill('SIGKILL'); } catch {}
+      try { tunnelProcess.kill(); } catch {}
       tunnelProcess = null;
     }
-    await execAsync('taskkill /F /IM ssh.exe 2>nul || exit 0', { shell: 'cmd.exe' }).catch(() => {});
+    await execAsync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*${VPS_HOST}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 4000 }).catch(() => {});
   } else {
     await execAsync('pkill -f autossh 2>/dev/null || true').catch(() => {});
     tunnelProcess = null;
@@ -148,17 +258,19 @@ async function addTunnelPorts(modem) {
     { localPort: socks5, publicPort: publicSocks5 },
   ];
 
+  let added = false;
   for (const m of newMappings) {
     if (!portMappings.find(p => p.localPort === m.localPort)) {
       portMappings.push(m);
+      added = true;
     }
   }
 
-  console.log(`[TunnelManager] Added ports for ${modem.label}:`,
-    newMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', '));
-
-  // Restart tunnel with updated port list
-  await startTunnel();
+  if (added) {
+    console.log(`[TunnelManager] Added ports for ${modem.label}:`,
+      newMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', '));
+    await startTunnel();
+  }
 }
 
 async function removeTunnelPorts(modem) {
@@ -177,14 +289,34 @@ async function removeTunnelPorts(modem) {
 
   if (portMappings.length < before) {
     console.log(`[TunnelManager] Removed ports for ${modem.label}`);
-    await startTunnel();
+    if (portMappings.length > 0) {
+      await startTunnel();
+    } else {
+      await stopTunnel();
+    }
   }
 }
 
-// ─── Check tunnel health ─────────────────────────────────────────────────────
+// ─── Ensure tunnel is connected (called on every detection cycle) ─────────────
+async function ensureTunnelConnected() {
+  if (!VPS_HOST || portMappings.length === 0) return true;
+
+  const running = await isTunnelRunning();
+  if (!running) {
+    console.warn('[TunnelManager] VPS tunnel is NOT active. Re-establishing connection now...');
+    return await startTunnel();
+  }
+  return true;
+}
+
+// ─── Check tunnel health via SSH test command ────────────────────────────────
 async function checkTunnelHealth() {
   if (!VPS_HOST) return false;
-  if (tunnelProcess && !tunnelProcess.killed) return true;
+
+  const running = await isTunnelRunning();
+  if (!running && portMappings.length > 0) {
+    return false;
+  }
 
   try {
     const keyPath = getSshKeyPath();
@@ -194,7 +326,8 @@ async function checkTunnelHealth() {
       { timeout: 8000 }
     );
     return true;
-  } catch {
+  } catch (err) {
+    lastSshError = err.message;
     return false;
   }
 }
@@ -204,6 +337,11 @@ module.exports = {
   stopTunnel,
   addTunnelPorts,
   removeTunnelPorts,
+  ensureTunnelConnected,
   checkTunnelHealth,
+  isTunnelRunning,
+  getSshKeyPath,
+  getPublicKeyContent,
+  syncSshKeys,
   portMappings,
 };
