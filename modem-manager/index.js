@@ -239,7 +239,11 @@ async function runCycle() {
     // ── 5. Print status table ──────────────────────────────────────────────
     printStatusTable();
 
-    // ── 6. Expire overdue subscriptions & sync credentials ───────────────
+    // ── 6. Reconcile DB (deactivate any stale/ghost online modems) ────────
+    const activeIds = proxying.map(d => d.id).filter(Boolean);
+    await sync.reconcileOnlineModems(activeIds).catch(() => {});
+
+    // ── 7. Expire overdue subscriptions & sync credentials ───────────────
     await sync.expireOldSubscriptions().catch(() => {});
     await sync.syncActiveCredentials().catch(() => {});
 
