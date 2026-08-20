@@ -97,6 +97,13 @@ echo ================================================================
 echo.
 
 cd /d "%PROJ_DIR%modem-manager"
+
+:: ─── Launch Bandwidth Tracker in background (reads OS interface stats) ───
+echo [*] Starting Bandwidth Tracker (live usage updates)...
+powershell -NoProfile -WindowStyle Hidden -Command "Start-Process -WindowStyle Hidden -FilePath 'node' -ArgumentList 'bandwidthTracker.js' -WorkingDirectory '%PROJ_DIR%modem-manager'" >nul 2>&1
+echo [OK] Bandwidth Tracker running in background.
+echo.
+
 node index.js
 
 pause
