@@ -55,7 +55,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  const SidebarContent = () => (
+  const SidebarContent = ({ isMobileDrawer = false }) => (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
@@ -64,26 +64,45 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
     }}>
       {/* Logo */}
       <div style={{
-        padding: collapsed ? '0 12px 20px' : '0 20px 20px',
+        padding: (collapsed && !isMobileDrawer) ? '0 12px 20px' : '0 20px 20px',
         borderBottom: '1px solid var(--clr-border)',
         marginBottom: '12px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'space-between',
+        justifyContent: (collapsed && !isMobileDrawer) ? 'center' : 'space-between',
       }}>
-        {!collapsed && (
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+        {(!collapsed || isMobileDrawer) && (
+          <Link to="/" onClick={() => setMobileOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
             <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
             <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.15rem' }}>Vertex Proxies</span>
           </Link>
         )}
-        {collapsed && (
+        {(collapsed && !isMobileDrawer) && (
           <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
+        )}
+        {isMobileDrawer && (
+          <button
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+            style={{
+              background: 'var(--clr-surface)',
+              border: '1px solid var(--clr-border)',
+              borderRadius: '8px',
+              padding: '6px',
+              cursor: 'pointer',
+              color: 'var(--clr-text)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <X size={18} />
+          </button>
         )}
       </div>
 
       {/* Section label */}
-      {!collapsed && (
+      {(!collapsed || isMobileDrawer) && (
         <div style={{
           padding: '0 20px 8px',
           fontSize: '0.68rem',
@@ -104,13 +123,14 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
             <Link
               key={to}
               to={to}
-              title={collapsed ? label : undefined}
+              onClick={() => setMobileOpen(false)}
+              title={(collapsed && !isMobileDrawer) ? label : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: collapsed ? 0 : '10px',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                padding: collapsed ? '10px' : '10px 12px',
+                gap: (collapsed && !isMobileDrawer) ? 0 : '10px',
+                justifyContent: (collapsed && !isMobileDrawer) ? 'center' : 'flex-start',
+                padding: (collapsed && !isMobileDrawer) ? '10px' : '10px 12px',
                 borderRadius: 'var(--radius-md)',
                 textDecoration: 'none',
                 fontSize: '0.9rem',
@@ -142,7 +162,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
               <span style={{ color: active ? 'var(--clr-accent)' : 'inherit', flexShrink: 0 }}>
                 {icon}
               </span>
-              {!collapsed && <span>{label}</span>}
+              {(!collapsed || isMobileDrawer) && <span>{label}</span>}
             </Link>
           );
         })}
@@ -153,11 +173,12 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
             <div style={{ height: '1px', background: 'var(--clr-border)', margin: '10px 2px' }} />
             <Link
               to="/admin"
+              onClick={() => setMobileOpen(false)}
               style={{
                 display: 'flex', alignItems: 'center',
-                gap: collapsed ? 0 : '10px',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                padding: collapsed ? '10px' : '10px 12px',
+                gap: (collapsed && !isMobileDrawer) ? 0 : '10px',
+                justifyContent: (collapsed && !isMobileDrawer) ? 'center' : 'flex-start',
+                padding: (collapsed && !isMobileDrawer) ? '10px' : '10px 12px',
                 borderRadius: 'var(--radius-md)',
                 textDecoration: 'none',
                 fontSize: '0.9rem',
@@ -168,7 +189,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
               }}
             >
               <Shield size={18} style={{ flexShrink: 0 }} />
-              {!collapsed && <span style={{ fontWeight: 600 }}>Admin Panel</span>}
+              {(!collapsed || isMobileDrawer) && <span style={{ fontWeight: 600 }}>Admin Panel</span>}
             </Link>
           </>
         )}
@@ -178,11 +199,12 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
             <div style={{ height: '1px', background: 'var(--clr-border)', margin: '10px 2px' }} />
             <Link
               to="/dashboard"
+              onClick={() => setMobileOpen(false)}
               style={{
                 display: 'flex', alignItems: 'center',
-                gap: collapsed ? 0 : '10px',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                padding: collapsed ? '10px' : '10px 12px',
+                gap: (collapsed && !isMobileDrawer) ? 0 : '10px',
+                justifyContent: (collapsed && !isMobileDrawer) ? 'center' : 'flex-start',
+                padding: (collapsed && !isMobileDrawer) ? '10px' : '10px 12px',
                 borderRadius: 'var(--radius-md)',
                 textDecoration: 'none',
                 fontSize: '0.9rem',
@@ -191,7 +213,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
               }}
             >
               <LayoutDashboard size={18} style={{ flexShrink: 0 }} />
-              {!collapsed && <span>Customer View</span>}
+              {(!collapsed || isMobileDrawer) && <span>Customer View</span>}
             </Link>
           </>
         )}
@@ -199,7 +221,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
 
       {/* User + Sign out / Sign in */}
       <div style={{
-        padding: collapsed ? '12px 10px 0' : '12px 10px 0',
+        padding: (collapsed && !isMobileDrawer) ? '12px 10px 0' : '12px 10px 0',
         borderTop: '1px solid var(--clr-border)',
         marginTop: 'auto',
         display: 'flex',
@@ -208,7 +230,7 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
       }}>
         {session ? (
           <>
-            {!collapsed && (
+            {(!collapsed || isMobileDrawer) && (
               <div style={{
                 padding: '10px 12px',
                 background: 'var(--clr-surface)',
@@ -234,9 +256,9 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: collapsed ? 0 : '8px',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                padding: collapsed ? '10px' : '10px 12px',
+                gap: (collapsed && !isMobileDrawer) ? 0 : '8px',
+                justifyContent: (collapsed && !isMobileDrawer) ? 'center' : 'flex-start',
+                padding: (collapsed && !isMobileDrawer) ? '10px' : '10px 12px',
                 borderRadius: 'var(--radius-md)',
                 background: 'transparent',
                 border: 'none',
@@ -251,21 +273,23 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--clr-text-2)'; }}
             >
               <LogOut size={18} style={{ flexShrink: 0 }} />
-              {!collapsed && <span>Sign Out</span>}
+              {(!collapsed || isMobileDrawer) && <span>Sign Out</span>}
             </button>
           </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <Link
               to="/auth"
+              onClick={() => setMobileOpen(false)}
               className="btn btn-secondary btn-sm"
               style={{ width: '100%', padding: '8px', fontSize: '0.85rem' }}
             >
-              {!collapsed ? 'Sign In' : <LogOut size={16} />}
+              {(!collapsed || isMobileDrawer) ? 'Sign In' : <LogOut size={16} />}
             </Link>
-            {!collapsed && (
+            {(!collapsed || isMobileDrawer) && (
               <Link
                 to="/auth?tab=signup"
+                onClick={() => setMobileOpen(false)}
                 className="btn btn-primary btn-sm"
                 style={{ width: '100%', padding: '8px', fontSize: '0.85rem' }}
               >
@@ -299,11 +323,12 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
         overflowX: 'hidden',
         overflowY: 'auto',
       }}>
-        <SidebarContent />
+        <SidebarContent isMobileDrawer={false} />
       </aside>
 
-      {/* ── Collapse Toggle Button ───────────────────── */}
+      {/* ── Collapse Toggle Button (Desktop Only) ───── */}
       <button
+        id="desktop-collapse-btn"
         onClick={() => setCollapsed(c => !c)}
         style={{
           position: 'fixed',
@@ -338,41 +363,44 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
         />
       )}
 
-      {/* ── Mobile sidebar ──────────────────────────── */}
+      {/* ── Mobile sidebar drawer ───────────────────── */}
       <aside style={{
         position: 'fixed',
-        top: 0, left: mobileOpen ? 0 : '-260px',
-        bottom: 0, width: '240px',
+        top: 0, left: mobileOpen ? 0 : '-280px',
+        bottom: 0, width: '260px',
         background: 'var(--clr-bg-2)',
         borderRight: '1px solid var(--clr-border)',
         transition: 'left 0.25s cubic-bezier(0.4,0,0.2,1)',
         zIndex: 49,
-        display: 'none', // shown via CSS media query below
+        display: 'none',
         flexDirection: 'column',
         overflowY: 'auto',
+        boxShadow: mobileOpen ? 'var(--shadow-lg)' : 'none',
       }} id="mobile-sidebar">
-        <SidebarContent />
+        <SidebarContent isMobileDrawer={true} />
       </aside>
 
-      {/* ── Mobile menu button ──────────────────────── */}
+      {/* ── Mobile menu toggle button ───────────────── */}
       <button
         onClick={() => setMobileOpen(o => !o)}
+        aria-label="Toggle navigation menu"
         style={{
           position: 'fixed',
           top: '16px', left: '16px',
-          width: 38, height: 38,
+          width: 40, height: 40,
           borderRadius: '10px',
           background: 'var(--clr-bg-2)',
           border: '1px solid var(--clr-border)',
           cursor: 'pointer',
-          display: 'none', // shown via CSS media query
+          display: 'none',
           alignItems: 'center', justifyContent: 'center',
           color: 'var(--clr-text)',
           zIndex: 52,
+          boxShadow: 'var(--shadow-md)',
         }}
         id="mobile-menu-btn"
       >
-        {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* ── Main content ────────────────────────────── */}
@@ -389,10 +417,10 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
 
       <style>{`
         @media (max-width: 768px) {
-          #mobile-sidebar   { display: flex !important; }
-          #mobile-menu-btn  { display: flex !important; }
-          /* On mobile, collapse the desktop sidebar completely */
-          aside:first-of-type { display: none !important; }
+          #mobile-sidebar       { display: flex !important; }
+          #mobile-menu-btn      { display: flex !important; }
+          #desktop-collapse-btn { display: none !important; }
+          aside:first-of-type   { display: none !important; }
           main { margin-left: 0 !important; }
         }
       `}</style>
