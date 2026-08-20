@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { getMySubscriptions, requestIpRotation } from '../lib/supabase';
+import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { getMySubscriptions, requestIpRotation, supabase } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
 
@@ -294,15 +294,48 @@ function ProxyCredCard({ sub }) {
 export default function Dashboard({ session }) {
   const [subs, setSubs]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const [liveUpdate, setLiveUpdate] = useState(false);
+  const channelRef = useRef(null);
 
   useEffect(() => {
     loadSubs(true);
-    // Live update bandwidth and subscriptions every 15 seconds
-    const interval = setInterval(() => {
-      loadSubs(false);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
+
+    // ── Supabase Realtime: instant bandwidth updates ──────────────────
+    // Subscribe to any UPDATE on the subscriptions table for this user.
+    // Every time the backend writes new gb_used data, the dashboard
+    // updates immediately — no 15s polling delay.
+    const userId = session?.user?.id;
+    if (userId) {
+      channelRef.current = supabase
+        .channel(`dashboard-subs-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event:  'UPDATE',
+            schema: 'public',
+            table:  'subscriptions',
+            filter: `customer_id=eq.${userId}`,
+          },
+          (payload) => {
+            // Flash the live indicator
+            setLiveUpdate(true);
+            setTimeout(() => setLiveUpdate(false), 1200);
+
+            // Merge the updated row into existing state without full reload
+            setSubs(prev => prev.map(s =>
+              s.id === payload.new.id ? { ...s, ...payload.new } : s
+            ));
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, [session]);
 
   async function loadSubs(showLoader = true) {
     if (showLoader) setLoading(true);
@@ -310,6 +343,7 @@ export default function Dashboard({ session }) {
     if (!error) setSubs(data || []);
     if (showLoader) setLoading(false);
   }
+
 
   const active  = subs.filter(s => s.status === 'active');
   const expired = subs.filter(s => s.status !== 'active');
@@ -328,7 +362,26 @@ export default function Dashboard({ session }) {
         {/* Header */}
         <div className="flex justify-between items-center mb-xl">
           <div>
-            <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>My Proxies</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <h1 style={{ fontSize: '2rem', margin: 0 }}>My Proxies</h1>
+              <div title="Live traffic data — updates in real-time" style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '3px 10px', borderRadius: '20px',
+                background: liveUpdate ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.08)',
+                border: `1px solid ${liveUpdate ? 'rgba(16, 185, 129, 0.6)' : 'rgba(16, 185, 129, 0.2)'}`,
+                transition: 'all 0.3s ease',
+              }}>
+                <Activity size={11} color={liveUpdate ? '#10b981' : '#6ee7b7'} style={{ transition: 'color 0.3s' }} />
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: liveUpdate ? '#10b981' : '#6ee7b7', transition: 'color 0.3s' }}>
+                  {liveUpdate ? 'LIVE' : 'REALTIME'}
+                </span>
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: '#10b981',
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                }} />
+              </div>
+            </div>
             <p className="text-muted">{session?.user?.email}</p>
           </div>
           <a href="/#pricing" className="btn btn-primary">

@@ -98,6 +98,9 @@ async function markModemOffline(modemId) {
   await supabase.from('proxies').update({ active: false }).eq('modem_id', modemId);
 }
 
+// Track per-modem byte snapshots so we only sync the DELTA on each interval
+const _lastSyncedBytes = new Map(); // modemId → { bytesIn, bytesOut }
+
 // ─── Sync bandwidth usage ─────────────────────────────────────────────────────
 async function syncBandwidth(modems) {
   for (const modem of modems) {
@@ -105,14 +108,34 @@ async function syncBandwidth(modems) {
 
     try {
       const { bytesIn, bytesOut } = await spawner.getModemBandwidth(modem);
-      const totalBytes = bytesIn + bytesOut;
 
-      // Update modem total data used
-      await supabase.from('modems').update({
-        data_used_bytes: totalBytes,
-      }).eq('id', modem.id);
+      // Compute delta since last sync (avoids counting same bytes twice)
+      const prev       = _lastSyncedBytes.get(modem.id) || { bytesIn: 0, bytesOut: 0 };
+      const deltaIn    = Math.max(0, bytesIn  - prev.bytesIn);
+      const deltaOut   = Math.max(0, bytesOut - prev.bytesOut);
+      const deltaBytes = deltaIn + deltaOut;
 
-      // Find active subscriptions for proxies on this modem
+      // Remember current totals for next iteration
+      _lastSyncedBytes.set(modem.id, { bytesIn, bytesOut });
+
+      // Nothing new since last sync — skip
+      if (deltaBytes === 0) continue;
+
+      // Update modem-level cumulative counter in DB
+      await supabase.rpc('increment_modem_bytes', {
+        modem_id_input:  modem.id,
+        delta_bytes: deltaBytes,
+      }).catch(async () => {
+        // Fallback: manual fetch + update if RPC doesn't exist yet
+        const { data: m } = await supabase
+          .from('modems').select('data_used_bytes').eq('id', modem.id).single();
+        const prev_bytes = m?.data_used_bytes || 0;
+        await supabase.from('modems').update({
+          data_used_bytes: prev_bytes + deltaBytes,
+        }).eq('id', modem.id);
+      });
+
+      // Find all active subscriptions for proxies on this modem
       const { data: subs } = await supabase
         .from('subscriptions')
         .select('id, gb_used, gb_limit, proxy_id, proxies!inner(modem_id)')
@@ -120,30 +143,33 @@ async function syncBandwidth(modems) {
         .eq('status', 'active');
 
       if (subs && subs.length > 0) {
-        const gbUsed = totalBytes / (1024 ** 3);
-        const gbUsedFormatted = parseFloat(gbUsed.toFixed(6));
+        const deltaGb = deltaBytes / (1024 ** 3);
 
-        // Update all active subscriptions with the current GB used
         for (const sub of subs) {
-          const updateData = { gb_used: gbUsedFormatted };
-          if (sub.gb_limit && gbUsed >= sub.gb_limit) {
+          // Accumulate: add new delta on top of current stored value
+          const currentGb  = parseFloat(sub.gb_used || 0);
+          const newGbUsed  = parseFloat((currentGb + deltaGb).toFixed(6));
+          const updateData = { gb_used: newGbUsed };
+
+          // Auto-expire if GB cap hit
+          if (sub.gb_limit && newGbUsed >= parseFloat(sub.gb_limit)) {
             updateData.status = 'expired';
-            console.log(`[SupabaseSync] Subscription ${sub.id} expired (GB limit reached: ${gbUsedFormatted}/${sub.gb_limit} GB)`);
+            console.log(`[SupabaseSync] 📛 Subscription ${sub.id} expired (${newGbUsed.toFixed(4)} GB / ${sub.gb_limit} GB limit)`);
           }
+
           await supabase.from('subscriptions').update(updateData).eq('id', sub.id);
         }
 
-        // Log periodic usage to usage_logs
-        if (totalBytes > 0) {
-          const logEntries = subs.map(s => ({
-            subscription_id: s.id,
-            bytes_in:        bytesIn,
-            bytes_out:       bytesOut,
-            logged_at:       new Date().toISOString(),
-          }));
+        // Append to usage_logs for history
+        const logEntries = subs.map(s => ({
+          subscription_id: s.id,
+          bytes_in:        deltaIn,
+          bytes_out:       deltaOut,
+          logged_at:       new Date().toISOString(),
+        }));
+        await supabase.from('usage_logs').insert(logEntries).catch(() => {});
 
-          await supabase.from('usage_logs').insert(logEntries).catch(() => {});
-        }
+        console.log(`[SupabaseSync] 📊 Bandwidth sync: +${(deltaBytes / 1024).toFixed(1)} KB for ${modems.length} modem(s), ${subs.length} subscription(s)`);
       }
     } catch (e) {
       console.warn(`[SupabaseSync] Bandwidth sync error for modem ${modem.id}:`, e.message);
