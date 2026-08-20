@@ -421,6 +421,7 @@ export default function CloudPhones({ session }) {
                       {/* App Icons Grid */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: 'auto', marginBottom: '20px' }}>
                         {[
+                          { name: 'Play Store', color: '#fff', border: '#01875f', icon: <Download size={22} color="#01875f" /> },
                           { name: 'TikTok', color: '#000', border: '#ff0050', icon: <Sparkles size={20} color="#ff0050" /> },
                           { name: 'Instagram', color: '#e1306c', border: '#e1306c', icon: <Camera size={20} color="#fff" /> },
                           { name: 'WhatsApp', color: '#25d366', border: '#25d366', icon: <MessageSquare size={20} color="#fff" /> },
@@ -461,6 +462,9 @@ export default function CloudPhones({ session }) {
                         justifyContent: 'space-around',
                         border: '1px solid rgba(255,255,255,0.1)',
                       }}>
+                        <div onClick={() => handleLaunchApp('Play Store')} title="Google Play Store" style={{ cursor: 'pointer', width: '38px', height: '38px', borderRadius: '10px', background: '#fff', border: '1px solid #01875f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Download size={18} color="#01875f" />
+                        </div>
                         <div onClick={() => handleLaunchApp('Chrome')} style={{ cursor: 'pointer', width: '38px', height: '38px', borderRadius: '10px', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <Globe size={18} color="#fff" />
                         </div>
@@ -477,29 +481,81 @@ export default function CloudPhones({ session }) {
                   {/* App Screen View */}
                   {currentScreen === 'app' && (
                     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', color: '#fff' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <button onClick={handleGoHome} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: '2px' }}>
                             <ArrowLeft size={16} />
                           </button>
                           <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{activeApp}</span>
                         </div>
-                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: '#10b981', color: '#fff' }}>Protected</span>
+                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: '#10b981', color: '#fff' }}>Official Store</span>
                       </div>
 
-                      {/* App Mock Content */}
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px' }}>
-                        <div style={{ width: '60px', height: '60px', borderRadius: '16px', background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', color: 'var(--clr-accent)' }}>
-                          <Smartphone size={28} />
+                      {/* Google Play Store Dedicated Interface */}
+                      {activeApp === 'Play Store' ? (
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+                          <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <Globe size={14} color="#94a3b8" />
+                            <input
+                              type="text"
+                              placeholder="Search apps & games in Play Store..."
+                              style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.78rem', width: '100%', outline: 'none' }}
+                            />
+                          </div>
+
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '10px' }}>
+                            Top Apps on Play Store
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {[
+                              { name: 'TikTok', tag: 'Short Video • 1B+ downloads', size: '78 MB' },
+                              { name: 'WhatsApp Messenger', tag: 'Chat & Calls • 5B+ downloads', size: '42 MB' },
+                              { name: 'Instagram', tag: 'Photos & Reels • 2B+ downloads', size: '55 MB' },
+                              { name: 'Telegram', tag: 'Fast Messaging • 1B+ downloads', size: '38 MB' },
+                              { name: 'Facebook', tag: 'Social Media • 5B+ downloads', size: '62 MB' },
+                              { name: 'X (Twitter)', tag: 'News & Trends • 1B+ downloads', size: '45 MB' },
+                            ].map(item => (
+                              <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <div>
+                                  <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>{item.name}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{item.tag}</div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    if (!activeModalPhone.installed_apps.includes(item.name)) {
+                                      activeModalPhone.installed_apps.push(item.name);
+                                      setPhones([...phones]);
+                                    }
+                                    handleLaunchApp(item.name);
+                                  }}
+                                  style={{
+                                    background: '#01875f', border: 'none', color: '#fff',
+                                    padding: '5px 12px', borderRadius: '16px', fontSize: '0.72rem',
+                                    fontWeight: 700, cursor: 'pointer'
+                                  }}
+                                >
+                                  {activeModalPhone.installed_apps.includes(item.name) ? 'Open' : 'Install'}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem' }}>{activeApp} is Running</h4>
-                        <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0 0 16px' }}>
-                          All network requests from {activeApp} are securely routed through your 4G SIM proxy ({activeModalPhone.proxy?.exit_ip}).
-                        </p>
-                        <div style={{ fontSize: '0.75rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                          🛡️ Anti-Detect Fingerprint Active
+                      ) : (
+                        /* Standard App View */
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px' }}>
+                          <div style={{ width: '60px', height: '60px', borderRadius: '16px', background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', color: 'var(--clr-accent)' }}>
+                            <Smartphone size={28} />
+                          </div>
+                          <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem' }}>{activeApp} is Running</h4>
+                          <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0 0 16px' }}>
+                            All network requests from {activeApp} are securely routed through your 4G SIM proxy ({activeModalPhone.proxy?.exit_ip}).
+                          </p>
+                          <div style={{ fontSize: '0.75rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                            🛡️ Anti-Detect Fingerprint Active
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
 
