@@ -46,8 +46,9 @@ if [ "$PKG_MGR" = "dnf" ] || [ "$PKG_MGR" = "yum" ]; then
   $PKG_INSTALL nginx iptables iptables-services net-tools curl jq unzip firewalld autossh 2>/dev/null || true
 else
   # Ubuntu / Debian
-  apt-get update -qq
-  $PKG_INSTALL nginx autossh ufw iptables iptables-persistent net-tools curl jq unzip
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y --no-install-recommends nginx ufw curl net-tools jq unzip autossh || apt-get install -y nginx ufw curl
 fi
 
 log "Packages installed."
@@ -55,20 +56,26 @@ log "Packages installed."
 step "Configuring SSH Server (for reverse tunnels)"
 
 # Allow gateway ports (needed for reverse tunnel to bind on 0.0.0.0)
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/99-proxicell.conf << 'SSHEOF'
+GatewayPorts yes
+TCPKeepAlive yes
+ClientAliveInterval 60
+ClientAliveCountMax 10
+SSHEOF
+
 SSH_CFG=/etc/ssh/sshd_config
+if [ -f "$SSH_CFG" ]; then
+  grep -q "^GatewayPorts" "$SSH_CFG" && \
+    sed -i 's/^GatewayPorts.*/GatewayPorts yes/' "$SSH_CFG" || \
+    echo "GatewayPorts yes" >> "$SSH_CFG"
 
-grep -q "^GatewayPorts" "$SSH_CFG" && \
-  sed -i 's/^GatewayPorts.*/GatewayPorts yes/' "$SSH_CFG" || \
-  echo "GatewayPorts yes" >> "$SSH_CFG"
+  grep -q "^TCPKeepAlive" "$SSH_CFG" && \
+    sed -i 's/^TCPKeepAlive.*/TCPKeepAlive yes/' "$SSH_CFG" || \
+    echo "TCPKeepAlive yes" >> "$SSH_CFG"
+fi
 
-grep -q "^TCPKeepAlive" "$SSH_CFG" && \
-  sed -i 's/^TCPKeepAlive.*/TCPKeepAlive yes/' "$SSH_CFG" || \
-  echo "TCPKeepAlive yes" >> "$SSH_CFG"
-
-echo "ClientAliveInterval 60"  >> "$SSH_CFG" 2>/dev/null || true
-echo "ClientAliveCountMax 10"  >> "$SSH_CFG" 2>/dev/null || true
-
-systemctl reload sshd
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 log "SSH configured for reverse tunnels."
 
 step "Configuring Firewall"
