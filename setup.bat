@@ -76,18 +76,22 @@ if not exist "%PROJ_DIR%modem-manager\node_modules" (
     echo [OK] Modem manager dependencies verified.
 )
 
-:: ─── 7. Hardware Initialization (Start ADB Daemon ^& Detect Devices) ───
+:: ─── 7. Auto-Register Windows Boot Auto-Start Shortcut ───
+powershell -NoProfile -Command "$sFolder = [Environment]::GetFolderPath('Startup'); $sFile = Join-Path $sFolder 'VertexProxies.lnk'; $w = New-Object -ComObject WScript.Shell; $sc = $w.CreateShortcut($sFile); $sc.TargetPath = 'wscript.exe'; $sc.Arguments = '\"%PROJ_DIR%start-hidden.vbs\"'; $sc.WorkingDirectory = '%PROJ_DIR%'; $sc.Description = 'Vertex Proxies Modem Manager Auto-Start'; $sc.Save()" >nul 2>&1
+echo [OK] Windows Boot Auto-Start configured.
+
+:: ─── 8. Hardware Initialization (Start ADB Daemon ^& Detect Devices) ───
 echo [*] Initializing Android Debug Bridge (ADB)...
 adb start-server >nul 2>&1
 echo [*] Scanning for connected Android phones and USB modems...
 adb devices -l
 echo.
 
-:: ─── 8. Launch Vertex Proxies Modem Manager Engine ───
+:: ─── 9. Launch Vertex Proxies Modem Manager Engine ───
 echo ================================================================
 echo   [SUCCESS] SYSTEM INITIALIZED ^& READY
 echo   Starting Vertex Proxies Modem Manager Engine...
-echo   VPS Host:       157.151.206.163
+echo   VPS Host:       64.227.3.211
 echo   Web Dashboard:  https://proxyke.netlify.app
 echo ================================================================
 echo.
