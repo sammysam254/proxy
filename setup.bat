@@ -53,8 +53,8 @@ echo [OK] VPS Reverse Tunnel authorization keys synced & configured.
 
 :: ─── 5. Auto-Configure Environment Variables (.env) ───
 (
-    echo VPS_HOST=157.151.206.163
-    echo VPS_USER=opc
+    echo VPS_HOST=64.227.3.211
+    echo VPS_USER=root
     echo VPS_SSH_PORT=22
     echo VPS_SSH_KEY=%LOCAL_SSH_KEY:\=/%
     echo SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co
