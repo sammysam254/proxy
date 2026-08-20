@@ -150,6 +150,7 @@ async function detectModemsWindows() {
     // Skip well-known non-modem categories
     if (WIN_SKIP_KEYWORDS.some(k => combined.includes(k))) continue;
     if (WIN_STANDARD_ADAPTERS.some(k => desc.includes(k))) continue;
+    if (adapter.ipv4.startsWith('192.168.56.') || adapter.ipv4.startsWith('192.168.57.') || adapter.ipv4.startsWith('192.168.99.')) continue;
 
     // Also skip if the adapter type is 'Wireless LAN' (Wi-Fi) — those aren't SIM cards
     if (/wireless/i.test(atype)) continue;
@@ -166,7 +167,7 @@ async function detectModemsWindows() {
     if (desc.includes('huawei'))                    vendor = 'Huawei';
     if (desc.includes('zte'))                       vendor = 'ZTE';
     if (desc.includes('quectel'))                   vendor = 'Quectel';
-    if (desc.includes('android') || desc.includes('rndis')) vendor = 'Android Phone';
+    if (desc.includes('android') || desc.includes('rndis') || desc.includes('samsung')) vendor = 'Android Phone';
 
     const label = `${vendor} (${adapter.description || adapter.name})`;
 
@@ -194,6 +195,8 @@ async function detectModemsWindows() {
     for (const adapter of adapters) {
       if (!adapter.connected || !adapter.ipv4) continue;
       if (adapter.ipv4.startsWith('169.254.') || adapter.ipv4.startsWith('127.')) continue;
+      if (adapter.ipv4.startsWith('192.168.56.') || adapter.ipv4.startsWith('192.168.57.') || adapter.ipv4.startsWith('192.168.99.')) continue;
+      if (adapter.ipv4.startsWith('172.28.') || adapter.ipv4.startsWith('172.29.') || adapter.ipv4.startsWith('172.30.') || adapter.ipv4.startsWith('172.31.')) continue;
 
       const desc     = (adapter.description || '').toLowerCase();
       const combined = `${desc} ${(adapter.name || '').toLowerCase()}`;
@@ -202,6 +205,7 @@ async function detectModemsWindows() {
       if (WIN_SKIP_KEYWORDS.some(k => combined.includes(k))) continue;
       if (WIN_STANDARD_ADAPTERS.some(k => desc.includes(k))) continue;
       if (/wireless/i.test(atype)) continue;
+      if (/virtualbox/i.test(combined)) continue;
 
       // At this point skip any adapter that still looks like a normal LAN/Ethernet
       if (/ethernet.*adapter/i.test(adapter.name) && !/usb|mobile|modem/i.test(combined)) continue;
