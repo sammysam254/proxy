@@ -277,7 +277,8 @@ async function enableTethering(serial) {
     // 1. Permanently configure default USB configuration on the phone
     await configurePersistentUsbTethering(serial);
 
-    // 2. Ensure cellular mobile data is enabled
+    // 2. Ensure Wi-Fi is enabled on Android for Wi-Fi proxy routing
+    await adb(serial, 'svc wifi enable').catch(() => {});
     await adb(serial, 'svc data enable').catch(() => {});
 
     // 3. Try Android 11-14+ modular tethering commands
@@ -416,13 +417,19 @@ async function rotateAndroidIp(device) {
   console.log(`[AndroidDetector] Rotating cellular IP for ${device.label}...`);
 
   if (serial) {
-    // 1. Cycle mobile cellular data (most reliable on Safaricom/Airtel to get a new PDP IP)
+    // 1. Cycle Wi-Fi connection (for Android phones routing through Wi-Fi)
+    await adb(serial, 'svc wifi disable').catch(() => {});
+    await new Promise(r => setTimeout(r, 2000));
+    await adb(serial, 'svc wifi enable').catch(() => {});
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 2. Cycle mobile cellular data fallback
     await adb(serial, 'svc data disable').catch(() => {});
     await new Promise(r => setTimeout(r, 2500));
     await adb(serial, 'svc data enable').catch(() => {});
     await new Promise(r => setTimeout(r, 3000));
 
-    // 2. Toggle Airplane Mode as secondary trigger
+    // 3. Toggle Airplane Mode as secondary trigger
     await adb(serial, 'cmd connectivity airplane-mode enable').catch(() => {});
     await adb(serial, 'settings put global airplane_mode_on 1').catch(() => {});
     await adb(serial, 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true').catch(() => {});
