@@ -138,7 +138,7 @@ async function syncBandwidth(modems) {
       // Find all active subscriptions for proxies on this modem
       const { data: subs } = await supabase
         .from('subscriptions')
-        .select('id, gb_used, gb_limit, proxy_id, proxies!inner(modem_id)')
+        .select('id, gb_used, gb_limit, proxy_username, proxy_id, proxies!inner(modem_id)')
         .eq('proxies.modem_id', modem.id)
         .eq('status', 'active');
 
