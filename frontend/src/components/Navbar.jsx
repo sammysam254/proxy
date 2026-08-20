@@ -36,6 +36,7 @@ export default function Navbar({ session }) {
           <ul className="nav-links desktop-only">
             <li><Link to="/" className={isActive('/')}>Home</Link></li>
             <li><Link to="/proxies" className={isActive('/proxies')}>Proxies</Link></li>
+            <li><Link to="/cloud-phones" className={isActive('/cloud-phones')}>Cloud Phones</Link></li>
             {session && (
               <li><Link to="/dashboard" className={isActive('/dashboard')}>My Proxies</Link></li>
             )}
@@ -142,6 +143,7 @@ export default function Navbar({ session }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
           <Link to="/" onClick={() => setMobileOpen(false)} style={{ padding: '12px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--clr-text)', fontWeight: 500, background: location.pathname === '/' ? 'var(--clr-surface-2)' : 'transparent' }}>Home</Link>
           <Link to="/proxies" onClick={() => setMobileOpen(false)} style={{ padding: '12px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--clr-text)', fontWeight: 500, background: location.pathname === '/proxies' ? 'var(--clr-surface-2)' : 'transparent' }}>Proxies</Link>
+          <Link to="/cloud-phones" onClick={() => setMobileOpen(false)} style={{ padding: '12px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--clr-text)', fontWeight: 500, background: location.pathname === '/cloud-phones' ? 'var(--clr-surface-2)' : 'transparent' }}>Cloud Phones</Link>
           {session && (
             <Link to="/dashboard" onClick={() => setMobileOpen(false)} style={{ padding: '12px 14px', borderRadius: '8px', textDecoration: 'none', color: 'var(--clr-text)', fontWeight: 500, background: location.pathname === '/dashboard' ? 'var(--clr-surface-2)' : 'transparent' }}>My Proxies</Link>
           )}

@@ -91,6 +91,38 @@ INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
 SELECT 'Monthly', 80.00, 30, NULL, 'Unlimited data for 30 days'
 WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Monthly');
 
+INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
+SELECT 'Cloud Phone Only', 15.00, 30, NULL, 'Virtual Android 12 Cloud Phone (30 days)'
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Cloud Phone Only');
+
+INSERT INTO plans (name, price_usd, duration_days, gb_limit, description)
+SELECT 'Cloud Phone + 4G Proxy Combo', 89.00, 30, NULL, 'Virtual Cloud Phone + Unlimited 4G Mobile SIM Proxy (30 days)'
+WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Cloud Phone + 4G Proxy Combo');
+
+-- ============================================
+-- CLOUD PHONES TABLE (Virtual Android Instances)
+-- ============================================
+CREATE TABLE IF NOT EXISTS cloud_phones (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_id      UUID REFERENCES customers(id) ON DELETE CASCADE,
+  proxy_id         UUID REFERENCES proxies(id) ON DELETE SET NULL,
+  name             TEXT NOT NULL,                           -- e.g. "Cloud Phone #1"
+  brand            TEXT DEFAULT 'Samsung',                  -- e.g. "Samsung", "Google", "Xiaomi"
+  model            TEXT DEFAULT 'Galaxy S23',               -- e.g. "Galaxy S23", "Pixel 8 Pro"
+  android_version  TEXT DEFAULT '12.0',                     -- e.g. "11.0", "12.0", "13.0"
+  imei             TEXT,
+  android_id       TEXT,
+  mac_address      TEXT,
+  status           TEXT DEFAULT 'running' CHECK (status IN ('running', 'stopped', 'provisioning', 'error')),
+  vps_engine       TEXT DEFAULT 'oracle',                   -- 'oracle' or 'local'
+  stream_url       TEXT,                                    -- ws:// or webrtc:// endpoint
+  ws_port          INTEGER,                                 -- WebSocket streaming port
+  installed_apps   JSONB DEFAULT '["TikTok", "Instagram", "WhatsApp", "Chrome"]'::jsonb,
+  battery_level    INTEGER DEFAULT 95,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  last_active_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================
 -- CUSTOMERS TABLE (extends Supabase auth.users)
 -- ============================================

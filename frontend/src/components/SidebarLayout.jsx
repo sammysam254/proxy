@@ -8,21 +8,24 @@ import {
 import { signOut, isAdmin } from '../lib/supabase';
 
 const CUSTOMER_NAV = [
-  { to: '/',          icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/proxies',   icon: <Server size={18} />,          label: 'Proxies' },
-  { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
-  { to: '/settings',  icon: <Settings size={18} />,        label: 'Settings' },
+  { to: '/',             icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',      icon: <Server size={18} />,          label: 'Proxies' },
+  { to: '/cloud-phones', icon: <Smartphone size={18} />,      label: 'Cloud Phones' },
+  { to: '/dashboard',    icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
+  { to: '/settings',     icon: <Settings size={18} />,        label: 'Settings' },
 ];
 
 const GUEST_NAV = [
-  { to: '/',          icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/proxies',   icon: <Server size={18} />,          label: 'Proxies' },
-  { to: '/auth',      icon: <Users size={18} />,           label: 'Sign In / Register' },
+  { to: '/',             icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',      icon: <Server size={18} />,          label: 'Proxies' },
+  { to: '/cloud-phones', icon: <Smartphone size={18} />,      label: 'Cloud Phones' },
+  { to: '/auth',         icon: <Users size={18} />,           label: 'Sign In / Register' },
 ];
 
 const ADMIN_NAV = [
   { to: '/admin',              icon: <Activity size={18} />,   label: 'Overview' },
   { to: '/admin/modems',       icon: <Wifi size={18} />,       label: 'Modems' },
+  { to: '/cloud-phones',       icon: <Smartphone size={18} />, label: 'Cloud Phones' },
   { to: '/admin/android',      icon: <Smartphone size={18} />, label: 'Android Devices' },
   { to: '/admin/subscriptions',icon: <Users size={18} />,      label: 'Subscriptions' },
   { to: '/admin/revenue',      icon: <DollarSign size={18} />, label: 'Revenue' },

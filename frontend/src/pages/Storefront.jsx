@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Wifi, Globe, Shield, Zap, ChevronRight, Check,
-  Server, Activity, Lock, RefreshCw
+  Server, Activity, Lock, RefreshCw, Smartphone
 } from 'lucide-react';
 import { getPlans, getAvailableProxies } from '../lib/supabase';
 import PurchaseModal from '../components/PurchaseModal';
@@ -179,6 +179,11 @@ export default function Storefront({ session }) {
             <div className="grid grid-3" style={{ gap: '20px' }}>
               {[
                 {
+                  icon: <Smartphone size={24} color="#8b5cf6" />,
+                  title: 'Cloud Phones & In-Browser Player',
+                  desc: 'Rent virtual Android 13 Cloud Phones running on Oracle Cloud, pre-bound to your 4G SIM proxy with genuine anti-detect hardware profiles.',
+                },
+                {
                   icon: <Zap size={24} color="#3b82f6" />,
                   title: 'Real Hardware SIM Cards',
                   desc: 'Every proxy is backed by an actual SIM card connected to a cellular tower — not simulated or emulated.',
@@ -202,11 +207,6 @@ export default function Storefront({ session }) {
                   icon: <Activity size={24} color="#06b6d4" />,
                   title: 'Real-Time Bandwidth Stats',
                   desc: 'Track exact byte consumption live down to the megabyte with automatic accounting and renewal alerts.',
-                },
-                {
-                  icon: <Shield size={24} color="#ec4899" />,
-                  title: 'Dedicated Port Allocation',
-                  desc: 'Your port is exclusively assigned to your plan. Full isolation from other network traffic.',
                 },
               ].map(f => (
                 <div key={f.title} className="card" style={{ padding: '24px' }}>
