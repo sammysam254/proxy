@@ -72,13 +72,13 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
         justifyContent: collapsed ? 'center' : 'space-between',
       }}>
         {!collapsed && (
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
-            <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+            <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
             <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.15rem' }}>Vertex Proxies</span>
           </Link>
         )}
         {collapsed && (
-          <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
+          <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
         )}
       </div>
 

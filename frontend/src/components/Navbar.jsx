@@ -21,9 +21,9 @@ export default function Navbar({ session }) {
         {/* Logo */}
         <Link to="/" className="logo">
           <div className="logo-icon">
-            <Wifi size={18} color="#fff" />
+            <img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" />
           </div>
-          <span className="text-gradient">ProxiCell</span>
+          <span className="text-gradient">Vertex Proxies</span>
         </Link>
 
         {/* Nav Links */}

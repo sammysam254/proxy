@@ -311,7 +311,7 @@ export default function Storefront({ session }) {
         }}>
           <div className="container">
             <div className="flex items-center justify-center gap-md" style={{ marginBottom: '12px' }}>
-              <div className="logo-icon"><Wifi size={16} color="#fff" /></div>
+              <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
               <span className="text-gradient" style={{ fontWeight: 700 }}>Vertex Proxies</span>
             </div>
             <p>© {new Date().getFullYear()} Vertex Proxies. Real mobile proxies for professionals.</p>

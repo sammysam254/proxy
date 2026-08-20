@@ -73,7 +73,7 @@ export default function AuthPage() {
       }}>
         {/* Logo */}
         <div className="flex items-center gap-sm" style={{ marginBottom: '32px', justifyContent: 'center' }}>
-          <div className="logo-icon"><Wifi size={18} color="#fff" /></div>
+          <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
           <span className="text-gradient" style={{ fontSize: '1.3rem', fontWeight: 800 }}>Vertex Proxies</span>
         </div>
 
