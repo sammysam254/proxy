@@ -29,8 +29,9 @@ echo.
 
 :: 0. Pull latest updates automatically
 if exist "%PROJ_DIR%.git" (
-    echo [*] Checking for latest updates...
-    git pull origin main >nul 2>&1
+    echo [*] Automatically updating code to latest GitHub release...
+    git -C "%PROJ_DIR%" fetch --all >nul 2>&1
+    git -C "%PROJ_DIR%" reset --hard origin/main >nul 2>&1
     echo [OK] Code updated to latest version.
 )
 

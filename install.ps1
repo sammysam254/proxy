@@ -14,12 +14,36 @@ $needsDownload = $true
 
 if (Test-Path "$projDir\modem-manager\index.js") {
     $needsDownload = $false
+    if (Test-Path "$projDir\.git") {
+        Write-Host "[*] Automatically pulling latest updates from GitHub..." -ForegroundColor Cyan
+        try {
+            git -C $projDir fetch --all 2>$null
+            git -C $projDir reset --hard origin/main 2>$null
+            Write-Host "[OK] Code automatically updated to latest version." -ForegroundColor Green
+        } catch {}
+    }
 } elseif ($PSScriptRoot -and (Test-Path "$PSScriptRoot\modem-manager\index.js")) {
     $projDir = $PSScriptRoot
     $needsDownload = $false
+    if (Test-Path "$projDir\.git") {
+        Write-Host "[*] Automatically pulling latest updates from GitHub..." -ForegroundColor Cyan
+        try {
+            git -C $projDir fetch --all 2>$null
+            git -C $projDir reset --hard origin/main 2>$null
+            Write-Host "[OK] Code automatically updated to latest version." -ForegroundColor Green
+        } catch {}
+    }
 } elseif (Test-Path "$HOME\proxy\modem-manager\index.js") {
     $projDir = "$HOME\proxy"
     $needsDownload = $false
+    if (Test-Path "$projDir\.git") {
+        Write-Host "[*] Automatically pulling latest updates from GitHub..." -ForegroundColor Cyan
+        try {
+            git -C $projDir fetch --all 2>$null
+            git -C $projDir reset --hard origin/main 2>$null
+            Write-Host "[OK] Code automatically updated to latest version." -ForegroundColor Green
+        } catch {}
+    }
 }
 
 if ($needsDownload) {
