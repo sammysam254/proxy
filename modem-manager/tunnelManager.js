@@ -97,6 +97,19 @@ let isStopping = false;
 let lastSshError = null;
 
 // ─── Build SSH port-forward args ─────────────────────────────────────────────
+// ─── Clean remote VPS ports ──────────────────────────────────────────────────
+async function cleanRemoteVpsPorts() {
+  try {
+    const keyPath = getSshKeyPath();
+    if (!keyPath || !fs.existsSync(keyPath)) return;
+    const cleanCmd = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=4 -p ${VPS_SSH_PORT} -i "${keyPath}" ${VPS_USER}@${VPS_HOST} "pkill -f 'sshd: ${VPS_USER}@notty' 2>/dev/null || true; fuser -k 41000:44000/tcp 2>/dev/null || true"`;
+    await execAsync(cleanCmd, { timeout: 6000 }).catch(() => {});
+  } catch (e) {
+    // Non-fatal
+  }
+}
+
+// ─── Build SSH port-forward args ─────────────────────────────────────────────
 function buildSshArgs() {
   const remoteForwards = portMappings.flatMap(({ localPort, publicPort }) => [
     '-R', `0.0.0.0:${publicPort}:127.0.0.1:${localPort}`,
@@ -108,6 +121,7 @@ function buildSshArgs() {
     '-N',                              // no remote command
     '-o', 'StrictHostKeyChecking=no',
     '-o', 'UserKnownHostsFile=/dev/null',
+    '-o', 'StreamLocalBindUnlink=yes',
     '-o', 'ExitOnForwardFailure=no',   // keep going even if a single port fails
     '-o', 'ServerAliveInterval=15',    // send keepalive packet every 15s
     '-o', 'ServerAliveCountMax=3',     // disconnect if 3 keepalives fail (45s)
@@ -142,6 +156,17 @@ async function isTunnelRunning() {
   }
 }
 
+let _startTunnelDebounceTimer = null;
+function scheduleTunnelStart(delayMs = 600) {
+  clearTimeout(_startTunnelDebounceTimer);
+  return new Promise((resolve) => {
+    _startTunnelDebounceTimer = setTimeout(async () => {
+      const res = await startTunnel();
+      resolve(res);
+    }, delayMs);
+  });
+}
+
 // ─── Start/restart SSH tunnel ────────────────────────────────────────────────
 async function startTunnel() {
   if (!VPS_HOST) {
@@ -169,6 +194,9 @@ async function startTunnel() {
     return true;
   }
 
+  // Release any lingering port listeners on the VPS
+  await cleanRemoteVpsPorts();
+
   const args = buildSshArgs();
   console.log(`[TunnelManager] Starting persistent SSH tunnel to ${VPS_USER}@${VPS_HOST}:${VPS_SSH_PORT}`);
   console.log(`[TunnelManager] Active port forwards (${portMappings.length}): ${portMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', ')}`);
@@ -186,7 +214,7 @@ async function startTunnel() {
         const str = data.toString().trim();
         if (str) {
           lastSshError = str;
-          if (!str.includes('Warning: Permanently added')) {
+          if (!str.includes('Warning: Permanently added') && !str.includes('Warning: remote port forwarding failed')) {
             console.warn(`[TunnelManager] SSH stderr: ${str}`);
           }
         }
@@ -233,6 +261,7 @@ async function startTunnel() {
 async function stopTunnel() {
   isStopping = true;
   clearTimeout(tunnelRestartTimer);
+  clearTimeout(_startTunnelDebounceTimer);
 
   if (process.platform === 'win32') {
     if (tunnelProcess) {
@@ -269,7 +298,8 @@ async function addTunnelPorts(modem) {
   if (added) {
     console.log(`[TunnelManager] Added ports for ${modem.label}:`,
       newMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', '));
-    await startTunnel();
+    // Batch/debounce tunnel startup across all discovered devices
+    scheduleTunnelStart(600);
   }
 }
 
