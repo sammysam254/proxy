@@ -133,12 +133,15 @@ $privLines = @(
 )
 $pubLine = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAGXIts1funbauWOhOHJw8JO3O+1E6xGqXcNHZ/VGBCp proxicell-windows-tunnel"
 
-[System.IO.File]::WriteAllLines("$keyDir\proxicell_tunnel", $privLines)
-[System.IO.File]::WriteAllText("$keyDir\proxicell_tunnel.pub", "$pubLine`n")
-[System.IO.File]::WriteAllLines($localKeyPath, $privLines)
-[System.IO.File]::WriteAllText("$localKeyPath.pub", "$pubLine`n")
-
-try { icacls "$localKeyPath" /inheritance:r /grant:r "${env:USERNAME}:(R)" | Out-Null } catch {}
+if (-not (Test-Path "$keyDir\proxicell_tunnel")) {
+    [System.IO.File]::WriteAllLines("$keyDir\proxicell_tunnel", $privLines)
+    [System.IO.File]::WriteAllText("$keyDir\proxicell_tunnel.pub", "$pubLine`n")
+}
+if (-not (Test-Path $localKeyPath)) {
+    [System.IO.File]::WriteAllLines($localKeyPath, $privLines)
+    [System.IO.File]::WriteAllText("$localKeyPath.pub", "$pubLine`n")
+    try { icacls "$localKeyPath" /inheritance:r /grant:r "${env:USERNAME}:(R)" | Out-Null } catch {}
+}
 Write-Host "[OK] VPS Reverse Tunnel keys configured." -ForegroundColor Green
 
 # 6. Setup .env
