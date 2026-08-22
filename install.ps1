@@ -163,9 +163,7 @@ Write-Host "[OK] Environment configuration written to .env" -ForegroundColor Gre
 # 7. Install Dependencies
 $modemDir = "$projDir\modem-manager"
 $needsNpm = $false
-if (-not (Test-Path "$modemDir\node_modules")) {
-    $needsNpm = $true
-} elseif (-not (Test-Path "$modemDir\node_modules\chalk")) {
+if (-not (Test-Path "$modemDir\node_modules") -or -not (Test-Path "$modemDir\node_modules\dotenv") -or -not (Test-Path "$modemDir\node_modules\chalk")) {
     $needsNpm = $true
 }
 
