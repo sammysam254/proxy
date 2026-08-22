@@ -18,18 +18,25 @@ const url  = require('url');
 // ─── State ────────────────────────────────────────────────────────────────────
 // In-memory credential store: modemId → [ { username, password } ]
 const credStore = new Map();
+// Global quick lookup map: username → password
+const globalUserMap = new Map();
 
 // Active server instances: devicePath → { httpServers: [], socksServers: [], bandwidth: { in: 0, out: 0 } }
 const activeServers = new Map();
 
 // ─── Authentication Helper ───────────────────────────────────────────────────
 function isAuthorized(modemId, username, password) {
-  // 1. Direct match for this specific modemId
+  if (!username || !password) return false;
+  // 1. Direct match in globalUserMap (fastest & most reliable)
+  if (globalUserMap.has(username) && globalUserMap.get(username) === password) {
+    return true;
+  }
+  // 2. Direct match for this specific modemId
   const creds = credStore.get(modemId);
   if (creds && creds.some(c => c.username === username && c.password === password)) {
     return true;
   }
-  // 2. Global fallback across all registered modems in credStore
+  // 3. Fallback across all registered modems in credStore
   for (const [, list] of credStore) {
     if (list && list.some(c => c.username === username && c.password === password)) {
       return true;
@@ -372,6 +379,7 @@ async function stopProxy(modem) {
 
 // ─── Credentials Store ────────────────────────────────────────────────────────
 async function addCredential(username, password, modemId) {
+  if (username && password) globalUserMap.set(username, password);
   if (!credStore.has(modemId)) credStore.set(modemId, []);
   const list = credStore.get(modemId);
   const existing = list.find(c => c.username === username);
@@ -380,11 +388,29 @@ async function addCredential(username, password, modemId) {
   } else {
     list.push({ username, password });
   }
-  console.log(`[ProxyEngine] Added credential for user '${username}' on modem '${modemId}'`);
 }
 
 async function setExactCredentials(modemId, credsList) {
   credStore.set(modemId, credsList || []);
+  for (const c of credsList || []) {
+    if (c.username && c.password) globalUserMap.set(c.username, c.password);
+  }
+}
+
+async function setAllActiveCredentials(subsList) {
+  globalUserMap.clear();
+  credStore.clear();
+  for (const sub of subsList || []) {
+    if (sub.proxy_username && sub.proxy_password) {
+      globalUserMap.set(sub.proxy_username, sub.proxy_password);
+      const mId = sub.proxies?.modem_id || sub.modem_id;
+      if (mId) {
+        if (!credStore.has(mId)) credStore.set(mId, []);
+        credStore.get(mId).push({ username: sub.proxy_username, password: sub.proxy_password });
+      }
+    }
+  }
+  console.log(`[ProxyEngine] Synchronized ${globalUserMap.size} active proxy credentials.`);
 }
 
 module.exports = {
@@ -392,7 +418,8 @@ module.exports = {
   stopProxy,
   reloadConfig: async () => {},
   addCredential,
-  removeCredential,
+  removeCredential: () => {},
   setExactCredentials,
+  setAllActiveCredentials,
   getModemBandwidth,
 };

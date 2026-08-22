@@ -142,26 +142,18 @@ function buildSshArgs() {
   ];
 }
 
+let _activeTunnelPortsSignature = '';
+
+function getPortsSignature() {
+  return portMappings.map(m => `${m.localPort}:${m.publicPort}`).sort().join(',');
+}
+
 // ─── Check if SSH process is running ─────────────────────────────────────────
 async function isTunnelRunning() {
-  if (process.platform === 'win32') {
-    try {
-      const { stdout } = await execAsync(
-        `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*${VPS_HOST}*' } | Select-Object -ExpandProperty ProcessId"`,
-        { timeout: 4000 }
-      );
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
-    }
-  } else {
-    try {
-      const { stdout } = await execAsync(`pgrep -f "ssh.*${VPS_HOST}" || pgrep -f autossh`, { timeout: 3000 });
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
-    }
+  if (tunnelProcess && !tunnelProcess.killed && tunnelProcess.exitCode === null) {
+    return true;
   }
+  return false;
 }
 
 let _startTunnelDebounceTimer = null;
@@ -176,30 +168,30 @@ function scheduleTunnelStart(delayMs = 600) {
 }
 
 // ─── Start/restart SSH tunnel ────────────────────────────────────────────────
-async function startTunnel() {
+async function startTunnel(force = false) {
   if (!VPS_HOST) {
     console.warn('[TunnelManager] VPS_HOST not set — tunnel disabled.');
     return false;
   }
 
-  isStopping = false;
-  clearTimeout(tunnelRestartTimer);
-
-  // Stop any stale SSH instances first
-  if (process.platform === 'win32') {
-    if (tunnelProcess) {
-      try { tunnelProcess.kill(); } catch {}
-      tunnelProcess = null;
-    }
-    await execAsync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'ssh.exe'\\" | Where-Object { $_.CommandLine -like '*${VPS_HOST}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 4000 }).catch(() => {});
-  } else {
-    await execAsync('pkill -f autossh 2>/dev/null || true').catch(() => {});
-    tunnelProcess = null;
-  }
-
   if (portMappings.length === 0) {
     console.log('[TunnelManager] No active port mappings yet — tunnel standing by.');
     return true;
+  }
+
+  const currentSig = getPortsSignature();
+
+  // If already running and port list has not changed, do NOT restart
+  if (!force && tunnelProcess && !tunnelProcess.killed && tunnelProcess.exitCode === null && _activeTunnelPortsSignature === currentSig) {
+    return true;
+  }
+
+  isStopping = true;
+  clearTimeout(tunnelRestartTimer);
+
+  if (tunnelProcess) {
+    try { tunnelProcess.kill(); } catch {}
+    tunnelProcess = null;
   }
 
   // Release any lingering port listeners on the VPS
@@ -208,6 +200,9 @@ async function startTunnel() {
   const args = buildSshArgs();
   console.log(`[TunnelManager] Starting persistent SSH tunnel to ${VPS_USER}@${VPS_HOST}:${VPS_SSH_PORT}`);
   console.log(`[TunnelManager] Active port forwards (${portMappings.length}): ${portMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', ')}`);
+
+  _activeTunnelPortsSignature = currentSig;
+  isStopping = false;
 
   const isWin = process.platform === 'win32';
 
@@ -231,14 +226,15 @@ async function startTunnel() {
 
     tunnelProcess.on('exit', (code) => {
       tunnelProcess = null;
+      _activeTunnelPortsSignature = '';
       if (!isStopping && portMappings.length > 0) {
-        console.warn(`[TunnelManager] SSH tunnel disconnected (exit code ${code}). Auto-reconnecting in 5s...`);
+        console.warn(`[TunnelManager] SSH tunnel exited (code ${code}). Auto-reconnecting in 3s...`);
         clearTimeout(tunnelRestartTimer);
         tunnelRestartTimer = setTimeout(() => {
           if (!isStopping && portMappings.length > 0) {
-            startTunnel().catch(e => console.error('[TunnelManager] Reconnect error:', e.message));
+            startTunnel(true).catch(e => console.error('[TunnelManager] Reconnect error:', e.message));
           }
-        }, 5000);
+        }, 3000);
       }
     });
 

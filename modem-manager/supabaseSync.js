@@ -187,23 +187,11 @@ async function syncActiveCredentials() {
   try {
     const { data: subs } = await supabase
       .from('subscriptions')
-      .select('id, proxy_username, proxy_password, proxy_id, status, proxies!inner(modem_id)')
+      .select('id, proxy_username, proxy_password, proxy_id, status, proxies(modem_id)')
       .eq('status', 'active');
 
-    const activeByModem = new Map();
     if (subs && subs.length > 0) {
-      for (const sub of subs) {
-        if (sub.proxies?.modem_id && sub.proxy_username && sub.proxy_password) {
-          const mId = sub.proxies.modem_id;
-          if (!activeByModem.has(mId)) activeByModem.set(mId, []);
-          activeByModem.get(mId).push({ username: sub.proxy_username, password: sub.proxy_password });
-        }
-      }
-    }
-
-    // Set exact active credentials per modem, instantly revoking any inactive/revoked accounts
-    for (const [mId, creds] of activeByModem) {
-      await spawner.setExactCredentials(mId, creds);
+      await spawner.setAllActiveCredentials(subs);
     }
   } catch (e) {
     // ignore
