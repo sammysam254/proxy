@@ -874,9 +874,19 @@ function SubscriptionsPanel() {
                         </button>
                       )}
                       {s.status === 'revoked' && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--clr-red)', fontWeight: 600 }}>
-                          Revoked (Blocked)
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--clr-red)', fontWeight: 600 }}>
+                            Revoked
+                          </span>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => markActive(s.id)}
+                            style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                            title="Restore access"
+                          >
+                            <Power size={11} /> Restore
+                          </button>
+                        </div>
                       )}
                     </div>
                   </td>

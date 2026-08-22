@@ -155,12 +155,24 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   expires_at      TIMESTAMPTZ,                        -- NULL = pay-per-gb (no expiry)
   gb_limit        NUMERIC(10,3),                      -- copied from plan at purchase time
   gb_used         NUMERIC(10,3) DEFAULT 0,
-  status          TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'suspended')),
+  status          TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'suspended', 'revoked')),
   payment_method  TEXT CHECK (payment_method IN ('paystack', 'crypto', 'manual')),
   payment_ref     TEXT,                               -- payment reference/tx hash
   last_rotated_at TIMESTAMPTZ,                       -- last IP rotation
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure existing database constraint allows 'revoked' status
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_status_check'
+  ) THEN
+    ALTER TABLE subscriptions DROP CONSTRAINT subscriptions_status_check;
+    ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check
+      CHECK (status IN ('pending', 'active', 'expired', 'suspended', 'revoked'));
+  END IF;
+END $$;
 
 -- ============================================
 -- USAGE LOGS TABLE
