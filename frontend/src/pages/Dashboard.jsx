@@ -157,10 +157,10 @@ function ProxyCredCard({ sub }) {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '1rem' }}>
-              {modem?.label || 'Proxy Connection'}
+              {modem?.operator || 'Mobile 4G/5G LTE'}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
-              {modem?.operator || 'Mobile Carrier'} · {modem?.ip_address || 'IP loading...'}
+              <span className="mono">Serial: #{modem?.adb_serial || modem?.device_path || sub.id.slice(0, 8)}</span> · {modem?.ip_address || 'Live SIM IP'}
             </div>
           </div>
         </div>

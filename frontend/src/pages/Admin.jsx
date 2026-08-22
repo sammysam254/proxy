@@ -72,9 +72,11 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
             <StatusIcon size={20} color={accentColor} />
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{device.label}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
-              {device.operator || (isAndroid ? 'Android Phone' : 'Unknown Carrier')}
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+              {device.operator || (isAndroid ? 'Mobile Carrier' : 'Cellular SIM')}
+            </div>
+            <div className="mono" style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
+              Serial: #{device.adb_serial || device.device_path || device.id?.slice(0, 8)}
               {device.interface && ` · ${device.interface}`}
             </div>
           </div>
@@ -408,7 +410,7 @@ function MarketplacePanel() {
           <table>
             <thead>
               <tr>
-                <th>Device / SIM Label</th>
+                <th>Carrier & Proxy Serial</th>
                 <th>Protocol</th>
                 <th>Public Port</th>
                 <th>Local Port</th>
@@ -421,9 +423,9 @@ function MarketplacePanel() {
               {proxies.map(p => (
                 <tr key={p.id}>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{p.modems?.label || 'Unknown Device'}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)' }}>
-                      {p.modems?.operator || 'Carrier'} · {p.modems?.ip_address || 'No IP'}
+                    <div style={{ fontWeight: 600 }}>{p.modems?.operator || 'Mobile Carrier'}</div>
+                    <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--clr-accent)' }}>
+                      Serial: #{p.modems?.adb_serial || p.modems?.device_path || p.id?.slice(0, 8)}
                     </div>
                   </td>
                   <td>

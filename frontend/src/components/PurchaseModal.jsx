@@ -575,15 +575,19 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                       fontSize: '0.92rem',
                     }}
                   >
-                    {onlineProxies.map(p => (
-                      <option
-                        key={p.id}
-                        value={p.id}
-                        style={{ background: '#0d1322', color: '#f8fafc', padding: '10px' }}
-                      >
-                        {p.modems?.label || 'Modem'} ({p.proxy_type?.toUpperCase()}) — {p.modems?.operator || 'Mobile SIM'}
-                      </option>
-                    ))}
+                    {onlineProxies.map(p => {
+                      const carrier = p.modems?.operator || 'Mobile 4G/5G';
+                      const serial = p.modems?.adb_serial || p.modems?.device_path || p.id?.slice(0, 8);
+                      return (
+                        <option
+                          key={p.id}
+                          value={p.id}
+                          style={{ background: '#0d1322', color: '#f8fafc', padding: '10px' }}
+                        >
+                          {carrier} — {p.proxy_type?.toUpperCase()} (Serial: #{serial})
+                        </option>
+                      );
+                    })}
                   </select>
 
                   {/* Selected Proxy Summary Tag */}
@@ -600,7 +604,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                       fontSize: '0.78rem',
                     }}>
                       <span style={{ color: 'var(--clr-text-2)' }}>
-                        Connected SIM: <strong style={{ color: '#fff' }}>{selProxy.modems?.label}</strong>
+                        Carrier: <strong style={{ color: '#fff' }}>{selProxy.modems?.operator || 'Mobile 4G/5G'}</strong> · Serial: <strong className="mono" style={{ color: 'var(--clr-accent)' }}>#{selProxy.modems?.adb_serial || selProxy.modems?.device_path || selProxy.id?.slice(0, 8)}</strong>
                       </span>
                       <span className="mono" style={{ color: 'var(--clr-accent)', fontWeight: 700 }}>
                         :{selProxy.public_port} ({selProxy.proxy_type?.toUpperCase()})

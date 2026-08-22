@@ -74,7 +74,7 @@ export async function getMySubscriptions() {
       *,
       proxies (
         proxy_type, public_port, vps_host,
-        modems ( label, operator, ip_address, signal )
+        modems ( label, operator, ip_address, signal, adb_serial, device_path )
       ),
       plans ( name, duration_days, gb_limit )
     `)

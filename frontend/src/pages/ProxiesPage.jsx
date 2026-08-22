@@ -162,14 +162,14 @@ export default function ProxiesPage({ session }) {
                           color: 'var(--clr-accent)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                          <Smartphone size={18} />
+                          <Wifi size={18} />
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                            {modem?.label || '4G/5G Cellular Node'}
+                            {modem?.operator || 'Mobile 4G/5G LTE'}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
-                            {modem?.operator || 'Safaricom'} Cellular
+                          <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)' }}>
+                            Serial: #{modem?.adb_serial || modem?.device_path || p.id.slice(0, 8)}
                           </div>
                         </div>
                       </div>
