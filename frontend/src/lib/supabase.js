@@ -278,16 +278,16 @@ export async function savePlan(planData) {
       .from('plans')
       .update(payload)
       .eq('id', planData.id)
-      .select()
-      .single();
-    return { data, error };
+      .select();
+    if (error) throw error;
+    return { data: data?.[0] || planData, error: null };
   } else {
     const { data, error } = await supabase
       .from('plans')
       .insert(payload)
-      .select()
-      .single();
-    return { data, error };
+      .select();
+    if (error) throw error;
+    return { data: data?.[0] || null, error: null };
   }
 }
 
@@ -318,9 +318,9 @@ export async function updateProxyActiveStatus(proxyId, active) {
     .from('proxies')
     .update({ active })
     .eq('id', proxyId)
-    .select()
-    .single();
-  return { data, error };
+    .select();
+  if (error) throw error;
+  return { data: data?.[0] || null, error: null };
 }
 
 export async function deleteProxy(proxyId) {
@@ -333,17 +333,15 @@ export async function deleteProxy(proxyId) {
 
 // ─── Admin Credential Revocation ─────────────────────────────────────────────
 export async function revokeSubscription(subscriptionId) {
-  // 1. Mark subscription as revoked in database
   const { data, error } = await supabase
     .from('subscriptions')
     .update({
       status: 'revoked',
     })
     .eq('id', subscriptionId)
-    .select('*, proxies(modem_id)')
-    .single();
+    .select();
 
   if (error) throw error;
-  return { data, success: true };
+  return { data: data?.[0] || null, success: true };
 }
 

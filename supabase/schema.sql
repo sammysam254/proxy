@@ -237,6 +237,12 @@ DROP POLICY IF EXISTS "proxies_public_read" ON proxies;
 DROP POLICY IF EXISTS "proxies_all" ON proxies;
 CREATE POLICY "proxies_all" ON proxies FOR ALL USING (true) WITH CHECK (true);
 
+-- Plans (public read, admin & public write for pricing management)
+DROP POLICY IF EXISTS "plans_public_read" ON plans;
+DROP POLICY IF EXISTS "plans_admin" ON plans;
+DROP POLICY IF EXISTS "plans_all" ON plans;
+CREATE POLICY "plans_all" ON plans FOR ALL USING (true) WITH CHECK (true);
+
 -- Customers
 DROP POLICY IF EXISTS "customers_self" ON customers;
 CREATE POLICY "customers_self" ON customers USING (id = auth.uid());
