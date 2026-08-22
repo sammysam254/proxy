@@ -291,21 +291,27 @@ function handleSocks5Request(socket, modem, exitIp, trackKey) {
 
     port = req.readUInt16BE(offset);
 
+    // Pause socket during connection establishment so TLS handshake packets are not dropped
+    socket.pause();
+
     // Connect outbound using the modem's SIM exit IP
     const outbound = net.connect({
       host: host,
       port: port,
       localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
     }, () => {
-      // SOCKS5 success response
+      // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
       const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
-      socket.write(resp);
-      forwardStreams(socket, outbound, trackKey);
+      socket.write(resp, () => {
+        forwardStreams(socket, outbound, trackKey);
+        socket.resume();
+      });
     });
 
     outbound.on('error', (err) => {
       console.warn(`[ProxyEngine] SOCKS5 outbound error to ${host}:${port} via ${exitIp}:`, err.message);
       if (!socket.destroyed) {
+        socket.resume();
         socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
         socket.destroy();
       }
