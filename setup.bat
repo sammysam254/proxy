@@ -27,6 +27,13 @@ echo ================================================================
 echo [*] Project Directory: %PROJ_DIR%
 echo.
 
+:: 0. Pull latest updates automatically
+if exist "%PROJ_DIR%.git" (
+    echo [*] Checking for latest updates...
+    git pull origin main >nul 2>&1
+    echo [OK] Code updated to latest version.
+)
+
 :: 1. Clean Stale Processes
 echo [*] Stopping previous background instances...
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*index.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
