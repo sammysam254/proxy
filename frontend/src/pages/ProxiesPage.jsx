@@ -141,6 +141,11 @@ export default function ProxiesPage({ session }) {
                 const modem = p.modems;
                 const isOnline = modem?.status === 'online';
 
+                const rawOp = modem?.operator || 'Mobile 4G/5G LTE';
+                const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || 'Mobile 4G/5G LTE';
+                const rawSerial = modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:/, '') : '') || p.id.slice(0, 8);
+                const serial = rawSerial.replace(/^android:/, '');
+
                 return (
                   <div
                     key={p.id}
@@ -166,10 +171,10 @@ export default function ProxiesPage({ session }) {
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                            {modem?.operator || 'Mobile 4G/5G LTE'}
+                            {carrier}
                           </div>
-                          <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)' }}>
-                            Serial: #{modem?.adb_serial || modem?.device_path || p.id.slice(0, 8)}
+                          <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--clr-accent)' }}>
+                            Serial: #{serial}
                           </div>
                         </div>
                       </div>

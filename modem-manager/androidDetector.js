@@ -225,6 +225,7 @@ async function getAndroidDeviceInfo(serial) {
                'Mobile Network';
   }
   if (operator === 'null') operator = 'Mobile Network';
+  operator = operator.replace(/[, \r\n\t]+$/, '').trim() || 'Mobile Network';
 
   // Get SIM info
   const iccid = await adb(serial, 'service call iphonesubinfo 11 | grep -o "[0-9A-Fa-f ]*" | head -1').catch(() => null);

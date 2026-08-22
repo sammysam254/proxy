@@ -55,7 +55,7 @@ export async function getAvailableProxies() {
     .select(`
       *,
       modems!inner (
-        id, label, operator, signal, status, ip_address, is_android, model, battery
+        id, label, operator, signal, status, ip_address, is_android, model, battery, adb_serial, device_path
       )
     `)
     .eq('active', true)

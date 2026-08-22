@@ -576,8 +576,10 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                     }}
                   >
                     {onlineProxies.map(p => {
-                      const carrier = p.modems?.operator || 'Mobile 4G/5G';
-                      const serial = p.modems?.adb_serial || p.modems?.device_path || p.id?.slice(0, 8);
+                      const rawOp = p.modems?.operator || 'Mobile 4G/5G';
+                      const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || 'Mobile 4G/5G';
+                      const rawSerial = p.modems?.adb_serial || (p.modems?.device_path ? p.modems.device_path.replace(/^android:/, '') : '') || p.id.slice(0, 8);
+                      const serial = rawSerial.replace(/^android:/, '');
                       return (
                         <option
                           key={p.id}
@@ -591,26 +593,32 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
                   </select>
 
                   {/* Selected Proxy Summary Tag */}
-                  {selProxy && (
-                    <div style={{
-                      marginTop: '8px',
-                      padding: '8px 12px',
-                      background: 'rgba(59, 130, 246, 0.08)',
-                      border: '1px solid rgba(59, 130, 246, 0.2)',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: '0.78rem',
-                    }}>
-                      <span style={{ color: 'var(--clr-text-2)' }}>
-                        Carrier: <strong style={{ color: '#fff' }}>{selProxy.modems?.operator || 'Mobile 4G/5G'}</strong> · Serial: <strong className="mono" style={{ color: 'var(--clr-accent)' }}>#{selProxy.modems?.adb_serial || selProxy.modems?.device_path || selProxy.id?.slice(0, 8)}</strong>
-                      </span>
-                      <span className="mono" style={{ color: 'var(--clr-accent)', fontWeight: 700 }}>
-                        :{selProxy.public_port} ({selProxy.proxy_type?.toUpperCase()})
-                      </span>
-                    </div>
-                  )}
+                  {selProxy && (() => {
+                    const rawOp = selProxy.modems?.operator || 'Mobile 4G/5G';
+                    const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || 'Mobile 4G/5G';
+                    const rawSerial = selProxy.modems?.adb_serial || (selProxy.modems?.device_path ? selProxy.modems.device_path.replace(/^android:/, '') : '') || selProxy.id?.slice(0, 8);
+                    const serial = rawSerial.replace(/^android:/, '');
+                    return (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '8px 12px',
+                        background: 'rgba(59, 130, 246, 0.08)',
+                        border: '1px solid rgba(59, 130, 246, 0.2)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.78rem',
+                      }}>
+                        <span style={{ color: 'var(--clr-text-2)' }}>
+                          Carrier: <strong style={{ color: '#fff' }}>{carrier}</strong> · Serial: <strong className="mono" style={{ color: 'var(--clr-accent)' }}>#{serial}</strong>
+                        </span>
+                        <span className="mono" style={{ color: 'var(--clr-accent)', fontWeight: 700 }}>
+                          :{selProxy.public_port} ({selProxy.proxy_type?.toUpperCase()})
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="card" style={{ padding: '14px 16px', color: 'var(--clr-text-2)', fontSize: '0.9rem', background: '#0d1322' }}>
