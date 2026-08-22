@@ -271,6 +271,22 @@ async function configurePersistentUsbTethering(serial) {
   } catch {}
 }
 
+// ─── Optimize Android Network to Prefer High-Speed Wi-Fi with SIM Fallback ───
+async function optimizeNetworkPriority(serial) {
+  try {
+    // 1. Enable Wi-Fi and configure it to stay active without sleep
+    await adb(serial, 'svc wifi enable').catch(() => {});
+    await adb(serial, 'settings put global wifi_on 1').catch(() => {});
+    await adb(serial, 'settings put global wifi_sleep_policy 2').catch(() => {}); // 2 = NEVER sleep Wi-Fi
+    await adb(serial, 'settings put global wifi_always_requested 1').catch(() => {});
+    await adb(serial, 'settings put global wifi_watchdog_poor_network_test_enabled 0').catch(() => {});
+
+    // 2. Keep cellular SIM data active in parallel for carrier info and failover
+    await adb(serial, 'svc data enable').catch(() => {});
+    await adb(serial, 'settings put global mobile_data 1').catch(() => {});
+  } catch {}
+}
+
 // ─── Enable USB tethering via ADB (multi-method Android support) ─────────────
 async function enableTethering(serial) {
   console.log(`[AndroidDetector] Automatically triggering USB tethering on ${serial}...`);
@@ -278,9 +294,8 @@ async function enableTethering(serial) {
     // 1. Permanently configure default USB configuration on the phone
     await configurePersistentUsbTethering(serial);
 
-    // 2. Ensure Wi-Fi is enabled on Android for Wi-Fi proxy routing
-    await adb(serial, 'svc wifi enable').catch(() => {});
-    await adb(serial, 'svc data enable').catch(() => {});
+    // 2. Prioritize high-speed Wi-Fi with mobile SIM fallback
+    await optimizeNetworkPriority(serial);
 
     // 3. Try Android 11-14+ modular tethering commands
     await adb(serial, 'cmd tethering start-tethering 1').catch(() => {});

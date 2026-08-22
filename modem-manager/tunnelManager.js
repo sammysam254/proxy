@@ -97,13 +97,21 @@ let isStopping = false;
 let lastSshError = null;
 
 // ─── Build SSH port-forward args ─────────────────────────────────────────────
-// ─── Clean remote VPS ports ──────────────────────────────────────────────────
+// ─── Clean remote VPS ports & ensure GatewayPorts is active ──────────────────
 async function cleanRemoteVpsPorts() {
   try {
     const keyPath = getSshKeyPath();
     if (!keyPath || !fs.existsSync(keyPath)) return;
-    const cleanCmd = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=4 -p ${VPS_SSH_PORT} -i "${keyPath}" ${VPS_USER}@${VPS_HOST} "pkill -f 'sshd: ${VPS_USER}@notty' 2>/dev/null || true; fuser -k 41000:44000/tcp 2>/dev/null || true"`;
-    await execAsync(cleanCmd, { timeout: 6000 }).catch(() => {});
+    const remoteCmd = [
+      'fuser -k -9 41000:43050/tcp 2>/dev/null || true',
+      'pkill -9 -f "sshd:.*@notty" 2>/dev/null || true',
+      'mkdir -p /etc/ssh/sshd_config.d',
+      'echo "GatewayPorts yes" > /etc/ssh/sshd_config.d/99-proxicell.conf 2>/dev/null || true',
+      'grep -q "^GatewayPorts yes" /etc/ssh/sshd_config 2>/dev/null || (echo "GatewayPorts yes" >> /etc/ssh/sshd_config 2>/dev/null && (systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true))',
+    ].join('; ');
+
+    const cleanCmd = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p ${VPS_SSH_PORT} -i "${keyPath}" ${VPS_USER}@${VPS_HOST} "${remoteCmd}"`;
+    await execAsync(cleanCmd, { timeout: 8000 }).catch(() => {});
   } catch (e) {
     // Non-fatal
   }
