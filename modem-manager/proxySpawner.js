@@ -208,7 +208,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
 
             if (isAuthorized(modemId, u, p)) {
               socket.write(Buffer.from([0x01, 0x00])); // Auth success
-              handleSocks5Request(socket, modem, exitIp);
+              handleSocks5Request(socket, modem, exitIp, trackKey);
             } else {
               socket.write(Buffer.from([0x01, 0x01])); // Auth failed
               socket.destroy();
@@ -217,7 +217,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         } else {
           // No auth required (0x00)
           socket.write(Buffer.from([0x05, 0x00]));
-          handleSocks5Request(socket, modem, exitIp);
+          handleSocks5Request(socket, modem, exitIp, trackKey);
         }
       } else if (version === 0x04 || isSocks4) {
         // ── SOCKS4 Handshake ──────────────────────────────────────────────
@@ -232,9 +232,12 @@ function createSocksProxy(modem, port, isSocks4 = false) {
           localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
         }, () => {
           socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+          forwardStreams(socket, outbound, trackKey);
         });
 
-        forwardStreams(socket, outbound, trackKey);
+        outbound.on('error', () => {
+          if (!socket.destroyed) socket.destroy();
+        });
       } else {
         socket.destroy();
       }
@@ -250,9 +253,12 @@ function createSocksProxy(modem, port, isSocks4 = false) {
   return server;
 }
 
-function handleSocks5Request(socket, modem, exitIp) {
+function handleSocks5Request(socket, modem, exitIp, trackKey) {
   socket.once('data', (req) => {
-    if (req[0] !== 0x05 || req[1] !== 0x01) { // only TCP CONNECT
+    if (req.length < 4 || req[0] !== 0x05) {
+      return socket.destroy();
+    }
+    if (req[1] !== 0x01) { // only TCP CONNECT supported
       socket.write(Buffer.from([0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
       return socket.destroy();
     }
@@ -264,16 +270,23 @@ function handleSocks5Request(socket, modem, exitIp) {
 
     if (addrType === 0x01) {
       // IPv4
+      if (req.length < 10) return socket.destroy();
       host = `${req[4]}.${req[5]}.${req[6]}.${req[7]}`;
       offset = 8;
     } else if (addrType === 0x03) {
       // Domain name
       const len = req[4];
+      if (req.length < 5 + len + 2) return socket.destroy();
       host = req.slice(5, 5 + len).toString('utf8');
       offset = 5 + len;
+    } else if (addrType === 0x04) {
+      // IPv6
+      if (req.length < 22) return socket.destroy();
+      host = req.slice(4, 20).toString('hex').match(/.{1,4}/g).join(':');
+      offset = 20;
     } else {
-      socket.destroy();
-      return;
+      socket.write(Buffer.from([0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
+      return socket.destroy();
     }
 
     port = req.readUInt16BE(offset);
@@ -287,9 +300,16 @@ function handleSocks5Request(socket, modem, exitIp) {
       // SOCKS5 success response
       const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
       socket.write(resp);
+      forwardStreams(socket, outbound, trackKey);
     });
 
-    forwardStreams(socket, outbound, trackKey);
+    outbound.on('error', (err) => {
+      console.warn(`[ProxyEngine] SOCKS5 outbound error to ${host}:${port} via ${exitIp}:`, err.message);
+      if (!socket.destroyed) {
+        socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
+        socket.destroy();
+      }
+    });
   });
 }
 
