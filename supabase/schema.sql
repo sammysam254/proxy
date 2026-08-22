@@ -320,3 +320,11 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_status   ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer        ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_usage_sub              ON usage_logs(subscription_id);
 CREATE INDEX IF NOT EXISTS idx_modems_status          ON modems(status);
+
+-- ============================================
+-- SUPABASE REALTIME (Live bandwidth updates in dashboard)
+-- ============================================
+-- Enables real-time push to the frontend whenever gb_used, status,
+-- or ip_address changes — no polling required.
+ALTER PUBLICATION supabase_realtime ADD TABLE subscriptions;
+ALTER PUBLICATION supabase_realtime ADD TABLE modems;
