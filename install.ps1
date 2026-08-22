@@ -162,19 +162,53 @@ Write-Host "[OK] Environment configuration written to .env" -ForegroundColor Gre
 
 # 7. Install Dependencies
 $modemDir = "$projDir\modem-manager"
-$needsNpm = $false
-if (-not (Test-Path "$modemDir\node_modules") -or -not (Test-Path "$modemDir\node_modules\dotenv") -or -not (Test-Path "$modemDir\node_modules\chalk")) {
-    $needsNpm = $true
+Write-Host "[*] Checking modem-manager dependencies..." -ForegroundColor Blue
+
+# Find npm.cmd directly to avoid PowerShell script execution policy issues
+$npmCmd = $null
+$npmSearchPaths = @(
+    "C:\Program Files\nodejs\npm.cmd",
+    "C:\Program Files (x86)\nodejs\npm.cmd",
+    "$env:APPDATA\npm\npm.cmd",
+    "$env:LOCALAPPDATA\Programs\node\npm.cmd"
+)
+foreach ($cand in $npmSearchPaths) {
+    if (Test-Path $cand) {
+        $npmCmd = $cand
+        break
+    }
+}
+if (-not $npmCmd) {
+    $found = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($found) { $npmCmd = $found.Source }
 }
 
-if ($needsNpm) {
-    Write-Host "[*] Installing modem-manager dependencies..." -ForegroundColor Blue
-    Set-Location $modemDir
-    cmd.exe /c "npm install --no-audit --no-fund"
-    Set-Location $projDir
-    Write-Host "[OK] Dependencies installed." -ForegroundColor Green
+$hasDotenv = Test-Path "$modemDir\node_modules\dotenv\package.json"
+$hasSupabase = Test-Path "$modemDir\node_modules\@supabase\supabase-js\package.json"
+
+if (-not $hasDotenv -or -not $hasSupabase) {
+    Write-Host "[*] Installing dependencies via npm (please wait 10-20 seconds)..." -ForegroundColor Yellow
+    Push-Location $modemDir
+    if ($npmCmd) {
+        & "$npmCmd" install --no-audit --no-fund
+    } else {
+        cmd.exe /c "npm install --no-audit --no-fund"
+    }
+    Pop-Location
+}
+
+if (Test-Path "$modemDir\node_modules\dotenv\package.json") {
+    Write-Host "[OK] Dependencies successfully installed and verified." -ForegroundColor Green
 } else {
-    Write-Host "[OK] Dependencies verified." -ForegroundColor Green
+    Write-Host "[*] Explicitly installing required packages..." -ForegroundColor Yellow
+    Push-Location $modemDir
+    if ($npmCmd) {
+        & "$npmCmd" install dotenv chalk node-cron axios @supabase/supabase-js uuid --no-audit --no-fund
+    } else {
+        cmd.exe /c "npm install dotenv chalk node-cron axios @supabase/supabase-js uuid --no-audit --no-fund"
+    }
+    Pop-Location
+    Write-Host "[OK] Dependencies ready." -ForegroundColor Green
 }
 
 # 8. Setup Auto-Start
