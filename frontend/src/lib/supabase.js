@@ -54,11 +54,12 @@ export async function getAvailableProxies() {
     .from('proxies')
     .select(`
       *,
-      modems (
-        id, label, operator, signal, status, ip_address
+      modems!inner (
+        id, label, operator, signal, status, ip_address, is_android, model, battery
       )
     `)
-    .eq('active', true);
+    .eq('active', true)
+    .eq('modems.status', 'online');
   return { data, error };
 }
 

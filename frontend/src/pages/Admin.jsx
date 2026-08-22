@@ -232,36 +232,54 @@ function Overview({ stats, modems, onRotate, onRefresh }) {
 
 // ─── Modems panel ─────────────────────────────────────────────────────────────
 function ModemsPanel({ modems, onRotate, onRefresh }) {
+  const [showAll, setShowAll] = useState(false);
   const usbModems = modems.filter(m => !m.is_android);
+  const displayedModems = showAll ? usbModems : usbModems.filter(m => m.status === 'online');
+
   return (
     <div style={{ padding: '36px' }}>
-      <div className="flex justify-between items-center mb-xl">
+      <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>
             USB Modems
             <span className="badge badge-blue" style={{ marginLeft: '10px', verticalAlign: 'middle' }}>
-              {usbModems.length}
+              {displayedModems.length} {showAll ? 'total' : 'online'}
             </span>
           </h1>
-          <p className="text-muted">Physical USB modems with SIM cards</p>
+          <p className="text-muted">Physical USB modems with SIM cards (live active connections)</p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={onRefresh}>
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', background: 'var(--clr-surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--clr-border)' }}>
+            <button
+              className={`btn btn-sm ${!showAll ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowAll(false)}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+            >
+              ● Online Only
+            </button>
+            <button
+              className={`btn btn-sm ${showAll ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowAll(true)}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+            >
+              All History
+            </button>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={onRefresh}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {usbModems.length === 0 ? (
+      {displayedModems.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '64px' }}>
           <Wifi size={40} color="var(--clr-text-3)" style={{ margin: '0 auto 16px' }} />
-          <h3 style={{ marginBottom: '8px' }}>No USB Modems Detected</h3>
-          <p className="text-muted">Plug in USB modems with SIM cards on your local machine and ensure the modem manager is running.</p>
-          <div style={{ marginTop: '20px', background: 'var(--clr-surface)', borderRadius: 'var(--radius-md)', padding: '14px', fontFamily: 'monospace', fontSize: '0.8rem', textAlign: 'left' }}>
-            journalctl -u proxicell-manager -f
-          </div>
+          <h3 style={{ marginBottom: '8px' }}>No USB Modems Online</h3>
+          <p className="text-muted">Plug in USB modems with SIM cards on your local machine and verify the modem manager is running.</p>
         </div>
       ) : (
         <div className="grid-auto">
-          {usbModems.map(m => (
+          {displayedModems.map(m => (
             <DeviceCard key={m.id} device={m} onRotate={onRotate} type="modem" />
           ))}
         </div>
@@ -272,22 +290,43 @@ function ModemsPanel({ modems, onRotate, onRefresh }) {
 
 // ─── Android Devices panel ────────────────────────────────────────────────────
 function AndroidPanel({ modems, onRotate, onRefresh }) {
+  const [showAll, setShowAll] = useState(false);
   const androidDevs = modems.filter(m => m.is_android);
+  const displayedDevs = showAll ? androidDevs : androidDevs.filter(m => m.status === 'online');
+
   return (
     <div style={{ padding: '36px' }}>
-      <div className="flex justify-between items-center mb-xl">
+      <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>
             Android Devices
             <span className="badge badge-purple" style={{ marginLeft: '10px', verticalAlign: 'middle' }}>
-              {androidDevs.length}
+              {displayedDevs.length} {showAll ? 'total' : 'online'}
             </span>
           </h1>
-          <p className="text-muted">Android phones via USB tethering + ADB</p>
+          <p className="text-muted">Android phones via USB tethering + ADB (live active devices)</p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={onRefresh}>
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', background: 'var(--clr-surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--clr-border)' }}>
+            <button
+              className={`btn btn-sm ${!showAll ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowAll(false)}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+            >
+              ● Online Only
+            </button>
+            <button
+              className={`btn btn-sm ${showAll ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowAll(true)}
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+            >
+              All History
+            </button>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={onRefresh}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Setup guide */}
@@ -299,27 +338,26 @@ function AndroidPanel({ modems, onRotate, onRefresh }) {
         <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
           <Smartphone size={20} color="var(--clr-accent-2)" style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
-            <div style={{ fontWeight: 700, marginBottom: '6px' }}>How to add an Android device</div>
+            <div style={{ fontWeight: 700, marginBottom: '6px' }}>How to connect Android devices</div>
             <ol style={{ color: 'var(--clr-text-2)', fontSize: '0.875rem', paddingLeft: '18px', lineHeight: 2 }}>
               <li>Enable <strong>USB Debugging</strong> on your phone (Developer Options)</li>
               <li>Enable <strong>USB Tethering</strong> (Settings → Hotspot & Tethering)</li>
-              <li>Connect phone via USB cable to your local machine</li>
-              <li>Accept the ADB authorization prompt on the phone</li>
-              <li>The modem manager will detect it automatically within 30 seconds</li>
+              <li>Connect phone via USB cable to your machine</li>
+              <li>The modem manager automatically detects and binds it within 30 seconds</li>
             </ol>
           </div>
         </div>
       </div>
 
-      {androidDevs.length === 0 ? (
+      {displayedDevs.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '64px' }}>
           <Smartphone size={40} color="var(--clr-text-3)" style={{ margin: '0 auto 16px' }} />
-          <h3 style={{ marginBottom: '8px' }}>No Android Devices Detected</h3>
+          <h3 style={{ marginBottom: '8px' }}>No Android Devices Online</h3>
           <p className="text-muted">Connect Android phones with USB Debugging and USB Tethering enabled.</p>
         </div>
       ) : (
         <div className="grid-auto">
-          {androidDevs.map(d => (
+          {displayedDevs.map(d => (
             <DeviceCard key={d.id} device={d} onRotate={onRotate} type="android" />
           ))}
         </div>

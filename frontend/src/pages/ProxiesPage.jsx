@@ -53,6 +53,8 @@ export default function ProxiesPage({ session }) {
 
   const filteredProxies = proxies.filter(p => {
     const modem = p.modems;
+    if (modem?.status !== 'online') return false;
+
     const matchesSearch = !searchQuery || 
       (modem?.label && modem.label.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (modem?.operator && modem.operator.toLowerCase().includes(searchQuery.toLowerCase())) ||
