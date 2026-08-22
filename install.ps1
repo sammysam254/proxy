@@ -1,5 +1,6 @@
 # Vertex Proxies - Installer & Launcher
 $ErrorActionPreference = 'Continue'
+try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
 Write-Host "================================================================" -ForegroundColor Cyan
@@ -161,10 +162,17 @@ Write-Host "[OK] Environment configuration written to .env" -ForegroundColor Gre
 
 # 7. Install Dependencies
 $modemDir = "$projDir\modem-manager"
+$needsNpm = $false
 if (-not (Test-Path "$modemDir\node_modules")) {
+    $needsNpm = $true
+} elseif (-not (Test-Path "$modemDir\node_modules\chalk")) {
+    $needsNpm = $true
+}
+
+if ($needsNpm) {
     Write-Host "[*] Installing modem-manager dependencies..." -ForegroundColor Blue
     Set-Location $modemDir
-    npm install --no-audit --no-fund
+    cmd.exe /c "npm install --no-audit --no-fund"
     Set-Location $projDir
     Write-Host "[OK] Dependencies installed." -ForegroundColor Green
 } else {
