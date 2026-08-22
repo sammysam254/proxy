@@ -155,28 +155,33 @@ function createHttpProxy(modem, port) {
     const [targetHost, targetPort] = req.url.split(':');
     const portNum = parseInt(targetPort || '443');
 
-    // Create outbound socket exiting specifically through the SIM card IP
-    const serverSocket = net.connect({
-      host:         targetHost,
-      port:         portNum,
-      localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
-    }, () => {
-      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-      if (head && head.length > 0) {
-        recordBandwidth(trackKey, 0, head.length);
-        serverSocket.write(head);
+    function doHttpConnect(tryLocal = true) {
+      const opts = { host: targetHost, port: portNum };
+      if (tryLocal && exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.')) {
+        opts.localAddress = exitIp;
       }
-    });
 
-    serverSocket.on('error', (err) => {
-      console.warn(`[ProxyEngine] Outbound connect error to ${targetHost}:${portNum} via ${exitIp}:`, err.message);
-      if (!clientSocket.destroyed) {
-        clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-        clientSocket.destroy();
-      }
-    });
+      const serverSocket = net.connect(opts, () => {
+        clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        if (head && head.length > 0) {
+          recordBandwidth(trackKey, 0, head.length);
+          serverSocket.write(head);
+        }
+        forwardStreams(clientSocket, serverSocket, trackKey);
+      });
 
-    forwardStreams(clientSocket, serverSocket, trackKey);
+      serverSocket.on('error', () => {
+        if (tryLocal && opts.localAddress) {
+          return doHttpConnect(false);
+        }
+        if (!clientSocket.destroyed) {
+          clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+          clientSocket.destroy();
+        }
+      });
+    }
+
+    doHttpConnect(true);
   });
 
   server.listen(port, '0.0.0.0', () => {
@@ -233,18 +238,26 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         const destPort = firstChunk.readUInt16BE(2);
         const destIp   = `${firstChunk[4]}.${firstChunk[5]}.${firstChunk[6]}.${firstChunk[7]}`;
 
-        const outbound = net.connect({
-          host: destIp,
-          port: destPort,
-          localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
-        }, () => {
-          socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
-          forwardStreams(socket, outbound, trackKey);
-        });
+        function doSocks4Connect(tryLocal = true) {
+          const opts = { host: destIp, port: destPort };
+          if (tryLocal && exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.')) {
+            opts.localAddress = exitIp;
+          }
 
-        outbound.on('error', () => {
-          if (!socket.destroyed) socket.destroy();
-        });
+          const outbound = net.connect(opts, () => {
+            socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+            forwardStreams(socket, outbound, trackKey);
+          });
+
+          outbound.on('error', () => {
+            if (tryLocal && opts.localAddress) {
+              return doSocks4Connect(false);
+            }
+            if (!socket.destroyed) socket.destroy();
+          });
+        }
+
+        doSocks4Connect(true);
       } else {
         socket.destroy();
       }
@@ -301,28 +314,34 @@ function handleSocks5Request(socket, modem, exitIp, trackKey) {
     // Pause socket during connection establishment so TLS handshake packets are not dropped
     socket.pause();
 
-    // Connect outbound using the modem's SIM exit IP
-    const outbound = net.connect({
-      host: host,
-      port: port,
-      localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
-    }, () => {
-      // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
-      const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
-      socket.write(resp, () => {
-        forwardStreams(socket, outbound, trackKey);
-        socket.resume();
-      });
-    });
-
-    outbound.on('error', (err) => {
-      console.warn(`[ProxyEngine] SOCKS5 outbound error to ${host}:${port} via ${exitIp}:`, err.message);
-      if (!socket.destroyed) {
-        socket.resume();
-        socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
-        socket.destroy();
+    function doSocks5Connect(tryLocal = true) {
+      const opts = { host, port };
+      if (tryLocal && exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.')) {
+        opts.localAddress = exitIp;
       }
-    });
+
+      const outbound = net.connect(opts, () => {
+        // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
+        const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+        socket.write(resp, () => {
+          forwardStreams(socket, outbound, trackKey);
+          socket.resume();
+        });
+      });
+
+      outbound.on('error', () => {
+        if (tryLocal && opts.localAddress) {
+          return doSocks5Connect(false);
+        }
+        if (!socket.destroyed) {
+          socket.resume();
+          socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
+          socket.destroy();
+        }
+      });
+    }
+
+    doSocks5Connect(true);
   });
 }
 
