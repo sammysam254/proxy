@@ -54,17 +54,17 @@ icacls "%LOCAL_SSH_KEY%" /inheritance:r /grant:r "%USERNAME%:(R)" >nul 2>&1
 echo [OK] VPS Reverse Tunnel authorization keys configured.
 
 :: 3. Configure .env
-(
-    echo VPS_HOST=64.227.3.211
-    echo VPS_USER=root
-    echo VPS_SSH_PORT=22
-    echo VPS_SSH_KEY=%LOCAL_SSH_KEY:\=/%
-    echo SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co
-    echo SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzZmlqemp6aW9hcmFnbmxvcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjMwNDksImV4cCI6MjEwMjY5OTA0OX0.Z-VBaoutWmZUW6S_G3SECl5ylWUfECs5iR7E4aMNASI
-    echo APP_DIR=%PROJ_DIR:\=/%
-    echo NODE_ENV=production
-    echo LOG_LEVEL=info
-) > "%PROJ_DIR%.env"
+set "CLEAN_SSH_KEY=%LOCAL_SSH_KEY:\=/%"
+set "CLEAN_APP_DIR=%PROJ_DIR:\=/%"
+> "%PROJ_DIR%.env" echo VPS_HOST=64.227.3.211
+>> "%PROJ_DIR%.env" echo VPS_USER=root
+>> "%PROJ_DIR%.env" echo VPS_SSH_PORT=22
+>> "%PROJ_DIR%.env" echo VPS_SSH_KEY=%CLEAN_SSH_KEY%
+>> "%PROJ_DIR%.env" echo SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co
+>> "%PROJ_DIR%.env" echo SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzZmlqemp6aW9hcmFnbmxvcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjMwNDksImV4cCI6MjEwMjY5OTA0OX0.Z-VBaoutWmZUW6S_G3SECl5ylWUfECs5iR7E4aMNASI
+>> "%PROJ_DIR%.env" echo APP_DIR=%CLEAN_APP_DIR%
+>> "%PROJ_DIR%.env" echo NODE_ENV=production
+>> "%PROJ_DIR%.env" echo LOG_LEVEL=info
 echo [OK] Environment settings verified in .env
 
 :: 4. Verify Node Dependencies

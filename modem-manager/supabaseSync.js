@@ -5,72 +5,95 @@
 
 'use strict';
 
+const dns = require('dns');
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
 const { createClient } = require('@supabase/supabase-js');
 const spawner          = require('./proxySpawner');
 
-const VPS_HOST     = process.env.VPS_HOST || '157.151.206.163';
+const VPS_HOST     = process.env.VPS_HOST || '64.227.3.211';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zsfijzjzioaragnlopgn.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'dummy_key';
 
 const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_KEY,
-  { auth: { persistSession: false } }
+  {
+    auth: { persistSession: false },
+    global: {
+      headers: { 'x-client-info': 'proxicell-modem-manager' },
+    },
+  }
 );
+
+async function withRetry(fn, maxAttempts = 3, delayMs = 1200) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === maxAttempts) throw err;
+      await new Promise(r => setTimeout(r, delayMs * i));
+    }
+  }
+}
 
 // ─── Upsert modem record ──────────────────────────────────────────────────────
 async function upsertModem(modem) {
-  const { data, error } = await supabase
-    .from('modems')
-    .upsert({
-      label:           modem.label,
-      interface:       modem.interface,
-      status:          modem.status,
-      ip_address:      modem.ipAddress,
-      signal:          modem.signal,
-      operator:        modem.operator,
-      iccid:           modem.iccid,
-      device_path:     modem.devicePath,
-      last_seen:       new Date().toISOString(),
-      // Android-specific
-      is_android:      modem.isAndroid || false,
-      adb_serial:      modem.adbSerial || null,
-      model:           modem.model || null,
-      android_version: modem.androidVersion || null,
-      battery:         modem.battery || null,
-    }, {
-      onConflict: 'device_path',
-      returning:  'representation',
-    })
-    .select('id')
-    .single();
+  return await withRetry(async () => {
+    const { data, error } = await supabase
+      .from('modems')
+      .upsert({
+        label:           modem.label,
+        interface:       modem.interface,
+        status:          modem.status,
+        ip_address:      modem.ipAddress,
+        signal:          modem.signal,
+        operator:        modem.operator,
+        iccid:           modem.iccid,
+        device_path:     modem.devicePath,
+        last_seen:       new Date().toISOString(),
+        // Android-specific
+        is_android:      modem.isAndroid || false,
+        adb_serial:      modem.adbSerial || null,
+        model:           modem.model || null,
+        android_version: modem.androidVersion || null,
+        battery:         modem.battery || null,
+      }, {
+        onConflict: 'device_path',
+        returning:  'representation',
+      })
+      .select('id')
+      .single();
 
-  if (error) {
-    console.error('[SupabaseSync] Failed to upsert modem:', error.message);
-    throw error;
-  }
-
-  // Upsert proxy records for each type
-  if (modem.portSet && data?.id) {
-    const proxies = [
-      { type: 'http',   localPort: modem.portSet.http,   publicPort: modem.portSet.publicHttp },
-      { type: 'socks4', localPort: modem.portSet.socks4, publicPort: modem.portSet.publicSocks4 },
-      { type: 'socks5', localPort: modem.portSet.socks5, publicPort: modem.portSet.publicSocks5 },
-    ];
-
-    for (const p of proxies) {
-      await supabase.from('proxies').upsert({
-        modem_id:    data.id,
-        proxy_type:  p.type,
-        local_port:  p.localPort,
-        public_port: p.publicPort,
-        vps_host:    VPS_HOST,
-        active:      true,
-      }, { onConflict: 'modem_id,proxy_type' });
+    if (error) {
+      console.error('[SupabaseSync] Failed to upsert modem:', error.message);
+      throw error;
     }
-  }
 
-  return data?.id;
+    // Upsert proxy records for each type
+    if (modem.portSet && data?.id) {
+      const proxies = [
+        { type: 'http',   localPort: modem.portSet.http,   publicPort: modem.portSet.publicHttp },
+        { type: 'socks4', localPort: modem.portSet.socks4, publicPort: modem.portSet.publicSocks4 },
+        { type: 'socks5', localPort: modem.portSet.socks5, publicPort: modem.portSet.publicSocks5 },
+      ];
+
+      for (const p of proxies) {
+        await supabase.from('proxies').upsert({
+          modem_id:    data.id,
+          proxy_type:  p.type,
+          local_port:  p.localPort,
+          public_port: p.publicPort,
+          vps_host:    VPS_HOST,
+          active:      true,
+        }, { onConflict: 'modem_id,proxy_type' });
+      }
+    }
+
+    return data?.id;
+  });
 }
 
 // ─── Update modem status ──────────────────────────────────────────────────────
