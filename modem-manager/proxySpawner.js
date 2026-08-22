@@ -357,10 +357,8 @@ async function addCredential(username, password, modemId) {
   console.log(`[ProxyEngine] Added credential for user '${username}' on modem '${modemId}'`);
 }
 
-async function removeCredential(username, modemId) {
-  if (!credStore.has(modemId)) return;
-  const list = credStore.get(modemId).filter(c => c.username !== username);
-  credStore.set(modemId, list);
+async function setExactCredentials(modemId, credsList) {
+  credStore.set(modemId, credsList || []);
 }
 
 module.exports = {
@@ -369,5 +367,6 @@ module.exports = {
   reloadConfig: async () => {},
   addCredential,
   removeCredential,
+  setExactCredentials,
   getModemBandwidth,
 };

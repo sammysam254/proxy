@@ -269,10 +269,26 @@ h1, h2, h3, h4, h5, h6 {
 
 .select {
   appearance: none;
+  background-color: #0f172a;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 40px;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+}
+
+select option:checked,
+select option:hover {
+  background-color: #1e293b !important;
+  color: #3b82f6 !important;
 }
 
 /* ─── Progress bar ───────────────────────────────────────── */

@@ -253,3 +253,97 @@ export async function activateSubscription(orderId, planId, proxyId, paymentMeth
 export async function simulateAdminSubscription(planId, proxyId) {
   return activateSubscription(null, planId, proxyId, 'manual', `ADMIN_TEST_${Date.now()}`);
 }
+
+// ─── Admin Plan Management ───────────────────────────────────────────────────
+export async function getAllAdminPlans() {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .order('created_at', { ascending: true });
+  return { data, error };
+}
+
+export async function savePlan(planData) {
+  const payload = {
+    name:          planData.name,
+    price_usd:     parseFloat(planData.price_usd),
+    duration_days: planData.duration_days ? parseInt(planData.duration_days) : null,
+    gb_limit:      planData.gb_limit ? parseFloat(planData.gb_limit) : null,
+    description:   planData.description || '',
+    is_active:     planData.is_active !== undefined ? planData.is_active : true,
+  };
+
+  if (planData.id) {
+    const { data, error } = await supabase
+      .from('plans')
+      .update(payload)
+      .eq('id', planData.id)
+      .select()
+      .single();
+    return { data, error };
+  } else {
+    const { data, error } = await supabase
+      .from('plans')
+      .insert(payload)
+      .select()
+      .single();
+    return { data, error };
+  }
+}
+
+export async function deletePlan(planId) {
+  const { data, error } = await supabase
+    .from('plans')
+    .delete()
+    .eq('id', planId);
+  return { data, error };
+}
+
+// ─── Admin Proxy & Marketplace Management ────────────────────────────────────
+export async function getAllAdminProxies() {
+  const { data, error } = await supabase
+    .from('proxies')
+    .select(`
+      *,
+      modems (
+        id, label, operator, signal, status, ip_address, is_android, model, interface
+      )
+    `)
+    .order('public_port', { ascending: true });
+  return { data, error };
+}
+
+export async function updateProxyActiveStatus(proxyId, active) {
+  const { data, error } = await supabase
+    .from('proxies')
+    .update({ active })
+    .eq('id', proxyId)
+    .select()
+    .single();
+  return { data, error };
+}
+
+export async function deleteProxy(proxyId) {
+  const { data, error } = await supabase
+    .from('proxies')
+    .delete()
+    .eq('id', proxyId);
+  return { data, error };
+}
+
+// ─── Admin Credential Revocation ─────────────────────────────────────────────
+export async function revokeSubscription(subscriptionId) {
+  // 1. Mark subscription as revoked in database
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .update({
+      status: 'revoked',
+    })
+    .eq('id', subscriptionId)
+    .select('*, proxies(modem_id)')
+    .single();
+
+  if (error) throw error;
+  return { data, success: true };
+}
+

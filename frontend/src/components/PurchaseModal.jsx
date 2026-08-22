@@ -550,25 +550,67 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
 
             {/* Proxy selector */}
             <div className="input-group" style={{ marginBottom: '20px' }}>
-              <label className="input-label">
-                <Wifi size={13} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                Select Proxy / SIM Card
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="input-label" style={{ margin: 0 }}>
+                  <Wifi size={13} style={{ verticalAlign: 'middle', marginRight: '4px', color: 'var(--clr-accent)' }} />
+                  Select Proxy / SIM Card
+                </label>
+                <span className="badge badge-online" style={{ fontSize: '0.7rem' }}>
+                  {onlineProxies.length} Online Available
+                </span>
+              </div>
               {onlineProxies.length > 0 ? (
-                <select
-                  className="input select"
-                  value={selProxy?.id || ''}
-                  onChange={e => setSelProxy(onlineProxies.find(p => p.id === e.target.value))}
-                >
-                  {onlineProxies.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.modems?.label} — {p.proxy_type?.toUpperCase()} — {p.modems?.operator || 'Mobile'}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <select
+                    className="input select"
+                    value={selProxy?.id || ''}
+                    onChange={e => setSelProxy(onlineProxies.find(p => p.id === e.target.value))}
+                    style={{
+                      background: '#0d1322',
+                      color: '#f8fafc',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                      fontWeight: 600,
+                      padding: '12px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.92rem',
+                    }}
+                  >
+                    {onlineProxies.map(p => (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        style={{ background: '#0d1322', color: '#f8fafc', padding: '10px' }}
+                      >
+                        {p.modems?.label || 'Modem'} ({p.proxy_type?.toUpperCase()}) — {p.modems?.operator || 'Mobile SIM'}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Selected Proxy Summary Tag */}
+                  {selProxy && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      background: 'rgba(59, 130, 246, 0.08)',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '0.78rem',
+                    }}>
+                      <span style={{ color: 'var(--clr-text-2)' }}>
+                        Connected SIM: <strong style={{ color: '#fff' }}>{selProxy.modems?.label}</strong>
+                      </span>
+                      <span className="mono" style={{ color: 'var(--clr-accent)', fontWeight: 700 }}>
+                        :{selProxy.public_port} ({selProxy.proxy_type?.toUpperCase()})
+                      </span>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div className="card" style={{ padding: '12px 16px', color: 'var(--clr-text-2)', fontSize: '0.9rem' }}>
-                  No proxies online right now. Please try again shortly.
+                <div className="card" style={{ padding: '14px 16px', color: 'var(--clr-text-2)', fontSize: '0.9rem', background: '#0d1322' }}>
+                  No proxies online right now. Please connect USB modems or Android phones.
                 </div>
               )}
             </div>

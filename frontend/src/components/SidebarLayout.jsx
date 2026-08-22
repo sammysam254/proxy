@@ -25,8 +25,9 @@ const GUEST_NAV = [
 const ADMIN_NAV = [
   { to: '/admin',              icon: <Activity size={18} />,   label: 'Overview' },
   { to: '/admin/modems',       icon: <Wifi size={18} />,       label: 'Modems' },
-  { to: '/cloud-phones',       icon: <Smartphone size={18} />, label: 'Cloud Phones' },
   { to: '/admin/android',      icon: <Smartphone size={18} />, label: 'Android Devices' },
+  { to: '/admin/marketplace',  icon: <Server size={18} />,     label: 'Marketplace Proxies' },
+  { to: '/admin/plans',        icon: <DollarSign size={18} />, label: 'Plans & Pricing' },
   { to: '/admin/subscriptions',icon: <Users size={18} />,      label: 'Subscriptions' },
   { to: '/admin/revenue',      icon: <DollarSign size={18} />, label: 'Revenue' },
 ];

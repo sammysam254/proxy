@@ -4,10 +4,15 @@ import toast from 'react-hot-toast';
 import {
   Wifi, Users, DollarSign, Activity, RefreshCw, Power,
   Server, Signal, Database, Shield, ChevronDown,
-  Smartphone, Battery, Usb, Globe, TrendingUp
+  Smartphone, Battery, Usb, Globe, TrendingUp, Plus, Edit2, Trash2, Check, X, Lock, AlertTriangle
 } from 'lucide-react';
-import { getAdminModems, getAdminStats, supabase, isAdmin } from '../lib/supabase';
+import {
+  getAdminModems, getAdminStats, getAllAdminPlans, savePlan, deletePlan,
+  getAllAdminProxies, updateProxyActiveStatus, deleteProxy, revokeSubscription,
+  supabase, isAdmin
+} from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
+import { playClickSound, playSuccessSound, playErrorSound } from '../lib/sound';
 
 // ─── Signal bars ──────────────────────────────────────────────────────────────
 function SignalBars({ strength }) {
@@ -21,7 +26,7 @@ function SignalBars({ strength }) {
   );
 }
 
-// ─── Device Card (used for both modems and Android phones) ───────────────────
+// ─── Device Card ─────────────────────────────────────────────────────────────
 function DeviceCard({ device, onRotate, type = 'modem' }) {
   const [rotating, setRotating] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -52,7 +57,6 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Top accent bar */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: 3,
         background: accentColor,
@@ -89,11 +93,12 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
         </div>
       </div>
 
-      {/* Stats row */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: isAndroid ? 'repeat(4,1fr)' : 'repeat(3,1fr)',
         gap: '8px',
+        marginTop: '14px',
+        marginBottom: '14px',
       }}>
         {[
           { icon: <Activity size={12} />,  label: 'IP',      value: device.ip_address || '—' },
@@ -114,20 +119,16 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
         ))}
       </div>
 
-      {/* Android info */}
       {isAndroid && device.model && (
-        <div style={{
-          display: 'flex', gap: '8px', flexWrap: 'wrap',
-        }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
           {device.model && <span className="badge badge-purple" style={{ fontSize: '0.7rem' }}>{device.model}</span>}
           {device.android_version && <span className="badge badge-blue" style={{ fontSize: '0.7rem' }}>Android {device.android_version}</span>}
           {device.adb_serial && <span className="mono" style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>ADB: {device.adb_serial}</span>}
         </div>
       )}
 
-      {/* Proxy ports */}
       {proxies.length > 0 && (
-        <div>
+        <div style={{ marginBottom: '14px' }}>
           <button
             onClick={() => setExpanded(!expanded)}
             className="btn btn-ghost btn-sm"
@@ -160,7 +161,6 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex gap-sm">
         <button
           className="btn btn-secondary btn-sm"
@@ -180,9 +180,8 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
   );
 }
 
-// ─── Overview panel ───────────────────────────────────────────────────────────
+// ─── Overview Panel ───────────────────────────────────────────────────────────
 function Overview({ stats, modems, onRotate, onRefresh }) {
-  const usbModems  = modems.filter(m => !m.is_android);
   const androidDev = modems.filter(m => m.is_android);
 
   return (
@@ -214,15 +213,14 @@ function Overview({ stats, modems, onRotate, onRefresh }) {
         ))}
       </div>
 
-      {/* Quick device list */}
-      <h2 style={{ fontSize: '1.2rem', marginBottom: '14px' }}>All Active Devices</h2>
+      <h2 style={{ fontSize: '1.2rem', marginBottom: '14px' }}>Active Devices Online</h2>
       <div className="grid-auto">
         {modems.filter(m => m.status === 'online').map(m => (
           <DeviceCard key={m.id} device={m} onRotate={onRotate} type={m.is_android ? 'android' : 'modem'} />
         ))}
         {modems.filter(m => m.status === 'online').length === 0 && (
           <div className="card" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px' }}>
-            <p className="text-muted">No devices online. Plug in USB modems or Android phones.</p>
+            <p className="text-muted">No devices currently online. Connect USB modems or Android phones.</p>
           </div>
         )}
       </div>
@@ -230,7 +228,7 @@ function Overview({ stats, modems, onRotate, onRefresh }) {
   );
 }
 
-// ─── Modems panel ─────────────────────────────────────────────────────────────
+// ─── USB Modems Panel ─────────────────────────────────────────────────────────
 function ModemsPanel({ modems, onRotate, onRefresh }) {
   const [showAll, setShowAll] = useState(false);
   const usbModems = modems.filter(m => !m.is_android);
@@ -288,7 +286,7 @@ function ModemsPanel({ modems, onRotate, onRefresh }) {
   );
 }
 
-// ─── Android Devices panel ────────────────────────────────────────────────────
+// ─── Android Devices Panel ────────────────────────────────────────────────────
 function AndroidPanel({ modems, onRotate, onRefresh }) {
   const [showAll, setShowAll] = useState(false);
   const androidDevs = modems.filter(m => m.is_android);
@@ -329,7 +327,6 @@ function AndroidPanel({ modems, onRotate, onRefresh }) {
         </div>
       </div>
 
-      {/* Setup guide */}
       <div className="card" style={{
         marginBottom: '24px',
         background: 'rgba(139,92,246,0.06)',
@@ -366,7 +363,393 @@ function AndroidPanel({ modems, onRotate, onRefresh }) {
   );
 }
 
-// ─── Subscriptions panel ──────────────────────────────────────────────────────
+// ─── Marketplace Proxies Control Panel ─────────────────────────────────────────
+function MarketplacePanel() {
+  const [proxies, setProxies] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { loadProxies(); }, []);
+
+  async function loadProxies() {
+    setLoading(true);
+    const { data } = await getAllAdminProxies();
+    setProxies(data || []);
+    setLoading(false);
+  }
+
+  const toggleProxyStatus = async (proxy) => {
+    playClickSound();
+    const newStatus = !proxy.active;
+    try {
+      await updateProxyActiveStatus(proxy.id, newStatus);
+      setProxies(prev => prev.map(p => p.id === proxy.id ? { ...p, active: newStatus } : p));
+      playSuccessSound();
+      toast.success(newStatus ? 'Proxy activated on marketplace' : 'Proxy removed from marketplace');
+    } catch (e) {
+      playErrorSound();
+      toast.error('Failed to update proxy status: ' + e.message);
+    }
+  };
+
+  return (
+    <div style={{ padding: '36px' }}>
+      <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>Marketplace Proxies</h1>
+          <p className="text-muted">Control which proxy endpoints are visible and available for customer rental</p>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={loadProxies} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'spin-icon' : ''} /> Refresh
+        </button>
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Device / SIM Label</th>
+                <th>Protocol</th>
+                <th>Public Port</th>
+                <th>Local Port</th>
+                <th>Device Status</th>
+                <th>Marketplace Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {proxies.map(p => (
+                <tr key={p.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{p.modems?.label || 'Unknown Device'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)' }}>
+                      {p.modems?.operator || 'Carrier'} · {p.modems?.ip_address || 'No IP'}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`proxy-chip ${p.proxy_type}`}>{p.proxy_type?.toUpperCase()}</span>
+                  </td>
+                  <td className="mono" style={{ fontWeight: 700, color: 'var(--clr-accent)' }}>
+                    {p.vps_host}:{p.public_port}
+                  </td>
+                  <td className="mono" style={{ fontSize: '0.8rem', color: 'var(--clr-text-3)' }}>
+                    :{p.local_port}
+                  </td>
+                  <td>
+                    <span className={`badge badge-${p.modems?.status === 'online' ? 'online' : 'offline'}`}>
+                      <span className="dot" />
+                      {p.modems?.status || 'offline'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`badge badge-${p.active ? 'online' : 'offline'}`}>
+                      {p.active ? 'Listed (Active)' : 'Delisted (Hidden)'}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className={`btn btn-sm ${p.active ? 'btn-danger' : 'btn-primary'}`}
+                      onClick={() => toggleProxyStatus(p)}
+                      style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+                    >
+                      {p.active ? 'Remove from Store' : 'List in Store'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {proxies.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--clr-text-3)', padding: '40px' }}>
+                    {loading ? 'Loading proxies...' : 'No proxies found.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Plans & Rental Pricing Panel ─────────────────────────────────────────────
+function PlansPanel() {
+  const [plans, setPlans]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [editingPlan, setEditingPlan] = useState(null); // null | plan object
+  const [isNew, setIsNew]           = useState(false);
+
+  useEffect(() => { loadPlans(); }, []);
+
+  async function loadPlans() {
+    setLoading(true);
+    const { data } = await getAllAdminPlans();
+    setPlans(data || []);
+    setLoading(false);
+  }
+
+  const handleOpenEdit = (plan) => {
+    setIsNew(false);
+    setEditingPlan({ ...plan });
+  };
+
+  const handleOpenNew = () => {
+    setIsNew(true);
+    setEditingPlan({
+      name: '',
+      price_usd: 10,
+      duration_days: 1,
+      gb_limit: null,
+      description: '',
+      is_active: true,
+    });
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    playClickSound();
+    try {
+      const { data, error } = await savePlan(editingPlan);
+      if (error) throw error;
+      playSuccessSound();
+      toast.success(isNew ? 'Plan created successfully!' : 'Plan updated successfully!');
+      setEditingPlan(null);
+      loadPlans();
+    } catch (err) {
+      playErrorSound();
+      toast.error('Failed to save plan: ' + err.message);
+    }
+  };
+
+  const handleDelete = async (planId) => {
+    if (!window.confirm('Are you sure you want to remove this pricing plan?')) return;
+    playClickSound();
+    try {
+      const { error } = await deletePlan(planId);
+      if (error) throw error;
+      playSuccessSound();
+      toast.success('Plan deleted.');
+      loadPlans();
+    } catch (err) {
+      playErrorSound();
+      toast.error('Failed to delete plan: ' + err.message);
+    }
+  };
+
+  const handleToggleActive = async (plan) => {
+    playClickSound();
+    try {
+      await savePlan({ ...plan, is_active: !plan.is_active });
+      setPlans(prev => prev.map(p => p.id === plan.id ? { ...p, is_active: !p.is_active } : p));
+      toast.success(`Plan ${!plan.is_active ? 'activated' : 'deactivated'}.`);
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  return (
+    <div style={{ padding: '36px' }}>
+      <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>Plans & Rental Pricing</h1>
+          <p className="text-muted">Manage time-based (Daily, Weekly, Monthly) and data-based (Pay Per GB) rental rates</p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn btn-primary btn-sm" onClick={handleOpenNew}>
+            <Plus size={16} /> Add New Plan
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={loadPlans} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'spin-icon' : ''} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Plans Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+        {plans.map(p => {
+          const isTimeBased = !!p.duration_days;
+          return (
+            <div key={p.id} className="card" style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              border: `1px solid ${p.is_active ? 'rgba(59, 130, 246, 0.3)' : 'var(--clr-border)'}`,
+              opacity: p.is_active ? 1 : 0.65,
+            }}>
+              <div>
+                <div className="flex justify-between items-center" style={{ marginBottom: '10px' }}>
+                  <span className="badge badge-blue" style={{ fontSize: '0.75rem' }}>
+                    {isTimeBased ? `${p.duration_days} Day${p.duration_days > 1 ? 's' : ''} Time-Based` : 'Data (GB-Based)'}
+                  </span>
+                  <span className={`badge badge-${p.is_active ? 'online' : 'offline'}`}>
+                    {p.is_active ? 'Active in Store' : 'Disabled'}
+                  </span>
+                </div>
+
+                <div style={{ fontWeight: 800, fontSize: '1.3rem', marginBottom: '4px' }}>
+                  {p.name}
+                </div>
+                <div style={{ color: 'var(--clr-text-2)', fontSize: '0.85rem', marginBottom: '16px', minHeight: '38px' }}>
+                  {p.description || 'No description set'}
+                </div>
+
+                <div style={{
+                  background: 'var(--clr-surface)',
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline'
+                }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>Rental Price</span>
+                  <div>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--clr-accent)' }}>
+                      ${parseFloat(p.price_usd).toFixed(2)}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', marginLeft: '4px' }}>
+                      {isTimeBased ? `/ ${p.duration_days}d` : '/ GB'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-sm" style={{ borderTop: '1px solid var(--clr-border)', paddingTop: '12px' }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleOpenEdit(p)}
+                  style={{ flex: 1 }}
+                >
+                  <Edit2 size={13} /> Edit Rate
+                </button>
+                <button
+                  className={`btn btn-sm ${p.is_active ? 'btn-ghost' : 'btn-secondary'}`}
+                  onClick={() => handleToggleActive(p)}
+                  title={p.is_active ? 'Deactivate plan' : 'Activate plan'}
+                >
+                  {p.is_active ? 'Disable' : 'Enable'}
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleDelete(p.id)}
+                  title="Delete Plan"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Edit / New Plan Modal */}
+      {editingPlan && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setEditingPlan(null); }}>
+          <div className="modal" style={{ maxWidth: '480px', width: '92%' }}>
+            <div className="flex justify-between items-center" style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '1.3rem', margin: 0 }}>
+                {isNew ? 'Create New Pricing Plan' : `Edit ${editingPlan.name} Plan`}
+              </h2>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditingPlan(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="input-group">
+                <label className="input-label">Plan Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Daily, Weekly, Custom 5GB"
+                  value={editingPlan.name}
+                  onChange={e => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                  className="input"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="input-group">
+                  <label className="input-label">Price ($ USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    required
+                    placeholder="10.00"
+                    value={editingPlan.price_usd}
+                    onChange={e => setEditingPlan({ ...editingPlan, price_usd: e.target.value })}
+                    className="input"
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Duration (Days)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Leave empty for GB-based"
+                    value={editingPlan.duration_days || ''}
+                    onChange={e => setEditingPlan({ ...editingPlan, duration_days: e.target.value ? parseInt(e.target.value) : null })}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">Data Limit (GB)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Leave empty for Unlimited Time-based"
+                  value={editingPlan.gb_limit || ''}
+                  onChange={e => setEditingPlan({ ...editingPlan, gb_limit: e.target.value ? parseFloat(e.target.value) : null })}
+                  className="input"
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">Description / Feature Note</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Unlimited data for 1 day with full IP rotation"
+                  value={editingPlan.description || ''}
+                  onChange={e => setEditingPlan({ ...editingPlan, description: e.target.value })}
+                  className="input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                <input
+                  type="checkbox"
+                  id="isActiveCheck"
+                  checked={editingPlan.is_active}
+                  onChange={e => setEditingPlan({ ...editingPlan, is_active: e.target.checked })}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--clr-accent)' }}
+                />
+                <label htmlFor="isActiveCheck" style={{ fontSize: '0.85rem', color: 'var(--clr-text)' }}>
+                  Active and purchasable in customer store
+                </label>
+              </div>
+
+              <div className="flex gap-sm" style={{ marginTop: '16px' }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setEditingPlan(null)} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
+                  Save Plan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Subscriptions Panel (with Credential Revocation) ─────────────────────────
 function SubscriptionsPanel() {
   const [subs, setSubs]       = useState([]);
   const [loading, setLoading] = useState(true);
@@ -386,28 +769,47 @@ function SubscriptionsPanel() {
   }
 
   const markActive = async (id) => {
+    playClickSound();
     await supabase.from('subscriptions').update({ status: 'active' }).eq('id', id);
     setSubs(prev => prev.map(s => s.id === id ? { ...s, status: 'active' } : s));
-    toast.success('Subscription activated');
+    playSuccessSound();
+    toast.success('Subscription activated.');
+  };
+
+  const handleRevoke = async (sub) => {
+    const confirm = window.confirm(`⚠️ Revoke credentials for ${sub.customers?.email || 'User'} (${sub.proxy_username})?\n\nThis will immediately disconnect the user and prevent any further proxy usage.`);
+    if (!confirm) return;
+
+    playClickSound();
+    try {
+      await revokeSubscription(sub.id);
+      setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, status: 'revoked' } : s));
+      playSuccessSound();
+      toast.success(`🔒 Credentials revoked for ${sub.proxy_username}. Proxy connection blocked.`);
+    } catch (e) {
+      playErrorSound();
+      toast.error('Revocation failed: ' + e.message);
+    }
   };
 
   const filtered = filter === 'all' ? subs : subs.filter(s => s.status === filter);
 
   return (
     <div style={{ padding: '36px' }}>
-      <div className="flex justify-between items-center mb-xl">
+      <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>Subscriptions</h1>
-          <p className="text-muted">{subs.length} total</p>
+          <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>Customer Subscriptions</h1>
+          <p className="text-muted">{subs.length} total subscriptions · Manage access & revoke credentials</p>
         </div>
         <div className="flex gap-sm">
-          {['all','active','pending','expired'].map(f => (
+          {['all','active','pending','revoked','expired'].map(f => (
             <button
               key={f}
               className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setFilter(f)}
+              style={{ textTransform: 'capitalize' }}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f}
             </button>
           ))}
         </div>
@@ -420,8 +822,8 @@ function SubscriptionsPanel() {
               <tr>
                 <th>Customer</th>
                 <th>Plan</th>
-                <th>Proxy</th>
-                <th>Device</th>
+                <th>Proxy Endpoint</th>
+                <th>Credentials</th>
                 <th>Status</th>
                 <th>Expires</th>
                 <th>Actions</th>
@@ -435,17 +837,15 @@ function SubscriptionsPanel() {
                   <td style={{ fontSize: '0.8rem' }}>
                     {s.proxies ? (
                       <>
-                        <span className={`proxy-chip ${s.proxies.proxy_type}`}>{s.proxies.proxy_type}</span>
+                        <span className={`proxy-chip ${s.proxies.proxy_type}`}>{s.proxies.proxy_type?.toUpperCase()}</span>
                         {' '}
-                        <span className="text-muted">{s.proxies.vps_host}:{s.proxies.public_port}</span>
+                        <span className="mono text-muted">{s.proxies.vps_host}:{s.proxies.public_port}</span>
                       </>
                     ) : '—'}
                   </td>
-                  <td>
-                    {s.proxies?.modems?.is_android
-                      ? <span className="badge badge-purple"><Smartphone size={10} /> Android</span>
-                      : <span className="badge badge-blue"><Wifi size={10} /> Modem</span>
-                    }
+                  <td style={{ fontSize: '0.8rem' }}>
+                    <div className="mono" style={{ color: 'var(--clr-text)' }}>{s.proxy_username}</div>
+                    <div className="mono text-muted" style={{ fontSize: '0.7rem' }}>{s.proxy_password}</div>
                   </td>
                   <td>
                     <span className={`badge badge-${s.status === 'active' ? 'online' : s.status === 'pending' ? 'pending' : 'offline'}`}>
@@ -456,18 +856,34 @@ function SubscriptionsPanel() {
                     {s.expires_at ? new Date(s.expires_at).toLocaleDateString() : 'GB-based'}
                   </td>
                   <td>
-                    {s.status === 'pending' && (
-                      <button className="btn btn-primary btn-sm" onClick={() => markActive(s.id)}>
-                        <Power size={12} /> Activate
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {s.status === 'pending' && (
+                        <button className="btn btn-primary btn-sm" onClick={() => markActive(s.id)}>
+                          <Power size={12} /> Activate
+                        </button>
+                      )}
+                      {s.status === 'active' && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleRevoke(s)}
+                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                        >
+                          <Lock size={12} /> Revoke Access
+                        </button>
+                      )}
+                      {s.status === 'revoked' && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--clr-red)', fontWeight: 600 }}>
+                          Revoked (Blocked)
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', color: 'var(--clr-text-3)', padding: '40px' }}>
-                    {loading ? 'Loading...' : 'No subscriptions found'}
+                    {loading ? 'Loading...' : 'No subscriptions found.'}
                   </td>
                 </tr>
               )}
@@ -479,7 +895,7 @@ function SubscriptionsPanel() {
   );
 }
 
-// ─── Revenue panel ────────────────────────────────────────────────────────────
+// ─── Revenue Panel ────────────────────────────────────────────────────────────
 function RevenuePanel() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -501,7 +917,7 @@ function RevenuePanel() {
     <div style={{ padding: '36px' }}>
       <div className="flex justify-between items-center mb-xl">
         <div>
-          <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>Revenue</h1>
+          <h1 style={{ fontSize: '1.8rem', marginBottom: '4px' }}>Revenue & Payments</h1>
           <p className="text-muted">Payment history and analytics</p>
         </div>
       </div>
@@ -565,13 +981,12 @@ function RevenuePanel() {
   );
 }
 
-// ─── Main Admin component ─────────────────────────────────────────────────────
+// ─── Main Admin Component ─────────────────────────────────────────────────────
 export default function Admin({ session }) {
   const [modems, setModems]       = useState([]);
   const [stats, setStats]         = useState({});
   const [loading, setLoading]     = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => { checkAdmin(); }, [session]);
 
@@ -621,6 +1036,8 @@ export default function Admin({ session }) {
         <Route index                  element={<Overview {...props} />} />
         <Route path="modems"          element={<ModemsPanel {...props} />} />
         <Route path="android"         element={<AndroidPanel {...props} />} />
+        <Route path="marketplace"     element={<MarketplacePanel />} />
+        <Route path="plans"           element={<PlansPanel />} />
         <Route path="subscriptions"   element={<SubscriptionsPanel />} />
         <Route path="revenue"         element={<RevenuePanel />} />
         <Route path="*"               element={<Navigate to="/admin" />} />
