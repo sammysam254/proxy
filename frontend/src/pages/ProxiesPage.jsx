@@ -231,7 +231,7 @@ export default function ProxiesPage({ session }) {
                             {isWifi && <span>🇺🇸</span>}
                           </div>
                           <div className="mono" style={{ fontSize: '0.75rem', color: accentColor }}>
-                            {isWifi ? `IP: ${modem?.ip_address || 'USA IP'}` : `Serial: #${serial}`}
+                            {isWifi ? 'Location: United States 🇺🇸' : `Serial: #${serial}`}
                           </div>
                         </div>
                       </div>

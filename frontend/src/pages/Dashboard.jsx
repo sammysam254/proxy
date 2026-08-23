@@ -170,7 +170,7 @@ function ProxyCredCard({ sub }) {
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
               <span className="mono" style={{ color: categoryAccent, fontWeight: 600 }}>
-                {isResidential ? `Location: USA 🇺🇸 · IP: ${modem?.ip_address || vpsHost}` : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')} · ${modem?.ip_address || 'Live Proxy IP'}`}
+                {isResidential ? 'Location: United States 🇺🇸' : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}`}
               </span>
             </div>
           </div>
