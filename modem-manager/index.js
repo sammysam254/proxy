@@ -175,11 +175,6 @@ async function runCycle() {
         registry.delete(path);
       }
     }
-        await bringOffline(device, 'unplugged');
-        await sync.markModemOffline(device.id);
-        registry.delete(path);
-      }
-    }
 
     // ── 3. Process each detected device ───────────────────────────────────
     for (const freshDevice of detected) {
