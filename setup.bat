@@ -97,17 +97,10 @@ if not exist "%PROJ_DIR%modem-manager\node_modules" (
 powershell -NoProfile -Command "$sFolder = [Environment]::GetFolderPath('Startup'); $sFile = Join-Path $sFolder 'VertexProxies.lnk'; $w = New-Object -ComObject WScript.Shell; $sc = $w.CreateShortcut($sFile); $sc.TargetPath = 'wscript.exe'; $sc.Arguments = '\"%PROJ_DIR%start-hidden.vbs\"'; $sc.WorkingDirectory = '%PROJ_DIR%'; $sc.Description = 'Vertex Proxies Auto-Start'; $sc.Save()" >nul 2>&1
 echo [OK] Windows Boot Auto-Start configured.
 
-:: 6. ADB Initialization
-echo [*] Initializing Android Debug Bridge (ADB)...
-adb start-server >nul 2>&1
-echo [*] Scanning for connected Android phones and USB modems...
-adb devices -l
-echo.
-
-:: 7. Start Engine
+:: 6. Start Engine
 echo ================================================================
 echo   [SUCCESS] SYSTEM INITIALIZED AND READY
-echo   Starting Vertex Proxies Modem Manager Engine...
+echo   Starting Vertex Proxies High-Speed Wi-Fi Engine (USA)...
 echo   VPS Host:       64.227.3.211
 echo   Web Dashboard:  https://proxyke.netlify.app
 echo ================================================================

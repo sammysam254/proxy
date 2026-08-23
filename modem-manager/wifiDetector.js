@@ -417,7 +417,7 @@ const DEFAULT_WIFI_SLOTS = parseInt(process.env.WIFI_PROXY_SLOTS || '12', 10);
 
 /**
  * Expands physical Wi-Fi connection into multiple distinct proxy slots (default 12 cards)
- * so customers have multiple endpoints to view, select, and rent.
+ * Configured specifically for High-Speed USA Residential Proxies.
  */
 function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
   const expanded = [];
@@ -426,9 +426,13 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
       expanded.push({
         ...base,
         devicePath: `${base.devicePath}_slot_${slot}`,
-        label:      `Residential Wi-Fi Node #${slot}${base.ssid ? ` (${base.ssid})` : ''}`,
-        operator:   base.ssid ? `Residential Wi-Fi (${base.ssid})` : `Residential Wi-Fi Node #${slot}`,
-        model:      `${base.model || 'Wi-Fi Adapter'} - Node #${slot}`,
+        label:      `USA Residential Proxy #${slot}`,
+        operator:   'United States (USA) 🇺🇸',
+        model:      `USA High-Speed Residential Node #${slot}`,
+        location:   'United States (USA)',
+        country:    'USA',
+        countryCode:'US',
+        signal:     99,
         slotNumber: slot,
       });
     }

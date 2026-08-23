@@ -45,10 +45,15 @@ function isAuthorized(modemId, username, password) {
   return false;
 }
 
-// ─── Socket Stream Forwarder with 100% Accurate Byte Tracking ─────────────────
-// NOTE: trackingKey is modem.id (Supabase UUID) — always consistent regardless of
-// device type (ADB serial, tether-only, USB modem, etc.)
+// ─── Socket Stream Forwarder with 100% Accurate Byte Tracking & Max Speed ────
 function forwardStreams(clientSocket, serverSocket, trackingKey) {
+  try {
+    clientSocket.setNoDelay(true);
+    serverSocket.setNoDelay(true);
+    clientSocket.setKeepAlive(true, 10000);
+    serverSocket.setKeepAlive(true, 10000);
+  } catch {}
+
   clientSocket.on('data', (chunk) => {
     recordBandwidth(trackingKey, 0, chunk.length);
     if (!serverSocket.destroyed) {
@@ -64,11 +69,11 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
   });
 
   clientSocket.on('end', () => { if (!serverSocket.destroyed) serverSocket.end(); });
-  serverSocket.on('end', () => { if (!clientSocket.destroyed) clientSocket.end(); });
+  serverSocket.on('end', () => { if (!clientSocket.destroyed) serverSocket.end(); });
   clientSocket.on('close', () => { if (!serverSocket.destroyed) serverSocket.destroy(); });
-  serverSocket.on('close', () => { if (!clientSocket.destroyed) clientSocket.destroy(); });
+  serverSocket.on('close', () => { if (!clientSocket.destroyed) serverSocket.destroy(); });
   clientSocket.on('error', () => { if (!serverSocket.destroyed) serverSocket.destroy(); });
-  serverSocket.on('error', () => { if (!clientSocket.destroyed) clientSocket.destroy(); });
+  serverSocket.on('error', () => { if (!clientSocket.destroyed) serverSocket.destroy(); });
 }
 
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────

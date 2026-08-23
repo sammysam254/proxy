@@ -164,13 +164,14 @@ function ProxyCredCard({ sub }) {
             <CategoryIcon size={20} color={categoryAccent} />
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '1rem' }}>
-              {(modem?.operator || (isResidential ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE')).replace(/[, \t\r\n]+$/, '').trim() || (isResidential ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE')}
+            <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {isResidential ? 'USA Residential Proxy' : ((modem?.operator || 'Mobile 4G/5G LTE').replace(/[, \t\r\n]+$/, '').trim())}
+              {isResidential && <span style={{ fontSize: '0.9rem' }}>🇺🇸</span>}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
-              <span className="mono" style={{ color: categoryAccent }}>
-                Serial: #{(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}
-              </span> · {modem?.ip_address || 'Live Proxy IP'}
+              <span className="mono" style={{ color: categoryAccent, fontWeight: 600 }}>
+                {isResidential ? `Location: USA 🇺🇸 · IP: ${modem?.ip_address || vpsHost}` : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')} · ${modem?.ip_address || 'Live Proxy IP'}`}
+              </span>
             </div>
           </div>
         </div>

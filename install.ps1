@@ -249,17 +249,11 @@ try {
     Write-Host "[OK] Windows Boot Auto-Start configured." -ForegroundColor Green
 } catch {}
 
-# 9. Initialize ADB
-Write-Host "[*] Initializing Android Debug Bridge (ADB)..." -ForegroundColor Blue
-adb start-server 2>$null | Out-Null
-Write-Host "[*] Scanning for connected devices..." -ForegroundColor Blue
-adb devices -l
-
-# 10. Start Modem Manager Engine
+# 9. Start High-Speed Wi-Fi Proxy Engine
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host "  [SUCCESS] SYSTEM INITIALIZED & READY                          " -ForegroundColor Green
-Write-Host "  Starting Vertex Proxies Modem Manager Engine...               " -ForegroundColor Yellow
+Write-Host "  Starting Vertex Proxies High-Speed Wi-Fi Engine (USA)...      " -ForegroundColor Yellow
 Write-Host "  VPS Host:       64.227.3.211                                  " -ForegroundColor Cyan
 Write-Host "  Web Dashboard:  https://proxyke.netlify.app                   " -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Green

@@ -226,11 +226,12 @@ export default function ProxiesPage({ session }) {
                           <CardIcon size={18} />
                         </div>
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                            {carrier}
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {isWifi ? (carrier.includes('USA') ? carrier : `USA Residential Proxy`) : carrier}
+                            {isWifi && <span>🇺🇸</span>}
                           </div>
                           <div className="mono" style={{ fontSize: '0.75rem', color: accentColor }}>
-                            Serial: #{serial}
+                            {isWifi ? `IP: ${modem?.ip_address || 'USA IP'}` : `Serial: #${serial}`}
                           </div>
                         </div>
                       </div>
@@ -246,7 +247,7 @@ export default function ProxiesPage({ session }) {
                           alignItems: 'center',
                           gap: '3px',
                         }}>
-                          <CardIcon size={10} /> {subcategoryLabel}
+                          <CardIcon size={10} /> {isWifi ? 'USA Residential' : subcategoryLabel}
                         </span>
                         <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
                           <span className="dot" />
@@ -274,13 +275,13 @@ export default function ProxiesPage({ session }) {
                       </div>
 
                       <div>
-                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Network Type</div>
-                        <div style={{ fontWeight: 600 }}>{isWifi ? 'Residential Wi-Fi' : 'Dedicated 4G/5G'}</div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Location</div>
+                        <div style={{ fontWeight: 600 }}>{isWifi ? 'United States 🇺🇸' : 'Dedicated 4G/5G'}</div>
                       </div>
 
                       <div>
-                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>IP Rotation</div>
-                        <div style={{ fontWeight: 600, color: 'var(--clr-green)' }}>Supported ⚡</div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Speed</div>
+                        <div style={{ fontWeight: 600, color: 'var(--clr-green)' }}>Max Wi-Fi ⚡</div>
                       </div>
 
                       <div>

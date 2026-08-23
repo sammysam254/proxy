@@ -151,36 +151,18 @@ async function runCycle() {
   log.info('─── Detection cycle ───────────────────────────────');
 
   try {
-    // ── 1. Detect all devices in parallel ─────────────────────────────────
-    const [usbDetected, androidDetected, wifiDetected] = await Promise.all([
-      detector.detectModems().catch(e => { log.warn('USB detection error:', e.message); return []; }),
-      android.detectAndroidDevices().catch(e => { log.warn('Android detection error:', e.message); return []; }),
-      wifi.detectWifiDevices().catch(e => { log.warn('Wi-Fi detection error:', e.message); return []; }),
-    ]);
-
-    androidDetected.forEach(d => { d.isAndroid = true; });
+    // ── 1. Detect Wi-Fi / Residential proxies exclusively ────────────────
+    const wifiDetected = await wifi.detectWifiDevices().catch(e => {
+      log.warn('Wi-Fi detection error:', e.message);
+      return [];
+    });
     wifiDetected.forEach(d => { d.isWifi = true; });
 
-    // ── Deduplicate: if an Android device or Wi-Fi adapter shares the same IP as a generic USB entry,
-    //    prefer Android or Wi-Fi.
-    const knownIps = new Set([
-      ...androidDetected.filter(d => d.ipAddress).map(d => d.ipAddress),
-      ...wifiDetected.filter(d => d.ipAddress).map(d => d.ipAddress),
-    ]);
-    const filteredUsb = usbDetected.filter(d => {
-      if (d.ipAddress && knownIps.has(d.ipAddress)) {
-        log.info(`Dedup: skipping USB adapter ${d.interface} (${d.ipAddress}) — already covered by Android/Wi-Fi`);
-        return false;
-      }
-      return true;
-    });
-
-    const detected = [...filteredUsb, ...androidDetected, ...wifiDetected];
+    const detected = wifiDetected;
 
     const onlineCount  = detected.filter(d => d.ipAddress).length;
     const offlineCount = detected.length - onlineCount;
-    log.info(`Found: ${filteredUsb.length} USB modem(s) + ${androidDetected.length} Android device(s) + ${wifiDetected.length} Wi-Fi connection(s)`);
-    log.info(`Status: ${onlineCount} online, ${offlineCount} offline / no IP yet`);
+    log.info(`USA Residential Proxies: ${onlineCount} online / ready at max speed (${offlineCount} pending)`);
 
     const detectedPaths = new Set(detected.map(d => d.devicePath));
 
@@ -188,6 +170,11 @@ async function runCycle() {
     for (const [path, device] of registry) {
       if (!detectedPaths.has(path)) {
         log.warn(`Device removed: ${device.label} (${path})`);
+        await bringOffline(device, 'unplugged');
+        await sync.markModemOffline(device.id);
+        registry.delete(path);
+      }
+    }
         await bringOffline(device, 'unplugged');
         await sync.markModemOffline(device.id);
         registry.delete(path);
@@ -361,57 +348,39 @@ function printStatusTable() {
   console.log(chalk.cyan('  └─────────────────────────────────────────────────────────────────────┘\n'));
 }
 
-// ─── Wait for at least one device to appear (boot-time race condition fix) ─────
-//
-//  After a reboot, Windows takes 10-60 seconds to assign DHCP IPs to USB/Android/Wi-Fi
-//  adapters. If we scan immediately, ipconfig returns no device yet.
-//  This function retries detection until a device is found or the timeout expires.
-//
-async function waitForDevices(maxWaitMs = 120_000, intervalMs = 8_000) {
+// ─── Wait for Wi-Fi connection to initialize (instant boot) ───────────────────
+async function waitForDevices(maxWaitMs = 15_000, intervalMs = 2_000) {
   const deadline = Date.now() + maxWaitMs;
   let attempt = 0;
 
   while (Date.now() < deadline) {
     attempt++;
-    log.info(`Boot scan attempt #${attempt} — waiting for network/modem/Wi-Fi adapters to get IPs...`);
+    log.info(`Initializing USA Residential Proxy slots (attempt #${attempt})...`);
 
-    const [usbDevices, androidDevices, wifiDevices] = await Promise.all([
-      detector.detectModems().catch(() => []),
-      android.detectAndroidDevices().catch(() => []),
-      wifi.detectWifiDevices().catch(() => []),
-    ]);
-
-    const total = usbDevices.length + androidDevices.length + wifiDevices.length;
-    const withIp = [...usbDevices, ...androidDevices, ...wifiDevices].filter(d => d.ipAddress).length;
+    const wifiDevices = await wifi.detectWifiDevices().catch(() => []);
+    const withIp = wifiDevices.filter(d => d.ipAddress).length;
 
     if (withIp > 0) {
-      log.ok(`✅ Found ${withIp} device(s) with live IPs after ${attempt} attempt(s). Proceeding!`);
+      log.ok(`✅ Initialized ${withIp} USA Residential proxy slots with live Wi-Fi connection. Proceeding!`);
       return true;
-    }
-
-    if (total > 0) {
-      log.warn(`Found ${total} device(s) but none have IPs yet — waiting for DHCP...`);
-    } else {
-      log.warn('No devices found yet — adapter may not be ready. Retrying...');
     }
 
     const remaining = deadline - Date.now();
     if (remaining > 0) {
       const wait = Math.min(intervalMs, remaining);
-      log.info(`  ↳ Retrying in ${wait / 1000}s (${Math.round(remaining / 1000)}s remaining before timeout)`);
       await new Promise(r => setTimeout(r, wait));
     }
   }
 
-  log.warn(`⚠️  No devices with IPs found after ${maxWaitMs / 1000}s. Starting anyway — will detect on next cycle.`);
+  log.warn(`⚠️  Starting anyway — will detect on next cycle.`);
   return false;
 }
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
 async function main() {
   console.log(chalk.cyan.bold('\n  ╔══════════════════════════════════════════╗'));
-  console.log(chalk.cyan.bold('  ║  Vertex Proxies — Modem Manager v2.0     ║'));
-  console.log(chalk.cyan.bold('  ║  USB Modems + Android Phones             ║'));
+  console.log(chalk.cyan.bold('  ║  Vertex Proxies — Residential Engine     ║'));
+  console.log(chalk.cyan.bold('  ║  USA High-Speed Wi-Fi Proxies (12 Slots) ║'));
   console.log(chalk.cyan.bold('  ╚══════════════════════════════════════════╝\n'));
 
   // Terminate any previous instances & stale reverse tunnels
@@ -425,12 +394,10 @@ async function main() {
   if (pubKey) {
     log.info(`SSH PubKey:  ${pubKey}`);
   }
-  log.info('Watching for USB modems and Android phones every 30s');
+  log.info('High-Speed Wi-Fi Tunneling Engine active');
 
   // ── Boot-time adapter stabilization ────────────────────────────────────────
-  log.info('Initializing network adapters and proxy slots...');
-  await new Promise(r => setTimeout(r, 2000));
-  await waitForDevices(30_000, 3_000);
+  await waitForDevices(15_000, 2_000);
 
   // Start persistent SSH tunnel to VPS
   await tunnel.startTunnel().catch(e => {
