@@ -289,41 +289,26 @@ async function optimizeNetworkPriority(serial) {
 
 // ─── Enable USB tethering via ADB (multi-method Android support) ─────────────
 async function enableTethering(serial) {
-  console.log(`[AndroidDetector] Automatically triggering USB tethering on ${serial}...`);
   try {
-    // 1. Permanently configure default USB configuration on the phone
+    // 1. Configure USB configuration on the phone
     await configurePersistentUsbTethering(serial);
 
     // 2. Prioritize high-speed Wi-Fi with mobile SIM fallback
     await optimizeNetworkPriority(serial);
 
-    // 3. Try Android 11-14+ modular tethering commands
+    // 3. Trigger tethering commands
     await adb(serial, 'cmd tethering start-tethering 1').catch(() => {});
     await adb(serial, 'cmd tethering start-tethering usb').catch(() => {});
-    await adb(serial, 'cmd connectivity start-tethering usb').catch(() => {});
-
-    // 4. Switch USB function to RNDIS + ADB (maintains ADB connection while enabling network)
     await adb(serial, 'svc usb setFunctions rndis,adb').catch(() => {});
-    await adb(serial, 'svc usb setFunctions rndis').catch(() => {});
 
-    // 5. Legacy service call fallbacks (Android 5 - 10)
-    await adb(serial, 'service call connectivity 33 i32 1').catch(() => {});
-    await adb(serial, 'service call connectivity 34 i32 1').catch(() => {});
-
-    // 6. Direct USB config property fallback
-    await adb(serial, 'setprop sys.usb.config rndis,adb').catch(() => {});
-
-    // 7. Poll host OS for tethered interface & IP assignment (up to 12s)
-    for (let attempt = 1; attempt <= 6; attempt++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const iface = await getAndroidTetheredInterface(serial);
-      if (iface && iface.ipAddress) {
-        console.log(`[AndroidDetector] ✅ USB tethering active on ${serial} -> Interface: ${iface.iface} (${iface.ipAddress})`);
-        return iface;
-      }
+    // 4. Quick check for host interface
+    const iface = await getAndroidTetheredInterface(serial);
+    if (iface && iface.ipAddress) {
+      console.log(`[AndroidDetector] ✅ USB tethering active on ${serial} -> Interface: ${iface.iface} (${iface.ipAddress})`);
+      return iface;
     }
   } catch (e) {
-    console.warn(`[AndroidDetector] Failed to enable tethering on ${serial}:`, e.message);
+    // Non-fatal
   }
   return null;
 }
@@ -334,7 +319,6 @@ async function detectAndroidDevices() {
 
   // Check if ADB is available
   if (!(await isAdbAvailable())) {
-    console.log('[AndroidDetector] adb not found. Install with: apt install adb');
     return detected;
   }
 
@@ -343,8 +327,7 @@ async function detectAndroidDevices() {
 
   const serials = await getAdbDevices();
   if (serials.length === 0) {
-    // No ADB devices — but still scan for rndis interfaces from tethered phones
-    // (phone may have tethering but ADB not enabled/authorized)
+    // No ADB devices — but check for tethered interface
     const ifaceInfo = await getAndroidTetheredInterface(null);
     if (ifaceInfo) {
       const stableKey  = ifaceInfo.iface.replace(/\s+/g, '_');
@@ -367,61 +350,40 @@ async function detectAndroidDevices() {
         isAndroid:      true,
         portSet:        null,
       });
-      console.log(`[AndroidDetector] No ADB auth — tethering-only device on ${ifaceInfo.iface} (${ifaceInfo.ipAddress})`);
-      console.log(`[AndroidDetector] TIP: Unlock your phone and accept the "Allow USB debugging?" prompt for full info.`);
     }
     return detected;
   }
 
   for (const serial of serials) {
-    console.log(`[AndroidDetector] Found ADB device: ${serial}`);
-
     // Get device info
     const info = await getAndroidDeviceInfo(serial);
 
-    // Check tethering & get network interface
+    // Check tethering & get network interface (quick check)
     let ifaceInfo = await getAndroidTetheredInterface(serial);
-
-    if (!ifaceInfo || !ifaceInfo.ipAddress) {
-      console.log(`[AndroidDetector] ${serial}: USB tethering not active / no IP. Automatically enabling...`);
-      ifaceInfo = await enableTethering(serial);
-      if (!ifaceInfo) {
-        ifaceInfo = await getAndroidTetheredInterface(serial);
-      }
-    }
-
-    if (!ifaceInfo) {
-      console.log(`[AndroidDetector] ${serial}: USB tethering not active. Attempting to enable...`);
-      await enableTethering(serial);
-      await new Promise(r => setTimeout(r, 3000));
-      ifaceInfo = await getAndroidTetheredInterface(serial);
-    }
 
     const iface     = ifaceInfo ? ifaceInfo.iface     : null;
     const ipAddress = ifaceInfo ? ifaceInfo.ipAddress : null;
-    const status    = iface && ipAddress ? 'online' : 'offline';
+    const status    = iface && ipAddress ? 'online' : 'standby';
 
-    const label = `${info.model} (Android ${info.androidVersion || '?'})`;
+    const label = `${info.model || 'Android Phone'} (${serial})`;
 
     detected.push({
       devicePath:     `android:${serial}`,
       interface:      iface,
       ipAddress,
-      operator:       info.operator,
+      operator:       info.operator || 'Mobile Network',
       iccid:          info.iccid,
-      signal:         info.signal,
+      signal:         info.signal || 80,
       status,
       label,
       vendor:         'Android',
-      model:          info.model,
+      model:          info.model || 'Android Device',
       androidVersion: info.androidVersion,
       battery:        info.battery,
       adbSerial:      serial,
       isAndroid:      true,
       portSet:        null,
     });
-
-    console.log(`[AndroidDetector] ${serial}: ${label} | IP: ${ipAddress || 'N/A'} | Status: ${status}`);
   }
 
   return detected;

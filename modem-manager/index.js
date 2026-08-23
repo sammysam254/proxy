@@ -428,11 +428,9 @@ async function main() {
   log.info('Watching for USB modems and Android phones every 30s');
 
   // ── Boot-time adapter stabilization ────────────────────────────────────────
-  // Give Windows 5 seconds to finish initializing adapters before first scan,
-  // then retry up to 2 minutes if no IP is assigned yet.
-  log.info('Waiting 5s for network adapters to initialize...');
-  await new Promise(r => setTimeout(r, 5000));
-  await waitForDevices(120_000, 8_000);
+  log.info('Initializing network adapters and proxy slots...');
+  await new Promise(r => setTimeout(r, 2000));
+  await waitForDevices(30_000, 3_000);
 
   // Start persistent SSH tunnel to VPS
   await tunnel.startTunnel().catch(e => {
