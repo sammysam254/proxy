@@ -8,6 +8,11 @@ cd /d "%SCRIPT_DIR%"
 
 :: Check if modem-manager exists locally
 if exist "%SCRIPT_DIR%modem-manager\index.js" goto :run_local
+if exist "C:\proxy\modem-manager\index.js" (
+    set "SCRIPT_DIR=C:\proxy\"
+    cd /d "C:\proxy"
+    goto :run_local
+)
 
 :: Standalone runner detected (e.g. running from Downloads or Temp without full repository)
 echo ================================================================
@@ -17,10 +22,10 @@ echo [*] Standalone mode detected. Initializing installation...
 echo.
 
 if exist "%SCRIPT_DIR%install.ps1" (
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install.ps1"
+    powershell -NoProfile -File "%SCRIPT_DIR%install.ps1"
 ) else (
     echo [*] Fetching complete Vertex Proxies codebase and dependencies from GitHub...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; irm https://raw.githubusercontent.com/sammysam254/proxy/main/install.ps1 | iex"
+    powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; $tmp = Join-Path $env:TEMP 'install.ps1'; (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/sammysam254/proxy/main/install.ps1', $tmp); powershell -NoProfile -File $tmp"
 )
 
 if exist "C:\proxy\modem-manager\index.js" (

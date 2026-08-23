@@ -5,6 +5,9 @@
 
 'use strict';
 
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
 const dns = require('dns');
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -15,7 +18,7 @@ const spawner          = require('./proxySpawner');
 
 const VPS_HOST     = process.env.VPS_HOST || '64.227.3.211';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zsfijzjzioaragnlopgn.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'dummy_key';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzZmlqemp6aW9hcmFnbmxvcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjMwNDksImV4cCI6MjEwMjY5OTA0OX0.Z-VBaoutWmZUW6S_G3SECl5ylWUfECs5iR7E4aMNASI';
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -100,12 +103,16 @@ async function upsertModem(modem) {
 async function updateModemStatus(modemId, modem) {
   if (!modemId) return;
 
+  const isOnline = modem.status === 'online';
   await supabase.from('modems').update({
     status:     modem.status,
     ip_address: modem.ipAddress,
     signal:     modem.signal,
     last_seen:  new Date().toISOString(),
   }).eq('id', modemId);
+
+  // Keep proxies table in sync with modem status
+  await supabase.from('proxies').update({ active: isOnline }).eq('modem_id', modemId);
 }
 
 // ─── Mark modem offline ───────────────────────────────────────────────────────
@@ -145,10 +152,12 @@ async function syncBandwidth(modems) {
       if (deltaBytes === 0) continue;
 
       // Update modem-level cumulative counter in DB
-      await supabase.rpc('increment_modem_bytes', {
+      const { error: rpcError } = await supabase.rpc('increment_modem_bytes', {
         modem_id_input:  modem.id,
         delta_bytes: deltaBytes,
-      }).catch(async () => {
+      });
+
+      if (rpcError) {
         // Fallback: manual fetch + update if RPC doesn't exist yet
         const { data: m } = await supabase
           .from('modems').select('data_used_bytes').eq('id', modem.id).single();
@@ -156,7 +165,7 @@ async function syncBandwidth(modems) {
         await supabase.from('modems').update({
           data_used_bytes: prev_bytes + deltaBytes,
         }).eq('id', modem.id);
-      });
+      }
 
       // Find all active subscriptions for proxies on this modem
       const { data: subs } = await supabase
@@ -195,7 +204,7 @@ async function syncBandwidth(modems) {
           bytes_out:       deltaOut,
           logged_at:       new Date().toISOString(),
         }));
-        await supabase.from('usage_logs').insert(logEntries).catch(() => {});
+        await supabase.from('usage_logs').insert(logEntries);
 
         console.log(`[SupabaseSync] 📊 Bandwidth sync: +${(deltaBytes / 1024).toFixed(1)} KB for ${modems.length} modem(s), ${subs.length} subscription(s)`);
       }
@@ -262,14 +271,19 @@ async function expireOldSubscriptions() {
 //
 async function reconcileOnlineModems(activeModemIds = []) {
   try {
+    const activeSet = new Set(activeModemIds.filter(Boolean));
+
+    // Ensure all currently active modems in memory are online and their proxies active
+    for (const modemId of activeSet) {
+      await supabase.from('proxies').update({ active: true }).eq('modem_id', modemId);
+    }
+
     const { data: dbModems, error } = await supabase
       .from('modems')
       .select('id, label, status')
       .eq('status', 'online');
 
     if (error || !dbModems) return;
-
-    const activeSet = new Set(activeModemIds.filter(Boolean));
 
     for (const m of dbModems) {
       if (!activeSet.has(m.id)) {
