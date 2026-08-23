@@ -68,20 +68,29 @@ function assignPorts() {
 
 const https = require('https');
 
-// ─── Fetch Public SIM IP via local interface binding ────────────────────────
+// ─── Fetch Public SIM IP via local interface binding (with 2-minute cache) ──
+const _ipCache = new Map();
 function fetchPublicIp(localAddress) {
+  if (!localAddress || localAddress === '0.0.0.0') return Promise.resolve(null);
+  const hit = _ipCache.get(localAddress);
+  if (hit && (Date.now() - hit.time < 120_000)) {
+    return Promise.resolve(hit.ip);
+  }
   return new Promise((resolve) => {
-    if (!localAddress || localAddress === '0.0.0.0') return resolve(null);
     const req = https.get('https://api.ipify.org?format=json', {
       localAddress,
-      timeout: 5000,
+      timeout: 3000,
     }, (res) => {
       let data = '';
       res.on('data', chunk => (data += chunk));
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed.ip || null);
+          if (parsed.ip) {
+            _ipCache.set(localAddress, { ip: parsed.ip, time: Date.now() });
+            return resolve(parsed.ip);
+          }
+          resolve(null);
         } catch {
           resolve(null);
         }
@@ -90,11 +99,15 @@ function fetchPublicIp(localAddress) {
     req.on('error', () => {
       const fallback = https.get('https://icanhazip.com', {
         localAddress,
-        timeout: 5000,
+        timeout: 3000,
       }, (res2) => {
         let text = '';
         res2.on('data', chunk => (text += chunk));
-        res2.on('end', () => resolve(text.trim() || null));
+        res2.on('end', () => {
+          const ip = text.trim();
+          if (ip) _ipCache.set(localAddress, { ip, time: Date.now() });
+          resolve(ip || null);
+        });
       });
       fallback.on('error', () => resolve(null));
     });
@@ -146,8 +159,11 @@ async function bringOffline(device, reason = 'disconnected') {
   await sync.updateModemStatus(device.id, { ...device, status: 'offline' });
 }
 
-// ─── Main detection + reconciliation cycle ────────────────────────────────────
+// ─── Main detection + reconciliation cycle (mutex protected) ──────────────────
+let isCycleRunning = false;
 async function runCycle() {
+  if (isCycleRunning) return;
+  isCycleRunning = true;
   log.info('─── Detection cycle ───────────────────────────────');
 
   try {
@@ -289,6 +305,8 @@ async function runCycle() {
 
   } catch (err) {
     log.error('Cycle failed:', err.message, err.stack);
+  } finally {
+    isCycleRunning = false;
   }
 }
 

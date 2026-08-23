@@ -270,6 +270,9 @@ async function expireOldSubscriptions() {
 //  names are automatically marked 'offline' and their proxies set to active: false.
 //
 async function reconcileOnlineModems(activeModemIds = []) {
+  if (!activeModemIds || activeModemIds.length === 0) {
+    return;
+  }
   try {
     const activeSet = new Set(activeModemIds.filter(Boolean));
 
