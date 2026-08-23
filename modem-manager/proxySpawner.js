@@ -50,26 +50,35 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
   try {
     clientSocket.setNoDelay(true);
     serverSocket.setNoDelay(true);
-    clientSocket.setKeepAlive(true, 10000);
-    serverSocket.setKeepAlive(true, 10000);
+    clientSocket.setKeepAlive(true, 5000);
+    serverSocket.setKeepAlive(true, 5000);
   } catch {}
 
+  // High-speed bidirectional stream with kernel backpressure handling (300+ Mbps)
   clientSocket.on('data', (chunk) => {
     recordBandwidth(trackingKey, 0, chunk.length);
     if (!serverSocket.destroyed) {
-      serverSocket.write(chunk);
+      const canWrite = serverSocket.write(chunk);
+      if (!canWrite) clientSocket.pause();
     }
+  });
+  serverSocket.on('drain', () => {
+    clientSocket.resume();
   });
 
   serverSocket.on('data', (chunk) => {
     recordBandwidth(trackingKey, chunk.length, 0);
     if (!clientSocket.destroyed) {
-      clientSocket.write(chunk);
+      const canWrite = clientSocket.write(chunk);
+      if (!canWrite) serverSocket.pause();
     }
+  });
+  clientSocket.on('drain', () => {
+    serverSocket.resume();
   });
 
   clientSocket.on('end', () => { if (!serverSocket.destroyed) serverSocket.end(); });
-  serverSocket.on('end', () => { if (!clientSocket.destroyed) serverSocket.end(); });
+  serverSocket.on('end', () => { if (!clientSocket.destroyed) clientSocket.end(); });
   clientSocket.on('close', () => { if (!serverSocket.destroyed) serverSocket.destroy(); });
   serverSocket.on('close', () => { if (!clientSocket.destroyed) serverSocket.destroy(); });
   clientSocket.on('error', () => { if (!serverSocket.destroyed) serverSocket.destroy(); });

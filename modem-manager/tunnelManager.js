@@ -135,6 +135,9 @@ function buildSshArgs() {
     '-o', 'ServerAliveCountMax=3',     // disconnect if 3 keepalives fail (45s)
     '-o', 'ConnectTimeout=10',
     '-o', 'TCPKeepAlive=yes',
+    '-o', 'IPQoS=throughput',          // optimize TCP buffers for maximum bandwidth
+    '-o', 'Compression=no',            // disable CPU compression bottleneck for maximum speed
+    '-c', 'aes128-gcm@openssh.com,aes128-ctr,chacha20-poly1305@openssh.com', // hardware AES-NI acceleration
     '-p', String(VPS_SSH_PORT),
     '-i', keyPath,
     ...remoteForwards,
