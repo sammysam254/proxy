@@ -194,7 +194,7 @@ async function detectWindowsWifiFallback() {
         devicePath: `wifi:${adapter.name.replace(/\s+/g, '_')}`,
         interface:  adapter.name,
         ipAddress:  adapter.ipv4,
-        operator:   'Wi-Fi Network',
+        operator:   'Residential Wi-Fi',
         iccid:      null,
         signal:     80,
         status:     'online',
@@ -205,6 +205,81 @@ async function detectWindowsWifiFallback() {
         portSet:    null,
       });
     }
+  }
+
+  return detected;
+}
+
+/**
+ * Primary adapter fallback: If computer does not have a dedicated Wi-Fi card or is connected
+ * via LAN/Ethernet, use the primary internet connection to host the 12 residential proxies.
+ */
+async function detectWindowsPrimaryAdapter() {
+  const raw = await run('ipconfig /all', { shell: 'cmd.exe' });
+  if (!raw) return [];
+
+  const detected = [];
+  const lines = raw.split(/\r?\n/);
+  let currentAdapter = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const headerMatch = line.match(/^(\S[^:]+) adapter ([^:]+):/);
+    if (headerMatch) {
+      if (currentAdapter) checkPrimary(currentAdapter);
+      currentAdapter = {
+        type:        headerMatch[1].trim(),
+        name:        headerMatch[2].trim(),
+        description: '',
+        ipv4:        null,
+        hasGateway:  false,
+        connected:   true,
+      };
+      continue;
+    }
+
+    if (!currentAdapter) continue;
+
+    const trimmed = line.trim();
+    if (/^Description/i.test(trimmed)) {
+      currentAdapter.description = (trimmed.match(/:\s*(.+)/) || [])[1]?.trim() || '';
+    } else if (/^IPv4 Address/i.test(trimmed)) {
+      const m = trimmed.match(/(\d+\.\d+\.\d+\.\d+)/);
+      if (m) currentAdapter.ipv4 = m[1];
+    } else if (/^Default Gateway/i.test(trimmed)) {
+      const m = trimmed.match(/(\d+\.\d+\.\d+\.\d+)/);
+      if (m && !m[1].startsWith('0.0.0.0')) currentAdapter.hasGateway = true;
+    } else if (/^Media State/i.test(trimmed)) {
+      if (trimmed.toLowerCase().includes('disconnected')) currentAdapter.connected = false;
+    }
+  }
+
+  if (currentAdapter) checkPrimary(currentAdapter);
+
+  function checkPrimary(adapter) {
+    if (!adapter.connected || !adapter.ipv4 || detected.length > 0) return;
+    if (adapter.ipv4.startsWith('169.254.') || adapter.ipv4.startsWith('127.')) return;
+    if (adapter.ipv4.startsWith('192.168.56.') || adapter.ipv4.startsWith('192.168.57.')) return; // VirtualBox
+    if (adapter.ipv4.startsWith('172.28.') || adapter.ipv4.startsWith('172.29.') || adapter.ipv4.startsWith('172.30.') || adapter.ipv4.startsWith('172.31.')) return; // WSL
+
+    const combined = `${adapter.type} ${adapter.name} ${adapter.description}`.toLowerCase();
+    if (/tailscale|virtualbox|vmware|vethernet|hyper-v|loopback|docker/i.test(combined)) return;
+
+    detected.push({
+      devicePath: `wifi:${adapter.name.replace(/\s+/g, '_')}`,
+      interface:  adapter.name,
+      ipAddress:  adapter.ipv4,
+      operator:   'Residential Network',
+      iccid:      null,
+      signal:     95,
+      status:     'online',
+      label:      `Residential (${adapter.name})`,
+      vendor:     'Computer Network',
+      model:      adapter.description || adapter.name,
+      ssid:       null,
+      isWifi:     true,
+      portSet:    null,
+    });
   }
 
   return detected;
@@ -244,10 +319,16 @@ async function detectWifiWindows() {
     });
   }
 
-  // If netsh wlan didn't find anything or wlansvc is stopped, use fallback
+  // If netsh wlan didn't find anything or wlansvc is stopped, use Wi-Fi fallback
   if (detected.length === 0) {
     const fallback = await detectWindowsWifiFallback();
     detected.push(...fallback);
+  }
+
+  // If still no wireless adapter found, use the computer's primary active internet connection
+  if (detected.length === 0) {
+    const primary = await detectWindowsPrimaryAdapter();
+    detected.push(...primary);
   }
 
   return detected;
