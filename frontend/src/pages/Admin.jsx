@@ -34,7 +34,8 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
   const proxies   = device.proxies || [];
   const isOnline  = device.status === 'online';
   const dataMB    = ((device.data_used_bytes || 0) / (1024 ** 2)).toFixed(1);
-  const isAndroid = type === 'android';
+  const isAndroid = type === 'android' || device.is_android;
+  const isWifi    = type === 'wifi' || device.device_path?.startsWith('wifi:') || device.label?.startsWith('Wi-Fi') || device.operator?.startsWith('Wi-Fi');
 
   const handleRotate = async () => {
     setRotating(true);
@@ -48,12 +49,12 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
     }
   };
 
-  const StatusIcon = isAndroid ? Smartphone : Wifi;
-  const accentColor = isAndroid ? '#8b5cf6' : (isOnline ? '#10b981' : '#ef4444');
+  const StatusIcon = isAndroid ? Smartphone : (isWifi ? Wifi : Server);
+  const accentColor = isAndroid ? '#8b5cf6' : (isWifi ? '#06b6d4' : (isOnline ? '#10b981' : '#ef4444'));
 
   return (
     <div className="card" style={{
-      border: `1px solid ${isOnline ? (isAndroid ? 'rgba(139,92,246,0.25)' : 'rgba(16,185,129,0.2)') : 'var(--clr-border)'}`,
+      border: `1px solid ${isOnline ? (isAndroid ? 'rgba(139,92,246,0.25)' : isWifi ? 'rgba(6,182,212,0.25)' : 'rgba(16,185,129,0.2)') : 'var(--clr-border)'}`,
       position: 'relative',
       overflow: 'hidden',
     }}>
@@ -73,7 +74,7 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-              {device.operator || (isAndroid ? 'Mobile Carrier' : 'Cellular SIM')}
+              {device.operator || (isAndroid ? 'Mobile Carrier' : isWifi ? 'Wi-Fi Network' : 'Cellular SIM')}
             </div>
             <div className="mono" style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
               Serial: #{device.adb_serial || device.device_path || device.id?.slice(0, 8)}
@@ -83,9 +84,17 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
         </div>
 
         <div className="flex items-center gap-sm">
-          {isAndroid && (
+          {isAndroid ? (
             <span className="badge badge-purple">
               <Smartphone size={10} /> Android
+            </span>
+          ) : isWifi ? (
+            <span className="badge badge-blue" style={{ background: 'rgba(6,182,212,0.15)', color: '#06b6d4' }}>
+              <Wifi size={10} /> Wi-Fi
+            </span>
+          ) : (
+            <span className="badge badge-blue">
+              <Server size={10} /> Modem
             </span>
           )}
           <span className={`badge badge-${isOnline ? 'online' : 'offline'}`}>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, Activity, Smartphone, Server, Shield } from 'lucide-react';
 import { getMySubscriptions, requestIpRotation, supabase } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
@@ -98,6 +98,15 @@ function formatBandwidth(gbUsed, gbLimit) {
   return `${usedFormatted} used (Unlimited)`;
 }
 
+export function getProxyCategory(sub) {
+  const modem = sub.proxies?.modems;
+  const isWifi = modem?.device_path?.startsWith('wifi:') || 
+                 modem?.operator?.includes('Wi-Fi') || 
+                 modem?.label?.includes('Wi-Fi') ||
+                 modem?.is_wifi;
+  return isWifi ? 'residential' : 'mobile';
+}
+
 function ProxyCredCard({ sub }) {
   const [expanded, setExpanded] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -115,6 +124,12 @@ function ProxyCredCard({ sub }) {
     ? Math.min(100, (sub.gb_used / sub.gb_limit) * 100)
     : null;
 
+  const category = getProxyCategory(sub);
+  const isResidential = category === 'residential';
+  const CategoryIcon = isResidential ? Wifi : Smartphone;
+  const categoryAccent = isResidential ? '#06b6d4' : '#8b5cf6';
+  const categoryLabel = isResidential ? 'Residential (Wi-Fi)' : 'Mobile (Dedicated)';
+
   const handleRotate = async () => {
     setRotating(true);
     playClickSound();
@@ -130,44 +145,49 @@ function ProxyCredCard({ sub }) {
     }
   };
 
-  const proxyCreds = [
-    {
-      type: 'HTTP/HTTPS',
-      host: proxy?.vps_host,
-      port: proxy?.public_port,
-      note: 'Use in browser proxy settings',
-      chipClass: 'http',
-    },
-  ];
-
   const vpsHost = proxy?.vps_host || 'N/A';
   const port    = proxy?.public_port || 'N/A';
 
   return (
-    <div className={`card card-accent ${isExpired ? 'expired-card' : ''}`} style={{ opacity: isExpired ? 0.6 : 1 }}>
+    <div className={`card card-accent ${isExpired ? 'expired-card' : ''}`} style={{
+      opacity: isExpired ? 0.6 : 1,
+      borderLeft: `4px solid ${categoryAccent}`,
+    }}>
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: '12px' }}>
         <div className="flex items-center gap-md">
           <div style={{
             width: 44, height: 44, borderRadius: 12,
-            background: 'rgba(59,130,246,0.15)',
+            background: `${categoryAccent}18`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Wifi size={20} color="var(--clr-accent)" />
+            <CategoryIcon size={20} color={categoryAccent} />
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '1rem' }}>
-              {(modem?.operator || 'Mobile 4G/5G LTE').replace(/[, \t\r\n]+$/, '').trim() || 'Mobile 4G/5G LTE'}
+              {(modem?.operator || (isResidential ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE')).replace(/[, \t\r\n]+$/, '').trim() || (isResidential ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE')}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
-              <span className="mono" style={{ color: 'var(--clr-accent)' }}>
-                Serial: #{(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:/, '')}
-              </span> · {modem?.ip_address || 'Live SIM IP'}
+              <span className="mono" style={{ color: categoryAccent }}>
+                Serial: #{(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}
+              </span> · {modem?.ip_address || 'Live Proxy IP'}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-sm">
+        <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
+          <span className="badge" style={{
+            background: `${categoryAccent}18`,
+            color: categoryAccent,
+            border: `1px solid ${categoryAccent}33`,
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}>
+            <CategoryIcon size={11} /> {categoryLabel}
+          </span>
           <span className={`badge badge-${isActive ? 'online' : 'offline'}`}>
             <span className="dot" />
             {sub.status}
@@ -239,6 +259,7 @@ function ProxyCredCard({ sub }) {
             </div>
 
             {[
+              { label: 'Category',      value: isResidential ? 'Residential Proxy (Wi-Fi)' : 'Mobile Proxy (Dedicated 4G/5G SIM)' },
               { label: 'Host / IP',     value: vpsHost },
               { label: 'Port',          value: String(port) },
               { label: 'Username',      value: sub.proxy_username },
@@ -297,15 +318,13 @@ export default function Dashboard({ session }) {
   const [subs, setSubs]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [liveUpdate, setLiveUpdate] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'mobile' | 'residential'
   const channelRef = useRef(null);
 
   useEffect(() => {
     loadSubs(true);
 
     // ── Supabase Realtime: instant bandwidth updates ──────────────────
-    // Subscribe to any UPDATE on the subscriptions table for this user.
-    // Every time the backend writes new gb_used data, the dashboard
-    // updates immediately — no 15s polling delay.
     const userId = session?.user?.id;
     if (userId) {
       channelRef.current = supabase
@@ -333,8 +352,6 @@ export default function Dashboard({ session }) {
     }
 
     // ── 5-second polling fallback ─────────────────────────────────────
-    // Ensures bandwidth updates even if Supabase Realtime isn't enabled
-    // on the subscriptions table in the Supabase dashboard.
     const poll = setInterval(() => loadSubs(false), 5000);
 
     return () => {
@@ -352,9 +369,21 @@ export default function Dashboard({ session }) {
     if (showLoader) setLoading(false);
   }
 
-
   const active  = subs.filter(s => s.status === 'active');
   const expired = subs.filter(s => s.status !== 'active');
+
+  const filteredActive = active.filter(s => {
+    if (categoryFilter === 'all') return true;
+    return getProxyCategory(s) === categoryFilter;
+  });
+
+  const filteredExpired = expired.filter(s => {
+    if (categoryFilter === 'all') return true;
+    return getProxyCategory(s) === categoryFilter;
+  });
+
+  const mobileCount = subs.filter(s => getProxyCategory(s) === 'mobile').length;
+  const resCount    = subs.filter(s => getProxyCategory(s) === 'residential').length;
 
   if (loading) return (
     <div className="loading-screen">
@@ -368,7 +397,7 @@ export default function Dashboard({ session }) {
     <main style={{ padding: '40px 0', minHeight: '80vh' }}>
       <div className="container">
         {/* Header */}
-        <div className="flex justify-between items-center mb-xl">
+        <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
               <h1 style={{ fontSize: '2rem', margin: 0 }}>My Proxies</h1>
@@ -401,8 +430,9 @@ export default function Dashboard({ session }) {
         <div className="stats-grid mb-xl">
           {[
             { label: 'Active Proxies',  value: active.length, sub: 'currently running' },
+            { label: 'Mobile Proxies',  value: mobileCount,   sub: 'dedicated cellular' },
+            { label: 'Residential',     value: resCount,      sub: 'routed via Wi-Fi' },
             { label: 'Total Purchased', value: subs.length,   sub: 'all time' },
-            { label: 'Expired',         value: expired.length, sub: 'past plans' },
           ].map(s => (
             <div key={s.label} className="stat-card">
               <div className="stat-label">{s.label}</div>
@@ -412,25 +442,83 @@ export default function Dashboard({ session }) {
           ))}
         </div>
 
+        {/* Subcategories Filter Bar */}
+        {subs.length > 0 && (
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '28px',
+            background: 'var(--clr-surface)',
+            padding: '6px',
+            borderRadius: '12px',
+            border: '1px solid var(--clr-border)',
+            width: 'fit-content',
+            flexWrap: 'wrap',
+          }}>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('all'); }}
+              className={`btn btn-sm ${categoryFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+            >
+              All Proxies ({subs.length})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
+              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Smartphone size={14} /> Mobile Proxies Dedicated ({mobileCount})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
+              className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Wifi size={14} /> Residential Proxies ({resCount})
+            </button>
+          </div>
+        )}
+
         {/* Active subs */}
-        {active.length > 0 && (
+        {filteredActive.length > 0 && (
           <div className="mb-xl">
-            <h2 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>Active Connections</h2>
+            <h2 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>
+              Active Connections
+              <span className="text-muted" style={{ fontSize: '0.9rem', fontWeight: 400, marginLeft: '8px' }}>
+                ({filteredActive.length})
+              </span>
+            </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {active.map(s => <ProxyCredCard key={s.id} sub={s} />)}
+              {filteredActive.map(s => <ProxyCredCard key={s.id} sub={s} />)}
             </div>
           </div>
         )}
 
         {/* Expired subs */}
-        {expired.length > 0 && (
+        {filteredExpired.length > 0 && (
           <div>
             <h2 style={{ fontSize: '1.3rem', marginBottom: '16px', color: 'var(--clr-text-2)' }}>
               Past Subscriptions
+              <span className="text-muted" style={{ fontSize: '0.9rem', fontWeight: 400, marginLeft: '8px' }}>
+                ({filteredExpired.length})
+              </span>
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {expired.map(s => <ProxyCredCard key={s.id} sub={s} />)}
+              {filteredExpired.map(s => <ProxyCredCard key={s.id} sub={s} />)}
             </div>
+          </div>
+        )}
+
+        {/* Empty filter state */}
+        {subs.length > 0 && filteredActive.length === 0 && filteredExpired.length === 0 && (
+          <div className="card" style={{ textAlign: 'center', padding: '48px 20px', marginBottom: '32px' }}>
+            <h3 style={{ marginBottom: '6px' }}>No proxies in this subcategory</h3>
+            <p className="text-muted text-sm" style={{ marginBottom: '16px' }}>
+              You do not have any active or past {categoryFilter === 'residential' ? 'Residential (Wi-Fi)' : 'Mobile Dedicated'} subscriptions.
+            </p>
+            <button className="btn btn-secondary btn-sm" onClick={() => setCategoryFilter('all')}>
+              Show All Proxies
+            </button>
           </div>
         )}
 

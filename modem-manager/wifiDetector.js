@@ -1,0 +1,439 @@
+/**
+ * ProxiCell — Wi-Fi Network Detector
+ * Detects connected Wi-Fi networks (including Mobile Hotspots) on Windows & Linux
+ *
+ * Allows generating proxies from the computer's connected Wi-Fi interface
+ * without needing USB tethering.
+ */
+
+'use strict';
+
+const { exec, execFile } = require('child_process');
+const { promisify }      = require('util');
+const fs                 = require('fs');
+const path               = require('path');
+const execAsync          = promisify(exec);
+
+const IS_WIN = process.platform === 'win32';
+
+// ─── Helper: run command, return stdout or null ────────────────────────────────
+async function run(cmd, opts = {}) {
+  try {
+    const { stdout } = await execAsync(cmd, { timeout: 8000, ...opts });
+    return stdout ? stdout.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Check for ADB path (for optional hotspot airplane-mode rotation) ─────────
+function getAdbBin() {
+  const candidates = [
+    path.join(__dirname, 'bin', 'platform-tools', 'adb.exe'),
+    path.join(__dirname, 'bin', 'platform-tools', 'adb'),
+    path.join(process.cwd(), 'modem-manager', 'bin', 'platform-tools', 'adb.exe'),
+    path.join(process.cwd(), 'bin', 'platform-tools', 'adb.exe'),
+    'adb.exe',
+    'adb',
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return 'adb';
+}
+
+function runAdb(args) {
+  return new Promise((resolve) => {
+    const bin = getAdbBin();
+    execFile(bin, args, { timeout: 8000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      resolve(stdout ? stdout.trim() : null);
+    });
+  });
+}
+
+// =============================================================================
+// ─── WINDOWS WI-FI DETECTION ─────────────────────────────────────────────────
+// =============================================================================
+
+/**
+ * Parses `netsh wlan show interfaces` on Windows.
+ * Returns array of objects with: name, description, ssid, signal, state
+ */
+async function getWindowsWlanInterfaces() {
+  const raw = await run('netsh wlan show interfaces', { shell: 'cmd.exe' });
+  if (!raw) return [];
+
+  const interfaces = [];
+  const blocks = raw.split(/Name\s*:\s*/);
+
+  for (const block of blocks) {
+    if (!block.trim() || block.includes('There is') || block.includes('The Wireless AutoConfig Service')) continue;
+
+    const lines = block.split(/\r?\n/);
+    const ifaceName = lines[0]?.trim();
+    if (!ifaceName) continue;
+
+    const getField = (pattern) => {
+      const match = block.match(pattern);
+      return match ? match[1].trim() : null;
+    };
+
+    const description = getField(/Description\s*:\s*(.+)/i);
+    const state       = getField(/State\s*:\s*(.+)/i);
+    const ssid        = getField(/SSID\s*:\s*(.+)/i);
+    const signalStr   = getField(/Signal\s*:\s*(\d+)%/i);
+    const radioType   = getField(/Radio type\s*:\s*(.+)/i);
+
+    const signal = signalStr ? parseInt(signalStr, 10) : 80;
+
+    interfaces.push({
+      name: ifaceName,
+      description: description || 'Wireless LAN Adapter',
+      state: state || 'unknown',
+      ssid: ssid && ssid !== '(null)' ? ssid : null,
+      signal,
+      radioType,
+    });
+  }
+
+  return interfaces;
+}
+
+/**
+ * Finds IPv4 address for an interface name using netsh or ipconfig
+ */
+async function getIpv4ForInterface(ifaceName) {
+  try {
+    const raw = await run(`netsh interface ipv4 show addresses name="${ifaceName}"`, { shell: 'cmd.exe' });
+    if (raw) {
+      const match = raw.match(/IP Address:\s+([\d.]+)/i);
+      if (match && !match[1].startsWith('169.254.') && !match[1].startsWith('127.')) {
+        return match[1].trim();
+      }
+    }
+  } catch {}
+
+  // Fallback: search in ipconfig /all
+  try {
+    const raw = await run('ipconfig /all', { shell: 'cmd.exe' });
+    if (raw) {
+      const blocks = raw.split(/adapter /i);
+      for (const block of blocks) {
+        if (block.toLowerCase().includes(ifaceName.toLowerCase())) {
+          const m = block.match(/IPv4 Address[.\s]*:\s*([\d.]+)/i);
+          if (m && !m[1].startsWith('169.254.') && !m[1].startsWith('127.')) {
+            return m[1].trim();
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Fallback detection on Windows when WLAN service or netsh is limited:
+ * Checks ipconfig /all for any Wireless adapter with a valid IP.
+ */
+async function detectWindowsWifiFallback() {
+  const raw = await run('ipconfig /all', { shell: 'cmd.exe' });
+  if (!raw) return [];
+
+  const detected = [];
+  const lines = raw.split(/\r?\n/);
+  let currentAdapter = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const headerMatch = line.match(/^(\S[^:]+) adapter ([^:]+):/);
+    if (headerMatch) {
+      if (currentAdapter) {
+        processAdapter(currentAdapter);
+      }
+      currentAdapter = {
+        type:        headerMatch[1].trim(),
+        name:        headerMatch[2].trim(),
+        description: '',
+        ipv4:        null,
+        connected:   true,
+      };
+      continue;
+    }
+
+    if (!currentAdapter) continue;
+
+    const trimmed = line.trim();
+    if (/^Description/i.test(trimmed)) {
+      currentAdapter.description = (trimmed.match(/:\s*(.+)/) || [])[1]?.trim() || '';
+    } else if (/^IPv4 Address/i.test(trimmed)) {
+      const m = trimmed.match(/(\d+\.\d+\.\d+\.\d+)/);
+      if (m) currentAdapter.ipv4 = m[1];
+    } else if (/^Media State/i.test(trimmed)) {
+      if (trimmed.toLowerCase().includes('disconnected')) {
+        currentAdapter.connected = false;
+      }
+    }
+  }
+
+  if (currentAdapter) {
+    processAdapter(currentAdapter);
+  }
+
+  function processAdapter(adapter) {
+    if (!adapter.connected || !adapter.ipv4) return;
+    if (adapter.ipv4.startsWith('169.254.') || adapter.ipv4.startsWith('127.')) return;
+    if (adapter.ipv4.startsWith('192.168.56.') || adapter.ipv4.startsWith('192.168.57.')) return;
+
+    const combined = `${adapter.type} ${adapter.name} ${adapter.description}`.toLowerCase();
+    const isWifi = /wireless|wi-fi|wlan|802\.11/i.test(combined);
+
+    if (isWifi) {
+      detected.push({
+        devicePath: `wifi:${adapter.name.replace(/\s+/g, '_')}`,
+        interface:  adapter.name,
+        ipAddress:  adapter.ipv4,
+        operator:   'Wi-Fi Network',
+        iccid:      null,
+        signal:     80,
+        status:     'online',
+        label:      `Wi-Fi (${adapter.name})`,
+        vendor:     'Wi-Fi Adapter',
+        model:      adapter.description || adapter.name,
+        isWifi:     true,
+        portSet:    null,
+      });
+    }
+  }
+
+  return detected;
+}
+
+/**
+ * Detect all connected Wi-Fi devices on Windows
+ */
+async function detectWifiWindows() {
+  const wlanIfaces = await getWindowsWlanInterfaces();
+  const detected = [];
+
+  for (const iface of wlanIfaces) {
+    if (iface.state !== 'connected') continue;
+
+    const ipv4 = await getIpv4ForInterface(iface.name);
+    if (!ipv4) continue;
+
+    const ssidLabel = iface.ssid || 'Connected';
+    const label = `Wi-Fi: ${ssidLabel}`;
+    const devicePath = `wifi:${iface.name.replace(/\s+/g, '_')}`;
+
+    detected.push({
+      devicePath,
+      interface:  iface.name,
+      ipAddress:  ipv4,
+      operator:   iface.ssid ? `Wi-Fi (${iface.ssid})` : 'Wi-Fi Network',
+      iccid:      null,
+      signal:     iface.signal,
+      status:     'online',
+      label,
+      vendor:     'Wi-Fi',
+      model:      iface.description || 'Wireless Adapter',
+      ssid:       iface.ssid,
+      isWifi:     true,
+      portSet:    null,
+    });
+  }
+
+  // If netsh wlan didn't find anything or wlansvc is stopped, use fallback
+  if (detected.length === 0) {
+    const fallback = await detectWindowsWifiFallback();
+    detected.push(...fallback);
+  }
+
+  return detected;
+}
+
+// =============================================================================
+// ─── LINUX WI-FI DETECTION ───────────────────────────────────────────────────
+// =============================================================================
+
+async function detectWifiLinux() {
+  const detected = [];
+  const ifDir = '/sys/class/net';
+  if (!fs.existsSync(ifDir)) return detected;
+
+  try {
+    const dirs = fs.readdirSync(ifDir);
+    const wifiIfaces = dirs.filter(name => /^(wlan|wlp|wls|wifi)/.test(name));
+
+    for (const iface of wifiIfaces) {
+      const ifPath = `${ifDir}/${iface}`;
+      let operstate = 'down';
+      try {
+        operstate = fs.readFileSync(`${ifPath}/operstate`, 'utf8').trim();
+      } catch {}
+
+      if (operstate !== 'up' && operstate !== 'unknown') continue;
+
+      // Get IP Address
+      const ipOut = await run(`ip addr show ${iface}`);
+      const ipMatch = ipOut && ipOut.match(/inet (\d+\.\d+\.\d+\.\d+)/);
+      const ipAddress = ipMatch ? ipMatch[1] : null;
+      if (!ipAddress || ipAddress.startsWith('127.') || ipAddress.startsWith('169.254.')) continue;
+
+      // Get SSID and Signal quality via iw or iwconfig or nmcli
+      let ssid = null;
+      let signal = 75;
+
+      const iwOut = await run(`iw dev ${iface} link 2>/dev/null`);
+      if (iwOut) {
+        const ssidMatch = iwOut.match(/SSID:\s*(.+)/i);
+        if (ssidMatch) ssid = ssidMatch[1].trim();
+        const sigMatch = iwOut.match(/signal:\s*-(\d+)\s*dBm/i);
+        if (sigMatch) {
+          const dbm = parseInt(sigMatch[1], 10);
+          signal = Math.max(0, Math.min(100, Math.round(((110 - dbm) / 60) * 100)));
+        }
+      }
+
+      if (!ssid) {
+        const iwconfigOut = await run(`iwconfig ${iface} 2>/dev/null`);
+        if (iwconfigOut) {
+          const essidMatch = iwconfigOut.match(/ESSID:"([^"]+)"/);
+          if (essidMatch) ssid = essidMatch[1];
+        }
+      }
+
+      const devicePath = `wifi:${iface}`;
+      detected.push({
+        devicePath,
+        interface:  iface,
+        ipAddress,
+        operator:   ssid ? `Wi-Fi (${ssid})` : 'Wi-Fi Network',
+        iccid:      null,
+        signal,
+        status:     'online',
+        label:      `Wi-Fi: ${ssid || iface}`,
+        vendor:     'Wi-Fi Adapter',
+        model:      `Linux Wireless (${iface})`,
+        ssid,
+        isWifi:     true,
+        portSet:    null,
+      });
+    }
+  } catch (e) {
+    // Non-fatal
+  }
+
+  return detected;
+}
+
+// =============================================================================
+// ─── PUBLIC API ──────────────────────────────────────────────────────────────
+// =============================================================================
+
+const DEFAULT_WIFI_SLOTS = parseInt(process.env.WIFI_PROXY_SLOTS || '12', 10);
+
+/**
+ * Expands physical Wi-Fi connection into multiple distinct proxy slots (default 12 cards)
+ * so customers have multiple endpoints to view, select, and rent.
+ */
+function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
+  const expanded = [];
+  for (const base of rawWifiList) {
+    for (let slot = 1; slot <= slotsCount; slot++) {
+      expanded.push({
+        ...base,
+        devicePath: `${base.devicePath}_slot_${slot}`,
+        label:      `Residential Wi-Fi Node #${slot}${base.ssid ? ` (${base.ssid})` : ''}`,
+        operator:   base.ssid ? `Residential Wi-Fi (${base.ssid})` : `Residential Wi-Fi Node #${slot}`,
+        model:      `${base.model || 'Wi-Fi Adapter'} - Node #${slot}`,
+        slotNumber: slot,
+      });
+    }
+  }
+  return expanded;
+}
+
+/**
+ * Detects all active Wi-Fi connections on current OS and expands to 12 proxy cards.
+ */
+async function detectWifiDevices() {
+  const rawList = IS_WIN ? await detectWifiWindows() : await detectWifiLinux();
+  return expandWifiSlots(rawList);
+}
+
+/**
+ * Rotates the Wi-Fi IP address.
+ * 1. Checks if an Android phone is connected via ADB (even without USB tethering).
+ *    If connected, toggles Airplane mode on the phone to rotate cellular IP for the hotspot!
+ * 2. Otherwise, reconnects to the Wi-Fi network or refreshes DHCP.
+ */
+async function rotateWifiIp(device) {
+  console.log(`[WifiDetector] Initiating IP rotation for Wi-Fi: ${device.label}...`);
+
+  // Check if any ADB devices are connected (e.g. phone generating the mobile hotspot)
+  const adbDevicesOut = await runAdb(['devices']);
+  let rotatedViaAdb = false;
+
+  if (adbDevicesOut) {
+    const lines = adbDevicesOut.split('\n').slice(1);
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 2 && parts[1] === 'device') {
+        const serial = parts[0];
+        console.log(`[WifiDetector] Found Android ADB device (${serial}). Toggling Airplane mode for mobile hotspot IP rotation...`);
+        try {
+          // Toggle Airplane mode on phone
+          await runAdb(['-s', serial, 'shell', 'cmd connectivity airplane-mode enable']).catch(() => {});
+          await runAdb(['-s', serial, 'shell', 'settings put global airplane_mode_on 1']).catch(() => {});
+          await runAdb(['-s', serial, 'shell', 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true']).catch(() => {});
+          await new Promise(r => setTimeout(r, 3000));
+          await runAdb(['-s', serial, 'shell', 'cmd connectivity airplane-mode disable']).catch(() => {});
+          await runAdb(['-s', serial, 'shell', 'settings put global airplane_mode_on 0']).catch(() => {});
+          await runAdb(['-s', serial, 'shell', 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false']).catch(() => {});
+          rotatedViaAdb = true;
+          console.log(`[WifiDetector] Successfully toggled Airplane mode on ADB device ${serial}.`);
+          break;
+        } catch (e) {
+          console.warn(`[WifiDetector] Failed ADB airplane mode toggle:`, e.message);
+        }
+      }
+    }
+  }
+
+  if (!rotatedViaAdb) {
+    console.log(`[WifiDetector] Performing network reconnect / DHCP release-renew for ${device.interface}...`);
+    if (IS_WIN) {
+      if (device.ssid) {
+        await run(`netsh wlan disconnect interface="${device.interface}"`, { shell: 'cmd.exe' });
+        await new Promise(r => setTimeout(r, 2000));
+        await run(`netsh wlan connect name="${device.ssid}" interface="${device.interface}"`, { shell: 'cmd.exe' });
+      } else {
+        await run(`ipconfig /renew "${device.interface}"`, { shell: 'cmd.exe' });
+      }
+    } else {
+      await run(`nmcli device reapply ${device.interface} 2>/dev/null || dhclient -r ${device.interface} && dhclient ${device.interface}`);
+    }
+  }
+
+  // Wait for network to stabilize
+  await new Promise(r => setTimeout(r, 4000));
+
+  // Re-fetch IP
+  const updatedDevices = await detectWifiDevices();
+  const found = updatedDevices.find(d => d.devicePath === device.devicePath || d.interface === device.interface);
+  if (found && found.ipAddress) {
+    device.ipAddress = found.ipAddress;
+    device.signal    = found.signal;
+    device.operator  = found.operator;
+  }
+
+  return device;
+}
+
+module.exports = {
+  detectWifiDevices,
+  expandWifiSlots,
+  rotateWifiIp,
+};

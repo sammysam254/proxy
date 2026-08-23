@@ -15,6 +15,7 @@ export default function ProxiesPage({ session }) {
   const [loading, setLoading]     = useState(true);
   const [selectedPlan, setSelectedPlan]   = useState(null);
   const [selectedProxy, setSelectedProxy] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'mobile' | 'residential'
   const [filterType, setFilterType]       = useState('all');
   const [searchQuery, setSearchQuery]     = useState('');
 
@@ -45,19 +46,32 @@ export default function ProxiesPage({ session }) {
       window.location.href = '/auth?tab=signup';
       return;
     }
-    // Default to the first plan (e.g. Daily or Pay Per GB)
     const defaultPlan = plans.find(p => p.name === 'Daily') || plans[0];
     setSelectedProxy(proxy);
     setSelectedPlan(defaultPlan || null);
   };
 
-  const filteredProxies = proxies.filter(p => {
-    const modem = p.modems;
-    if (modem?.status !== 'online') return false;
+  const isProxyWifi = (p) => {
+    const m = p.modems;
+    return m?.device_path?.startsWith('wifi:') || 
+           m?.operator?.includes('Wi-Fi') || 
+           m?.label?.includes('Wi-Fi') ||
+           m?.is_wifi;
+  };
+
+  const onlineProxies = proxies.filter(p => p.modems?.status === 'online');
+  const mobileCount   = onlineProxies.filter(p => !isProxyWifi(p)).length;
+  const resCount      = onlineProxies.filter(p => isProxyWifi(p)).length;
+
+  const filteredProxies = onlineProxies.filter(p => {
+    const isWifi = isProxyWifi(p);
+    const subcategory = isWifi ? 'residential' : 'mobile';
+
+    if (categoryFilter !== 'all' && subcategory !== categoryFilter) return false;
 
     const matchesSearch = !searchQuery || 
-      (modem?.label && modem.label.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (modem?.operator && modem.operator.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.modems?.label && p.modems.label.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.modems?.operator && p.modems.operator.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (p.proxy_type && p.proxy_type.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesType = filterType === 'all' || p.proxy_type === filterType;
@@ -72,10 +86,10 @@ export default function ProxiesPage({ session }) {
           <div className="flex justify-between items-center mb-lg" style={{ flexWrap: 'wrap', gap: '16px' }}>
             <div>
               <h1 style={{ fontSize: 'clamp(1.6rem, 4vw, 2.2rem)', marginBottom: '4px' }}>
-                Available Mobile Proxies
+                Proxy Marketplace
               </h1>
               <p className="text-muted text-sm">
-                Dedicated 4G/5G mobile SIM card endpoints ready for instant rent & connection
+                Dedicated 4G/5G mobile SIM endpoints & residential Wi-Fi proxies ready for instant connection
               </p>
             </div>
             <button
@@ -88,6 +102,41 @@ export default function ProxiesPage({ session }) {
             </button>
           </div>
 
+          {/* Subcategories Selector */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '20px',
+            background: 'var(--clr-surface)',
+            padding: '6px',
+            borderRadius: '12px',
+            border: '1px solid var(--clr-border)',
+            width: 'fit-content',
+            flexWrap: 'wrap',
+          }}>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('all'); }}
+              className={`btn btn-sm ${categoryFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+            >
+              All Proxies ({onlineProxies.length})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
+              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Smartphone size={14} /> Mobile Proxies Dedicated ({mobileCount})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
+              className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Wifi size={14} /> Residential Proxies ({resCount})
+            </button>
+          </div>
+
           {/* Search & Filter bar */}
           <div className="card mb-xl" style={{ padding: '16px 20px' }}>
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -95,7 +144,7 @@ export default function ProxiesPage({ session }) {
                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--clr-text-3)' }} />
                 <input
                   type="text"
-                  placeholder="Search by carrier, device model, or type..."
+                  placeholder="Search by carrier, network, or serial..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="input"
@@ -122,16 +171,18 @@ export default function ProxiesPage({ session }) {
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
               <div className="loader" style={{ margin: '0 auto 16px' }} />
-              <div className="text-muted">Loading live mobile hardware...</div>
+              <div className="text-muted">Loading live proxy network...</div>
             </div>
           ) : filteredProxies.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '50px 20px' }}>
               <Wifi size={40} style={{ color: 'var(--clr-text-3)', margin: '0 auto 16px' }} />
               <h3 style={{ marginBottom: '6px' }}>No Proxies Found</h3>
               <p className="text-muted text-sm" style={{ maxWidth: '400px', margin: '0 auto 20px' }}>
-                Try adjusting your search query or protocol filter.
+                {categoryFilter !== 'all' 
+                  ? `No live ${categoryFilter === 'residential' ? 'Residential (Wi-Fi)' : 'Mobile Dedicated'} proxies currently online.`
+                  : 'Try adjusting your search query or protocol filter.'}
               </p>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setSearchQuery(''); setFilterType('all'); }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setSearchQuery(''); setFilterType('all'); setCategoryFilter('all'); }}>
                 Reset Filters
               </button>
             </div>
@@ -140,11 +191,16 @@ export default function ProxiesPage({ session }) {
               {filteredProxies.map(p => {
                 const modem = p.modems;
                 const isOnline = modem?.status === 'online';
+                const isWifi = isProxyWifi(p);
 
-                const rawOp = modem?.operator || 'Mobile 4G/5G LTE';
-                const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || 'Mobile 4G/5G LTE';
-                const rawSerial = modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:/, '') : '') || p.id.slice(0, 8);
-                const serial = rawSerial.replace(/^android:/, '');
+                const rawOp = modem?.operator || (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE');
+                const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE');
+                const rawSerial = modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || p.id.slice(0, 8);
+                const serial = rawSerial.replace(/^android:|^wifi:/, '');
+
+                const accentColor = isWifi ? '#06b6d4' : '#8b5cf6';
+                const CardIcon    = isWifi ? Wifi : Smartphone;
+                const subcategoryLabel = isWifi ? 'Residential (Wi-Fi)' : 'Mobile Dedicated';
 
                 return (
                   <div
@@ -154,35 +210,49 @@ export default function ProxiesPage({ session }) {
                       display: 'flex',
                       flexDirection: 'column',
                       position: 'relative',
-                      border: isOnline ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--clr-border)',
-                      background: isOnline ? 'linear-gradient(135deg, rgba(16,185,129,0.04) 0%, rgba(59,130,246,0.04) 100%)' : 'var(--clr-surface)',
+                      border: isOnline ? `1px solid ${accentColor}44` : '1px solid var(--clr-border)',
+                      background: isOnline ? `linear-gradient(135deg, ${accentColor}0a 0%, rgba(59,130,246,0.04) 100%)` : 'var(--clr-surface)',
                     }}
                   >
                     {/* Header */}
-                    <div className="flex justify-between items-center" style={{ marginBottom: '14px' }}>
+                    <div className="flex justify-between items-center" style={{ marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                       <div className="flex items-center gap-sm">
                         <div style={{
                           width: 36, height: 36, borderRadius: 'var(--radius-md)',
-                          background: 'rgba(59,130,246,0.15)',
-                          color: 'var(--clr-accent)',
+                          background: `${accentColor}18`,
+                          color: accentColor,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                          <Wifi size={18} />
+                          <CardIcon size={18} />
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
                             {carrier}
                           </div>
-                          <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--clr-accent)' }}>
+                          <div className="mono" style={{ fontSize: '0.75rem', color: accentColor }}>
                             Serial: #{serial}
                           </div>
                         </div>
                       </div>
 
-                      <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.75rem' }}>
-                        <span className="dot" />
-                        {isOnline ? 'Online' : 'Standby'}
-                      </span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span className="badge" style={{
+                          background: `${accentColor}18`,
+                          color: accentColor,
+                          border: `1px solid ${accentColor}33`,
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                        }}>
+                          <CardIcon size={10} /> {subcategoryLabel}
+                        </span>
+                        <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
+                          <span className="dot" />
+                          {isOnline ? 'Online' : 'Standby'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Specs / Details */}
@@ -205,7 +275,7 @@ export default function ProxiesPage({ session }) {
 
                       <div>
                         <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Network Type</div>
-                        <div style={{ fontWeight: 600 }}>4G LTE / 5G</div>
+                        <div style={{ fontWeight: 600 }}>{isWifi ? 'Residential Wi-Fi' : 'Dedicated 4G/5G'}</div>
                       </div>
 
                       <div>

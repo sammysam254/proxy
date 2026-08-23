@@ -19,9 +19,17 @@ const cron     = require('node-cron');
 const chalk    = require('chalk');
 const detector = require('./modemDetector');
 const android  = require('./androidDetector');
+const wifi     = require('./wifiDetector');
 const spawner  = require('./proxySpawner');
 const tunnel   = require('./tunnelManager');
 const sync     = require('./supabaseSync');
+
+// ─── Device Type Helper ───────────────────────────────────────────────────────
+function getDeviceTag(device) {
+  if (device.isAndroid) return '📱 Android';
+  if (device.isWifi)    return '📶 Wi-Fi';
+  return '📡 Modem';
+}
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 const log = {
@@ -34,7 +42,7 @@ const log = {
 
 // ─── Device Registry ──────────────────────────────────────────────────────────
 //
-//  key: devicePath  (e.g. /dev/ttyUSB0, android:R52RA2345AB, android:tether:rndis0)
+//  key: devicePath  (e.g. /dev/ttyUSB0, android:R52RA2345AB, wifi:Wi-Fi)
 //  val: { ...modemFields, state, portIndex, portSet, id }
 //
 //  state: 'pending' | 'proxying'
@@ -95,13 +103,13 @@ function fetchPublicIp(localAddress) {
 
 // ─── Bring a device fully online (start proxy + tunnel) ──────────────────────
 async function bringOnline(device) {
-  log.ok(`[${device.isAndroid ? '📱 Android' : '📡 Modem'}] Bringing online: ${device.label}`);
+  log.ok(`[${getDeviceTag(device)}] Bringing online: ${device.label}`);
   
-  // 1. Fetch public SIM IP
+  // 1. Fetch public IP
   const publicIp = await fetchPublicIp(device.ipAddress);
   device.publicIp = publicIp || device.ipAddress;
 
-  log.ok(`  ↳ Public SIM IP: ${device.publicIp} (Local Interface: ${device.ipAddress})`);
+  log.ok(`  ↳ Public IP: ${device.publicIp} (Local Interface: ${device.ipAddress})`);
   log.ok(`  ↳ HTTP :${device.portSet.http}  SOCKS4 :${device.portSet.socks4}  SOCKS5 :${device.portSet.socks5}`);
   log.ok(`  ↳ VPS  HTTP :${device.portSet.publicHttp}  SOCKS4 :${device.portSet.publicSocks4}  SOCKS5 :${device.portSet.publicSocks5}`);
 
@@ -111,7 +119,7 @@ async function bringOnline(device) {
   // 3. Open reverse-tunnel ports on VPS
   await tunnel.addTunnelPorts(device);
 
-  // 4. Update state & sync real public cellular IP with Supabase
+  // 4. Update state & sync real public IP with Supabase
   device.state = 'proxying';
   await sync.updateModemStatus(device.id, {
     ...device,
@@ -126,7 +134,7 @@ async function bringOnline(device) {
 async function bringOffline(device, reason = 'disconnected') {
   if (device.state !== 'proxying') return; // already offline
 
-  log.warn(`[${device.isAndroid ? '📱 Android' : '📡 Modem'}] Going offline: ${device.label} (${reason})`);
+  log.warn(`[${getDeviceTag(device)}] Going offline: ${device.label} (${reason})`);
 
   await spawner.stopProxy(device);
   await tunnel.removeTunnelPorts(device);
@@ -144,29 +152,34 @@ async function runCycle() {
 
   try {
     // ── 1. Detect all devices in parallel ─────────────────────────────────
-    const [usbDetected, androidDetected] = await Promise.all([
+    const [usbDetected, androidDetected, wifiDetected] = await Promise.all([
       detector.detectModems().catch(e => { log.warn('USB detection error:', e.message); return []; }),
       android.detectAndroidDevices().catch(e => { log.warn('Android detection error:', e.message); return []; }),
+      wifi.detectWifiDevices().catch(e => { log.warn('Wi-Fi detection error:', e.message); return []; }),
     ]);
 
     androidDetected.forEach(d => { d.isAndroid = true; });
+    wifiDetected.forEach(d => { d.isWifi = true; });
 
-    // ── Deduplicate: if a Windows USB adapter and an ADB Android device share
-    //    the same IP, prefer the Android (ADB) entry — it has richer metadata.
-    const androidIps = new Set(androidDetected.filter(d => d.ipAddress).map(d => d.ipAddress));
+    // ── Deduplicate: if an Android device or Wi-Fi adapter shares the same IP as a generic USB entry,
+    //    prefer Android or Wi-Fi.
+    const knownIps = new Set([
+      ...androidDetected.filter(d => d.ipAddress).map(d => d.ipAddress),
+      ...wifiDetected.filter(d => d.ipAddress).map(d => d.ipAddress),
+    ]);
     const filteredUsb = usbDetected.filter(d => {
-      if (d.ipAddress && androidIps.has(d.ipAddress)) {
-        log.info(`Dedup: skipping USB adapter ${d.interface} (${d.ipAddress}) — already covered by Android ADB device`);
+      if (d.ipAddress && knownIps.has(d.ipAddress)) {
+        log.info(`Dedup: skipping USB adapter ${d.interface} (${d.ipAddress}) — already covered by Android/Wi-Fi`);
         return false;
       }
       return true;
     });
 
-    const detected = [...filteredUsb, ...androidDetected];
+    const detected = [...filteredUsb, ...androidDetected, ...wifiDetected];
 
     const onlineCount  = detected.filter(d => d.ipAddress).length;
     const offlineCount = detected.length - onlineCount;
-    log.info(`Found: ${filteredUsb.length} USB modem(s) + ${androidDetected.length} Android device(s)`);
+    log.info(`Found: ${filteredUsb.length} USB modem(s) + ${androidDetected.length} Android device(s) + ${wifiDetected.length} Wi-Fi connection(s)`);
     log.info(`Status: ${onlineCount} online, ${offlineCount} offline / no IP yet`);
 
     const detectedPaths = new Set(detected.map(d => d.devicePath));
@@ -188,7 +201,7 @@ async function runCycle() {
 
       if (!existing) {
         // ── NEW device — register and assign ports ────────────────────────
-        const deviceType = freshDevice.isAndroid ? '📱 Android' : '📡 Modem';
+        const deviceType = getDeviceTag(freshDevice);
         log.device(`New ${deviceType} detected: ${freshDevice.label}`);
 
         freshDevice.portSet   = assignPorts();
@@ -332,7 +345,7 @@ function printStatusTable() {
   console.log(chalk.cyan('  ├─────────────────────────────────────────────────────────────────────┤'));
 
   for (const d of devices) {
-    const type    = d.isAndroid ? 'Android' : 'Modem  ';
+    const type    = d.isAndroid ? 'Android' : (d.isWifi ? 'Wi-Fi  ' : 'Modem  ');
     const status  = d.state === 'proxying'
       ? chalk.green('LIVE    ')
       : chalk.yellow('PENDING ');
@@ -350,8 +363,8 @@ function printStatusTable() {
 
 // ─── Wait for at least one device to appear (boot-time race condition fix) ─────
 //
-//  After a reboot, Windows takes 10-60 seconds to assign DHCP IPs to USB/Android
-//  tethered adapters. If we scan immediately, ipconfig returns no device yet.
+//  After a reboot, Windows takes 10-60 seconds to assign DHCP IPs to USB/Android/Wi-Fi
+//  adapters. If we scan immediately, ipconfig returns no device yet.
 //  This function retries detection until a device is found or the timeout expires.
 //
 async function waitForDevices(maxWaitMs = 120_000, intervalMs = 8_000) {
@@ -360,15 +373,16 @@ async function waitForDevices(maxWaitMs = 120_000, intervalMs = 8_000) {
 
   while (Date.now() < deadline) {
     attempt++;
-    log.info(`Boot scan attempt #${attempt} — waiting for USB/Android adapters to get IPs...`);
+    log.info(`Boot scan attempt #${attempt} — waiting for network/modem/Wi-Fi adapters to get IPs...`);
 
-    const [usbDevices, androidDevices] = await Promise.all([
+    const [usbDevices, androidDevices, wifiDevices] = await Promise.all([
       detector.detectModems().catch(() => []),
       android.detectAndroidDevices().catch(() => []),
+      wifi.detectWifiDevices().catch(() => []),
     ]);
 
-    const total = usbDevices.length + androidDevices.length;
-    const withIp = [...usbDevices, ...androidDevices].filter(d => d.ipAddress).length;
+    const total = usbDevices.length + androidDevices.length + wifiDevices.length;
+    const withIp = [...usbDevices, ...androidDevices, ...wifiDevices].filter(d => d.ipAddress).length;
 
     if (withIp > 0) {
       log.ok(`✅ Found ${withIp} device(s) with live IPs after ${attempt} attempt(s). Proceeding!`);
@@ -507,23 +521,25 @@ function startRotationListener() {
 // ─── Execute IP rotation for a device ─────────────────────────────────────────
 async function executeRotation(device) {
   try {
-    log.info(`Rotating IP: ${device.label} (${device.isAndroid ? 'Android' : 'Modem'})...`);
+    log.info(`Rotating IP: ${device.label} (${getDeviceTag(device)})...`);
 
     // 1. Bring proxy offline during rotation
     await bringOffline(device, 'IP rotation');
 
-    // 2. Trigger rotation on hardware
+    // 2. Trigger rotation on hardware / network
     if (device.isAndroid) {
       await android.rotateAndroidIp(device);
+    } else if (device.isWifi) {
+      await wifi.rotateWifiIp(device);
     } else {
       await detector.rotateModemIp(device);
     }
 
-    // 3. Wait for cellular network negotiation and local DHCP assignment
+    // 3. Wait for network negotiation and local DHCP assignment
     await new Promise(r => setTimeout(r, 4000));
 
     if (device.ipAddress) {
-      // 4. Fetch the NEW public cellular SIM IP
+      // 4. Fetch the NEW public IP
       const newPublicIp = await fetchPublicIp(device.ipAddress);
       device.publicIp = newPublicIp || device.ipAddress;
 
@@ -613,7 +629,7 @@ function startWebhookServer() {
           const statusList = [...registry.values()].map(d => ({
             id:         d.id,
             label:      d.label,
-            type:       d.isAndroid ? 'android' : 'modem',
+            type:       d.isAndroid ? 'android' : (d.isWifi ? 'wifi' : 'modem'),
             state:      d.state,
             ip:         d.ipAddress,
             interface:  d.interface,
