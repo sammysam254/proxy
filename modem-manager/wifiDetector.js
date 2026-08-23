@@ -425,7 +425,7 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
     for (let slot = 1; slot <= slotsCount; slot++) {
       expanded.push({
         ...base,
-        devicePath: `${base.devicePath}_slot_${slot}`,
+        devicePath: `residential_usa_slot_${slot}`,
         label:      `USA Residential Proxy #${slot}`,
         operator:   'United States (USA) 🇺🇸',
         model:      `USA High-Speed Residential Node #${slot}`,
