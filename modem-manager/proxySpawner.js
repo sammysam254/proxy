@@ -85,11 +85,18 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
   serverSocket.on('error', () => { if (!clientSocket.destroyed) serverSocket.destroy(); });
 }
 
+const httpKeepAliveAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 2048,
+  maxFreeSockets: 512,
+  timeout: 60000,
+  keepAliveMsecs: 10000,
+});
+
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
 function createHttpProxy(modem, port) {
   const exitIp    = modem.ipAddress;
   const modemId   = modem.id || modem.devicePath;
-  // Use modem.id as the bandwidth tracking key (consistent across all device types)
   const trackKey  = modemId;
 
   const server = http.createServer((req, res) => {
@@ -120,25 +127,20 @@ function createHttpProxy(modem, port) {
       path:         parsed.path,
       method:       req.method,
       headers:      req.headers,
-      localAddress: exitIp && exitIp !== '0.0.0.0' ? exitIp : undefined,
+      agent:        httpKeepAliveAgent,
+      localAddress: exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.') ? exitIp : undefined,
     };
 
     delete options.headers['proxy-authorization'];
 
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.on('data', chunk => {
-        recordBandwidth(trackKey, chunk.length, 0);
-        res.write(chunk);
-      });
-      proxyRes.on('end', () => res.end());
+      proxyRes.on('data', chunk => recordBandwidth(trackKey, chunk.length, 0));
+      proxyRes.pipe(res);
     });
 
-    req.on('data', chunk => {
-      recordBandwidth(trackKey, 0, chunk.length);
-      proxyReq.write(chunk);
-    });
-    req.on('end', () => proxyReq.end());
+    req.on('data', chunk => recordBandwidth(trackKey, 0, chunk.length));
+    req.pipe(proxyReq);
 
     proxyReq.on('error', () => {
       if (!res.headersSent) res.writeHead(502);
@@ -148,6 +150,11 @@ function createHttpProxy(modem, port) {
 
   // 3. Handle HTTPS CONNECT Tunnels
   server.on('connect', (req, clientSocket, head) => {
+    try {
+      clientSocket.setNoDelay(true);
+      clientSocket.setKeepAlive(true, 5000);
+    } catch {}
+
     const authHeader = req.headers['proxy-authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
@@ -212,6 +219,11 @@ function createSocksProxy(modem, port, isSocks4 = false) {
   const trackKey  = modemId;
 
   const server = net.createServer((socket) => {
+    try {
+      socket.setNoDelay(true);
+      socket.setKeepAlive(true, 5000);
+    } catch {}
+
     socket.once('data', (firstChunk) => {
       const version = firstChunk[0];
 
@@ -259,6 +271,10 @@ function createSocksProxy(modem, port, isSocks4 = false) {
           }
 
           const outbound = net.connect(opts, () => {
+            try {
+              outbound.setNoDelay(true);
+              outbound.setKeepAlive(true, 5000);
+            } catch {}
             socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
             forwardStreams(socket, outbound, trackKey);
           });
@@ -335,6 +351,10 @@ function handleSocks5Request(socket, modem, exitIp, trackKey) {
       }
 
       const outbound = net.connect(opts, () => {
+        try {
+          outbound.setNoDelay(true);
+          outbound.setKeepAlive(true, 5000);
+        } catch {}
         // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
         const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
         socket.write(resp, () => {
