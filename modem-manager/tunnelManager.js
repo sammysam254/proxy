@@ -105,6 +105,7 @@ async function cleanRemoteVpsPorts() {
     const remoteCmd = [
       'fuser -k -9 41000:43050/tcp 2>/dev/null || true',
       'pkill -9 -f "sshd:.*@notty" 2>/dev/null || true',
+      'sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_wmem="4096 65536 16777216" net.ipv4.tcp_window_scaling=1 2>/dev/null || true',
       'mkdir -p /etc/ssh/sshd_config.d',
       'echo "GatewayPorts yes" > /etc/ssh/sshd_config.d/99-proxicell.conf 2>/dev/null || true',
       'grep -q "^GatewayPorts yes" /etc/ssh/sshd_config 2>/dev/null || (echo "GatewayPorts yes" >> /etc/ssh/sshd_config 2>/dev/null && (systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true))',
