@@ -9,11 +9,27 @@ cd /d "%SCRIPT_DIR%"
 :: Check if modem-manager exists locally
 if exist "%SCRIPT_DIR%modem-manager\index.js" goto :run_local
 
-:: Standalone runner detected (e.g. running from Downloads or Temp)
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install.ps1"
-if errorlevel 1 (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/sammysam254/proxy/main/install.ps1 | iex"
+:: Standalone runner detected (e.g. running from Downloads or Temp without full repository)
+echo ================================================================
+echo        VERTEX PROXIES -- STANDALONE INSTALLER
+echo ================================================================
+echo [*] Standalone mode detected. Initializing installation...
+echo.
+
+if exist "%SCRIPT_DIR%install.ps1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install.ps1"
+) else (
+    echo [*] Fetching complete Vertex Proxies codebase and dependencies from GitHub...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; irm https://raw.githubusercontent.com/sammysam254/proxy/main/install.ps1 | iex"
 )
+
+if exist "C:\proxy\modem-manager\index.js" (
+    echo.
+    echo [OK] Installation complete. Launching Vertex Proxies...
+    cd /d "C:\proxy\modem-manager"
+    node index.js
+)
+
 pause
 exit /b 0
 
