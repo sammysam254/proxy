@@ -34,6 +34,7 @@ function DeviceCard({ device, onRotate, type = 'modem' }) {
   const proxies   = device.proxies || [];
   const isOnline  = device.status === 'online';
   const dataMB    = ((device.data_used_bytes || 0) / (1024 ** 2)).toFixed(1);
+  const isAndroid = type === 'android' || Boolean(device.is_android);
   const isWifi    = type === 'wifi' || device.is_wifi || device.device_path?.startsWith('wifi:') || device.device_path?.includes('residential') || device.label?.toLowerCase().includes('residential') || device.label?.toLowerCase().includes('wi-fi') || device.operator?.toLowerCase().includes('residential') || device.operator?.toLowerCase().includes('wi-fi') || !device.is_android;
 
   const handleRotate = async () => {

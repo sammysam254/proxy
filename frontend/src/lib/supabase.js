@@ -185,16 +185,20 @@ export async function requestIpRotation(subscriptionId) {
 }
 
 export async function isAdmin(userId, userEmail) {
-  if (userEmail && userEmail.toLowerCase() === 'sammyseth260@gmail.com') return true;
+  if (userEmail && userEmail.toLowerCase().trim() === 'sammyseth260@gmail.com') return true;
   if (!userId) return false;
 
-  const { data } = await supabase
-    .from('customers')
-    .select('is_admin, email')
-    .eq('id', userId)
-    .single();
+  try {
+    const { data } = await supabase
+      .from('customers')
+      .select('is_admin, email')
+      .eq('id', userId)
+      .maybeSingle();
 
-  return data?.is_admin === true || data?.email?.toLowerCase() === 'sammyseth260@gmail.com';
+    return data?.is_admin === true || data?.email?.toLowerCase().trim() === 'sammyseth260@gmail.com';
+  } catch {
+    return false;
+  }
 }
 
 export async function activateSubscription(orderId, planId, proxyId, paymentMethod, paymentRef) {

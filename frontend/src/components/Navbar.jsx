@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { signOut } from '../lib/supabase';
+import { signOut, isAdmin } from '../lib/supabase';
 import { Wifi, LogOut, LayoutDashboard, Shield, Menu, X, Server } from 'lucide-react';
 
 export default function Navbar({ session }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [adminUser, setAdminUser] = useState(false);
   const isActive = (path) => location.pathname === path ? 'nav-link active' : 'nav-link';
+
+  // Check admin privileges
+  useEffect(() => {
+    if (session?.user?.id) {
+      isAdmin(session.user.id, session.user.email).then(setAdminUser);
+    } else {
+      setAdminUser(false);
+    }
+  }, [session]);
 
   // Close mobile menu on page navigation
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -49,9 +59,11 @@ export default function Navbar({ session }) {
                   <LayoutDashboard size={15} />
                   Dashboard
                 </Link>
-                <Link to="/admin" className="btn btn-ghost btn-sm">
-                  <Shield size={15} />
-                </Link>
+                {adminUser && (
+                  <Link to="/admin" className="btn btn-ghost btn-sm" title="Admin Panel">
+                    <Shield size={15} color="#8b5cf6" />
+                  </Link>
+                )}
                 <button onClick={handleSignOut} className="btn btn-secondary btn-sm">
                   <LogOut size={14} />
                   Sign Out
