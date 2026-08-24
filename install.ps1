@@ -215,33 +215,32 @@ if (Test-Path "$modemDir\node_modules\dotenv\package.json") {
     Write-Host "[OK] Dependencies ready." -ForegroundColor Green
 }
 
-# 8. Setup Auto-Start
-try {
-    $sFolder = [Environment]::GetFolderPath('Startup')
-    $sFile = Join-Path $sFolder 'VertexProxies.lnk'
-    $w = New-Object -ComObject WScript.Shell
-    $sc = $w.CreateShortcut($sFile)
-    $sc.TargetPath = 'wscript.exe'
-    $sc.Arguments = "`"$projDir\start-hidden.vbs`""
-    $sc.WorkingDirectory = $projDir
-    $sc.Description = 'Vertex Proxies Auto-Start'
-    $sc.Save()
-    Write-Host "[OK] Windows Boot Auto-Start configured." -ForegroundColor Green
-} catch {}
+# 8. Setup Auto-Start Background Service
+$svcScript = "$projDir\service-install.ps1"
+if (Test-Path $svcScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $svcScript
+} else {
+    try {
+        $sFolder = [Environment]::GetFolderPath('Startup')
+        $sFile = Join-Path $sFolder 'VertexProxies.lnk'
+        $w = New-Object -ComObject WScript.Shell
+        $sc = $w.CreateShortcut($sFile)
+        $sc.TargetPath = 'wscript.exe'
+        $sc.Arguments = "`"$projDir\start-hidden.vbs`""
+        $sc.WorkingDirectory = $projDir
+        $sc.Description = 'Vertex Proxies Auto-Start'
+        $sc.Save()
+        Write-Host "[OK] Windows Boot Auto-Start configured." -ForegroundColor Green
+    } catch {}
+}
 
-# 9. Start High-Speed Wi-Fi Proxy Engine
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host "  [SUCCESS] SYSTEM INITIALIZED & READY                          " -ForegroundColor Green
-Write-Host "  Starting Vertex Proxies High-Speed Wi-Fi Engine (USA)...      " -ForegroundColor Yellow
+Write-Host "  [SUCCESS] SYSTEM INITIALIZED & RUNNING AS BACKGROUND SERVICE  " -ForegroundColor Green
 Write-Host "  VPS Host:       64.227.3.211                                  " -ForegroundColor Cyan
 Write-Host "  Web Dashboard:  https://proxyke.netlify.app                   " -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
+Write-Host "The service is running silently in the background." -ForegroundColor White
+Write-Host "Use 'service-status.bat' to check status or 'view-logs.bat' to see live logs." -ForegroundColor Gray
 
-Start-Process -WindowStyle Hidden -FilePath 'node' -ArgumentList 'bandwidthTracker.js' -WorkingDirectory $modemDir
-Write-Host "[OK] Bandwidth Tracker running in background." -ForegroundColor Green
-Write-Host ""
-
-Set-Location $modemDir
-node index.js

@@ -16,6 +16,18 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const { execSync }    = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
+const { sendLog }      = require('./supabaseSync');
+
+const origLog = console.log;
+console.log = (...args) => {
+  origLog(...args);
+  try {
+    const text = args.join(' ');
+    if (text.includes('[BandwidthTracker]')) {
+      sendLog('info', text, 'bandwidth');
+    }
+  } catch (_) {}
+};
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zsfijzjzioaragnlopgn.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;

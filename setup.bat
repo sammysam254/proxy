@@ -108,23 +108,12 @@ if not exist "%PROJ_DIR%modem-manager\node_modules" (
     echo [OK] Dependencies verified.
 )
 
-:: 5. Register Startup
-powershell -NoProfile -Command "$sFolder = [Environment]::GetFolderPath('Startup'); $sFile = Join-Path $sFolder 'VertextProxies.lnk'; $w = New-Object -ComObject WScript.Shell; $sc = $w.CreateShortcut($sFile); $sc.TargetPath = 'wscript.exe'; $sc.Arguments = '\"%PROJ_DIR%start-hidden.vbs\"'; $sc.WorkingDirectory = '%PROJ_DIR%'; $sc.Description = 'Vertext Proxies Auto-Start'; $sc.Save()" >nul 2>&1
-echo [OK] Windows Boot Auto-Start configured.
+:: 5. Register Background Service and Auto-Start
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJ_DIR%service-install.ps1"
 
-:: 6. Start Engine
-echo ================================================================
-echo   [SUCCESS] SYSTEM INITIALIZED AND READY
-echo   Starting Vertext Proxies High-Speed Wi-Fi Engine (USA)...
-echo   VPS Host:       64.227.3.211
-echo   Web Dashboard:  https://vertext.site
-echo ================================================================
-echo.
+:: 6. Complete & Auto-Close
+echo [*] System initialized. Background service is active and streaming live logs to web dashboard.
+echo [*] Auto-closing terminal...
+timeout /t 1 >nul
+exit /b 0
 
-cd /d "%PROJ_DIR%modem-manager"
-powershell -NoProfile -WindowStyle Hidden -Command "Start-Process -WindowStyle Hidden -FilePath 'node' -ArgumentList 'bandwidthTracker.js' -WorkingDirectory '%PROJ_DIR%modem-manager'" >nul 2>&1
-echo [OK] Bandwidth Tracker running in background.
-echo.
-
-node index.js
-pause

@@ -25,14 +25,20 @@ bash vps-setup.sh
 
 ### Step 2: Set Up Local Machine (where modems / Android phones plug in)
 
-#### On Windows:
-1. Open PowerShell or Command Prompt as Administrator:
+#### On Windows (Silent Background Service & Boot Auto-Start):
+1. Run `install-service.bat` (or open Command Prompt as Administrator):
    ```cmd
-   git clone https://github.com/sammysam254/proxy.git
-   cd proxy
-   setup.bat
+   install-service.bat
    ```
-2. To start the proxy system anytime later, double-click `start.bat`.
+   This registers Vertex Proxies as a persistent Windows Background Service with auto-start on boot & logon.
+
+2. **Windows Service Management Commands**:
+   - `service-status.bat` — Check running status, process PIDs, and active tunnels.
+   - `service-start.bat` — Start the proxy service silently in the background.
+   - `service-stop.bat` — Stop the background service.
+   - `service-restart.bat` — Restart the background service cleanly.
+   - `view-logs.bat` — Stream live logs from `logs/service.log`.
+   - `service-uninstall.bat` — Remove from Windows startup and task scheduler.
 
 #### On Linux (Ubuntu / Debian / VirtualBox):
 ```bash

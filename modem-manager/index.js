@@ -32,11 +32,11 @@ function getDeviceTag(device) {
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 const log = {
-  info:  (...a) => console.log(chalk.blue('[INFO]'),   new Date().toISOString(), ...a),
-  ok:    (...a) => console.log(chalk.green('[OK]'),    new Date().toISOString(), ...a),
-  warn:  (...a) => console.log(chalk.yellow('[WARN]'), new Date().toISOString(), ...a),
-  error: (...a) => console.error(chalk.red('[ERR]'),   new Date().toISOString(), ...a),
-  device:(...a) => console.log(chalk.magenta('[DEV]'), new Date().toISOString(), ...a),
+  info:  (...a) => { const msg = a.join(' '); console.log(chalk.blue('[INFO]'),   new Date().toISOString(), ...a); sync.sendLog('info', msg, 'manager'); },
+  ok:    (...a) => { const msg = a.join(' '); console.log(chalk.green('[OK]'),    new Date().toISOString(), ...a); sync.sendLog('ok', msg, 'manager'); },
+  warn:  (...a) => { const msg = a.join(' '); console.log(chalk.yellow('[WARN]'), new Date().toISOString(), ...a); sync.sendLog('warn', msg, 'manager'); },
+  error: (...a) => { const msg = a.join(' '); console.error(chalk.red('[ERR]'),   new Date().toISOString(), ...a); sync.sendLog('error', msg, 'manager'); },
+  device:(...a) => { const msg = a.join(' '); console.log(chalk.magenta('[DEV]'), new Date().toISOString(), ...a); sync.sendLog('dev', msg, 'manager'); },
 };
 
 // ─── Device Registry ──────────────────────────────────────────────────────────
@@ -310,10 +310,10 @@ async function killPreviousInstances() {
   try {
     if (process.platform === 'win32') {
       const { execSync } = require('child_process');
-      log.info('Checking and cleaning up any stale previous instances...');
-      // 1. Kill any other node processes running modem-manager
+      // 1. Kill only stale previous index.js instances (preserve supervisor daemon & bandwidthTracker)
       try {
-        execSync(`powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'node.exe'\\" | Where-Object { $_.ProcessId -ne ${currentPid} -and ($_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*index.js*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 5000 });
+        const ppid = process.ppid || 0;
+        execSync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'node.exe'\\" | Where-Object { $_.ProcessId -ne ${currentPid} -and $_.ProcessId -ne ${ppid} -and $_.CommandLine -notlike '*service-daemon*' -and $_.CommandLine -notlike '*bandwidthTracker*' -and ($_.CommandLine -like '*modem-manager*index.js*' -or $_.CommandLine -like '*modem-manager\\\\index.js*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { timeout: 5000 });
       } catch {}
 
       // 2. Kill any stale SSH reverse tunnels from previous runs

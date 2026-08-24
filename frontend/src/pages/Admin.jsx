@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Wifi, Users, DollarSign, Activity, RefreshCw, Power,
   Server, Signal, Database, Shield, ChevronDown,
-  Smartphone, Battery, Usb, Globe, TrendingUp, Plus, Edit2, Trash2, Check, X, Lock, AlertTriangle
+  Smartphone, Battery, Usb, Globe, TrendingUp, Plus, Edit2, Trash2, Check, X, Lock, AlertTriangle,
+  Terminal, Search, Download, Pause, Play, ArrowDown
 } from 'lucide-react';
 import {
   getAdminModems, getAdminStats, getAllAdminPlans, savePlan, deletePlan,
   getAllAdminProxies, updateProxyActiveStatus, deleteProxy, revokeSubscription,
+  getSystemLogs, clearSystemLogs, subscribeToSystemLogs,
   supabase, isAdmin
 } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
@@ -1002,6 +1004,300 @@ function RevenuePanel() {
   );
 }
 
+// ─── System Logs Real-Time Panel ──────────────────────────────────────────────
+function SystemLogsPanel() {
+  const [logs, setLogs]               = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [filterLevel, setFilterLevel] = useState('all');
+  const [search, setSearch]           = useState('');
+  const [isPaused, setIsPaused]       = useState(false);
+  const [autoScroll, setAutoScroll]   = useState(true);
+  const logContainerRef               = useRef(null);
+
+  useEffect(() => {
+    loadLogs();
+
+    // Subscribe to live log streaming
+    const channel = subscribeToSystemLogs((newLog) => {
+      if (!isPaused && newLog) {
+        setLogs(prev => {
+          if (prev.some(l => l.id === newLog.id || (l.created_at === newLog.created_at && l.message === newLog.message))) {
+            return prev;
+          }
+          return [...prev, newLog].slice(-500);
+        });
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isPaused]);
+
+  useEffect(() => {
+    if (autoScroll && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll]);
+
+  async function loadLogs() {
+    setLoading(true);
+    const { data } = await getSystemLogs(300);
+    setLogs(data || []);
+    setLoading(false);
+  }
+
+  const handleClear = async () => {
+    if (!window.confirm('Clear all system logs?')) return;
+    await clearSystemLogs();
+    setLogs([]);
+    toast.success('System logs cleared');
+  };
+
+  const handleExport = () => {
+    const text = logs.map(l => `[${l.created_at || ''}] [${(l.level || 'info').toUpperCase()}] [${l.source || 'sys'}] ${l.message}`).join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vertex-proxies-logs-${new Date().toISOString().slice(0, 10)}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Logs exported to file');
+  };
+
+  const filtered = logs.filter(l => {
+    const levelMatch = filterLevel === 'all' || l.level?.toLowerCase() === filterLevel;
+    const searchMatch = !search || l.message?.toLowerCase().includes(search.toLowerCase()) || l.source?.toLowerCase().includes(search.toLowerCase());
+    return levelMatch && searchMatch;
+  });
+
+  const getLevelColor = (level = '') => {
+    switch (level.toLowerCase()) {
+      case 'ok':
+      case 'success':
+        return '#10b981';
+      case 'warn':
+      case 'warning':
+        return '#f59e0b';
+      case 'error':
+      case 'err':
+        return '#ef4444';
+      case 'dev':
+        return '#8b5cf6';
+      default:
+        return '#3b82f6';
+    }
+  };
+
+  return (
+    <div style={{ padding: '32px', height: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div className="flex justify-between items-center mb-md" style={{ flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ fontSize: '1.75rem', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Terminal size={24} color="var(--clr-primary)" /> System & Engine Live Logs
+            </h1>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '3px 10px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700,
+              background: isPaused ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)',
+              color: isPaused ? '#f59e0b' : '#10b981',
+              border: `1px solid ${isPaused ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}`,
+            }}>
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: isPaused ? '#f59e0b' : '#10b981',
+                boxShadow: isPaused ? 'none' : '0 0 8px #10b981',
+                animation: isPaused ? 'none' : 'pulse 2s infinite',
+              }} />
+              {isPaused ? 'STREAM PAUSED' : 'REALTIME CONNECTED'}
+            </span>
+          </div>
+          <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+            Live execution stream from Windows background service, proxy engines, and VPS SSH tunnels
+          </p>
+        </div>
+
+        {/* Top Actions */}
+        <div className="flex items-center gap-sm">
+          <button
+            className={`btn btn-sm ${isPaused ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setIsPaused(!isPaused)}
+            title={isPaused ? 'Resume stream' : 'Pause stream'}
+            style={{ fontSize: '0.8rem' }}
+          >
+            {isPaused ? <Play size={14} /> : <Pause size={14} />}
+            {isPaused ? 'Resume' : 'Pause'}
+          </button>
+
+          <button
+            className={`btn btn-sm ${autoScroll ? 'btn-secondary' : 'btn-ghost'}`}
+            onClick={() => setAutoScroll(!autoScroll)}
+            title="Toggle autoscroll to bottom"
+            style={{ fontSize: '0.8rem', background: autoScroll ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+          >
+            <ArrowDown size={14} /> Auto-scroll: {autoScroll ? 'ON' : 'OFF'}
+          </button>
+
+          <button className="btn btn-secondary btn-sm" onClick={handleExport} title="Download logs as text file">
+            <Download size={14} /> Export
+          </button>
+
+          <button className="btn btn-danger btn-sm" onClick={handleClear} title="Clear logs in Supabase">
+            <Trash2 size={14} /> Clear
+          </button>
+
+          <button className="btn btn-secondary btn-sm" onClick={loadLogs} title="Refresh">
+            <RefreshCw size={14} className={loading ? 'spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex justify-between items-center mb-md" style={{ flexWrap: 'wrap', gap: '10px' }}>
+        <div className="flex gap-xs" style={{ flexWrap: 'wrap' }}>
+          {['all', 'info', 'ok', 'warn', 'error', 'dev'].map(lvl => (
+            <button
+              key={lvl}
+              className={`btn btn-sm ${filterLevel === lvl ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFilterLevel(lvl)}
+              style={{ textTransform: 'uppercase', fontSize: '0.75rem', padding: '4px 10px' }}
+            >
+              {lvl === 'ok' ? 'SUCCESS' : lvl === 'dev' ? 'DEVICE' : lvl}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ position: 'relative', width: 280 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--clr-text-3)' }} />
+          <input
+            type="text"
+            placeholder="Search log messages..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '6px 12px 6px 32px',
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              border: '1px solid var(--clr-border)',
+              background: 'var(--clr-surface)',
+              color: 'var(--clr-text)',
+            }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--clr-text-3)', cursor: 'pointer' }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Terminal Display */}
+      <div
+        ref={logContainerRef}
+        style={{
+          flex: 1,
+          background: '#070a12',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          overflowY: 'auto',
+          fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace",
+          fontSize: '0.82rem',
+          lineHeight: '1.6',
+          boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.6)',
+        }}
+      >
+        {loading && logs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--clr-text-3)' }}>
+            <div className="loader" style={{ margin: '0 auto 12px' }} />
+            <span>Connecting to live log stream...</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--clr-text-3)' }}>
+            <Terminal size={32} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+            <div>No log entries match your filter.</div>
+            <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Logs will stream here automatically when the proxy engine runs.</div>
+          </div>
+        ) : (
+          filtered.map((logItem, idx) => {
+            const lvl = logItem.level?.toLowerCase() || 'info';
+            const lvlColor = getLevelColor(lvl);
+            const timeStr = logItem.created_at
+              ? new Date(logItem.created_at).toLocaleTimeString()
+              : '—';
+
+            return (
+              <div
+                key={logItem.id || idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '3px 0',
+                  borderBottom: '1px solid rgba(255,255,255,0.02)',
+                  wordBreak: 'break-word',
+                }}
+              >
+                <span style={{ color: '#64748b', fontSize: '0.75rem', flexShrink: 0, userSelect: 'none', minWidth: 68 }}>
+                  {timeStr}
+                </span>
+
+                <span style={{
+                  color: lvlColor,
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  textTransform: 'uppercase',
+                  flexShrink: 0,
+                  minWidth: 52,
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  background: `${lvlColor}15`,
+                  textAlign: 'center',
+                }}>
+                  {lvl}
+                </span>
+
+                {logItem.source && logItem.source !== 'manager' && (
+                  <span style={{
+                    color: '#94a3b8',
+                    fontSize: '0.7rem',
+                    padding: '1px 5px',
+                    borderRadius: '4px',
+                    background: 'rgba(255,255,255,0.05)',
+                    flexShrink: 0,
+                  }}>
+                    {logItem.source}
+                  </span>
+                )}
+
+                <span style={{
+                  color: lvl === 'error' ? '#fca5a5' : lvl === 'warn' ? '#fde68a' : '#e2e8f0',
+                  flex: 1,
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {logItem.message}
+                </span>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
+        <span>Showing {filtered.length} of {logs.length} cached logs</span>
+        <span>Supabase Realtime Engine Sync: Active</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Admin Component ─────────────────────────────────────────────────────
 export default function Admin({ session }) {
   const [modems, setModems]       = useState([]);
@@ -1061,6 +1357,7 @@ export default function Admin({ session }) {
         <Route path="plans"           element={<PlansPanel />} />
         <Route path="subscriptions"   element={<SubscriptionsPanel />} />
         <Route path="revenue"         element={<RevenuePanel />} />
+        <Route path="logs"            element={<SystemLogsPanel />} />
         <Route path="*"               element={<Navigate to="/admin" />} />
       </Routes>
     </SidebarLayout>

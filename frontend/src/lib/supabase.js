@@ -349,3 +349,71 @@ export async function revokeSubscription(subscriptionId) {
   return { data: data?.[0] || null, success: true };
 }
 
+// ─── Admin System Logs ────────────────────────────────────────────────────────
+export async function getSystemLogs(limit = 250) {
+  // 1. Try system_logs table
+  try {
+    const { data, error } = await supabase
+      .from('system_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (!error && data && data.length > 0) {
+      return { data: data.reverse(), error: null };
+    }
+  } catch (_) {}
+
+  // 2. Fallback to system_config buffer
+  try {
+    const { data } = await supabase
+      .from('system_config')
+      .select('value')
+      .eq('key', 'latest_system_logs')
+      .single();
+
+    if (data?.value) {
+      const parsed = JSON.parse(data.value);
+      if (Array.isArray(parsed)) {
+        return { data: parsed, error: null };
+      }
+    }
+  } catch (_) {}
+
+  return { data: [], error: null };
+}
+
+export async function clearSystemLogs() {
+  try {
+    await supabase.from('system_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  } catch (_) {}
+  try {
+    await supabase.from('system_config').upsert({
+      key: 'latest_system_logs',
+      value: '[]'
+    });
+  } catch (_) {}
+}
+
+export function subscribeToSystemLogs(onNewLog) {
+  return supabase
+    .channel('system_logs_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_logs' }, payload => {
+      if (payload?.new) {
+        onNewLog(payload.new);
+      }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'key=eq.latest_system_logs' }, payload => {
+      if (payload?.new?.value) {
+        try {
+          const parsed = JSON.parse(payload.new.value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            onNewLog(parsed[parsed.length - 1]);
+          }
+        } catch (_) {}
+      }
+    })
+    .subscribe();
+}
+
+

@@ -14,6 +14,7 @@ try {
 } catch {}
 
 const { createClient } = require('@supabase/supabase-js');
+const { v4: uuidv4 }   = require('uuid');
 const spawner          = require('./proxySpawner');
 
 const VPS_HOST     = process.env.VPS_HOST || '64.227.3.211';
@@ -30,6 +31,81 @@ const supabase = createClient(
     },
   }
 );
+
+// ─── Real-time System Log Streaming to Supabase ───────────────────────────────
+const pendingLogs = [];
+const rollingLogsBuffer = [];
+let logFlushTimer = null;
+
+function sendLog(level, message, source = 'manager') {
+  if (!message) return;
+  const cleanMsg = typeof message === 'string' ? message.replace(/\u001b\[[0-9;]*m/g, '').trim() : JSON.stringify(message);
+  if (!cleanMsg) return;
+
+  const entry = {
+    id: uuidv4(),
+    level: level.toLowerCase(),
+    message: cleanMsg,
+    source,
+    created_at: new Date().toISOString(),
+  };
+
+  pendingLogs.push(entry);
+  rollingLogsBuffer.push(entry);
+  if (rollingLogsBuffer.length > 200) {
+    rollingLogsBuffer.shift();
+  }
+
+  if (pendingLogs.length >= 10) {
+    flushLogs();
+  } else if (!logFlushTimer) {
+    logFlushTimer = setTimeout(flushLogs, 1200);
+  }
+}
+
+async function flushLogs() {
+  if (logFlushTimer) {
+    clearTimeout(logFlushTimer);
+    logFlushTimer = null;
+  }
+  if (pendingLogs.length === 0) return;
+
+  const batch = pendingLogs.splice(0, pendingLogs.length);
+
+  // 1. Insert into system_logs table
+  try {
+    const { error } = await supabase.from('system_logs').insert(batch);
+    if (!error) {
+      // Periodically prune older logs (> 2000)
+      if (Math.random() < 0.05) {
+        pruneOldLogs();
+      }
+    }
+  } catch (_) {}
+
+  // 2. Guaranteed fallback buffer in system_config
+  try {
+    await supabase.from('system_config').upsert({
+      key: 'latest_system_logs',
+      value: JSON.stringify(rollingLogsBuffer.slice(-100))
+    });
+  } catch (_) {}
+}
+
+async function pruneOldLogs() {
+  try {
+    const { data } = await supabase
+      .from('system_logs')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .range(1500, 1501);
+    if (data && data.length > 0) {
+      await supabase.from('system_logs').delete().lt('created_at', data[0].created_at);
+    }
+  } catch (_) {}
+}
+
+process.on('beforeExit', () => { flushLogs(); });
 
 async function withRetry(fn, maxAttempts = 3, delayMs = 1200) {
   for (let i = 1; i <= maxAttempts; i++) {
@@ -345,5 +421,7 @@ module.exports = {
   syncActiveCredentials,
   expireOldSubscriptions,
   cleanupDuplicateModems,
+  sendLog,
+  flushLogs,
   supabase,
 };

@@ -330,6 +330,21 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================
+-- SYSTEM LOGS TABLE (Live Engine & Daemon Event Stream)
+-- ============================================
+CREATE TABLE IF NOT EXISTS system_logs (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  level      TEXT DEFAULT 'info',       -- 'info', 'ok', 'warn', 'error', 'dev'
+  message    TEXT NOT NULL,
+  source     TEXT DEFAULT 'manager',    -- 'manager', 'daemon', 'bandwidth', 'tunnel'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE system_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "system_logs_all" ON system_logs;
+CREATE POLICY "system_logs_all" ON system_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(customer_id);
@@ -338,11 +353,13 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_status   ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer        ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_usage_sub              ON usage_logs(subscription_id);
 CREATE INDEX IF NOT EXISTS idx_modems_status          ON modems(status);
+CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
 
 -- ============================================
--- SUPABASE REALTIME (Live bandwidth updates in dashboard)
+-- SUPABASE REALTIME (Live updates in dashboard & admin panel)
 -- ============================================
 -- Enables real-time push to the frontend whenever gb_used, status,
--- or ip_address changes — no polling required.
+-- ip_address, or system logs change — no polling required.
 ALTER PUBLICATION supabase_realtime ADD TABLE subscriptions;
 ALTER PUBLICATION supabase_realtime ADD TABLE modems;
+ALTER PUBLICATION supabase_realtime ADD TABLE system_logs;

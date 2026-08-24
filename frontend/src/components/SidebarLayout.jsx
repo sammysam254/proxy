@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Wifi, LayoutDashboard, Shield, LogOut, ChevronLeft,
   ChevronRight, Home, Menu, X, Server, Users,
-  DollarSign, Settings, Smartphone, Activity
+  DollarSign, Settings, Smartphone, Activity, Terminal
 } from 'lucide-react';
 import { signOut, isAdmin } from '../lib/supabase';
 
@@ -27,6 +27,7 @@ const ADMIN_NAV = [
   { to: '/admin/plans',        icon: <DollarSign size={18} />, label: 'Plans & Pricing' },
   { to: '/admin/subscriptions',icon: <Users size={18} />,      label: 'Subscriptions' },
   { to: '/admin/revenue',      icon: <DollarSign size={18} />, label: 'Revenue' },
+  { to: '/admin/logs',         icon: <Terminal size={18} />,   label: 'System Logs' },
 ];
 
 export default function SidebarLayout({ session, children, adminMode = false }) {
