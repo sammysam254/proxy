@@ -68,14 +68,21 @@ function isAuthorized(modemId, username, password) {
   return false;
 }
 
+// ─── Socket Stream Tuning & Optimization (1 Gbps+ WAN Scaling) ───────────────
+function tuneSocket(sock) {
+  if (!sock) return;
+  try {
+    sock.setNoDelay(true);
+    sock.setKeepAlive(true, 1000);
+    if (sock.readableHighWaterMark !== undefined) sock.readableHighWaterMark = 1024 * 1024;
+    if (sock.writableHighWaterMark !== undefined) sock.writableHighWaterMark = 1024 * 1024;
+  } catch {}
+}
+
 // ─── Socket Stream Forwarder with Native Zero-Overhead C++ Stream Piping (1 Gbps+) ───
 function forwardStreams(clientSocket, serverSocket, trackingKey) {
-  try {
-    clientSocket.setNoDelay(true);
-    serverSocket.setNoDelay(true);
-    clientSocket.setKeepAlive(true, 1000);
-    serverSocket.setKeepAlive(true, 1000);
-  } catch {}
+  tuneSocket(clientSocket);
+  tuneSocket(serverSocket);
 
   let lastClientRead = clientSocket.bytesRead || 0;
   let lastServerRead = serverSocket.bytesRead || 0;
@@ -114,10 +121,10 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
 
 const httpKeepAliveAgent = new http.Agent({
   keepAlive: true,
-  maxSockets: 4096,
-  maxFreeSockets: 1024,
+  maxSockets: 8192,
+  maxFreeSockets: 2048,
   timeout: 60000,
-  keepAliveMsecs: 5000,
+  keepAliveMsecs: 1000,
 });
 
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
@@ -127,7 +134,12 @@ function createHttpProxy(modem, port) {
   const modemId      = modem.id || modem.devicePath;
   const trackKey     = modemId;
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer({
+    highWaterMark: 1024 * 1024,
+    keepAlive: true,
+    keepAliveInitialDelay: 1000,
+    keepAliveTimeout: 60000,
+  }, (req, res) => {
     // 1. Check Auth for standard HTTP
     const authHeader = req.headers['proxy-authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
@@ -241,11 +253,11 @@ function createSocksProxy(modem, port, isSocks4 = false) {
   const modemId      = modem.id || modem.devicePath;
   const trackKey     = modemId;
 
-  const server = net.createServer((socket) => {
-    try {
-      socket.setNoDelay(true);
-      socket.setKeepAlive(true, 1000);
-    } catch {}
+  const server = net.createServer({
+    pauseOnConnect: false,
+    highWaterMark: 1024 * 1024,
+  }, (socket) => {
+    tuneSocket(socket);
 
     socket.once('data', (firstChunk) => {
       const version = firstChunk[0];
