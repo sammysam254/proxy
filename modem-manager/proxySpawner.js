@@ -11,10 +11,46 @@
 
 'use strict';
 
+// ─── Uncap Libuv Threadpool for Instant Parallel DNS & Network I/O ───────────
+process.env.UV_THREADPOOL_SIZE = '128';
+
 const http = require('http');
 const net  = require('net');
 const url  = require('url');
 const os   = require('os');
+const dns  = require('dns');
+
+// ─── Fast In-Memory DNS Cache (0ms repeat lookup latency) ─────────────────────
+const _dnsCache = new Map();
+const DNS_CACHE_TTL = 300_000; // 5 minutes
+
+async function resolveHostFast(hostname) {
+  if (!hostname || net.isIP(hostname)) return hostname;
+  
+  const cached = _dnsCache.get(hostname);
+  if (cached && (Date.now() - cached.time < DNS_CACHE_TTL)) {
+    return cached.ip;
+  }
+
+  try {
+    const addresses = await dns.promises.resolve4(hostname);
+    if (addresses && addresses.length > 0) {
+      const ip = addresses[0];
+      _dnsCache.set(hostname, { ip, time: Date.now() });
+      return ip;
+    }
+  } catch {}
+
+  return new Promise((resolve) => {
+    dns.lookup(hostname, { family: 4 }, (err, address) => {
+      if (!err && address) {
+        _dnsCache.set(hostname, { ip: address, time: Date.now() });
+        return resolve(address);
+      }
+      resolve(hostname);
+    });
+  });
+}
 
 // ─── Network Interface Binding Validator ──────────────────────────────────────
 function getAvailableLocalIps() {
@@ -216,28 +252,31 @@ function createHttpProxy(modem, port) {
 
     const [targetHost, targetPort] = req.url.split(':');
     const portNum = parseInt(targetPort || '443');
-    const opts = { host: targetHost, port: portNum };
-    if (boundAddress) opts.localAddress = boundAddress;
 
-    const serverSocket = net.connect(opts, () => {
-      try {
-        serverSocket.setNoDelay(true);
-        serverSocket.setKeepAlive(true, 1000);
-      } catch {}
-      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-      if (head && head.length > 0) {
-        recordBandwidth(trackKey, 0, head.length);
-        serverSocket.write(head);
-      }
-      forwardStreams(clientSocket, serverSocket, trackKey);
-    });
+    async function doConnect() {
+      const resolvedHost = await resolveHostFast(targetHost);
+      const opts = { host: resolvedHost, port: portNum };
+      if (boundAddress) opts.localAddress = boundAddress;
 
-    serverSocket.on('error', () => {
-      if (!clientSocket.destroyed) {
-        clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-        clientSocket.destroy();
-      }
-    });
+      const serverSocket = net.connect(opts, () => {
+        tuneSocket(serverSocket);
+        clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        if (head && head.length > 0) {
+          recordBandwidth(trackKey, 0, head.length);
+          serverSocket.write(head);
+        }
+        forwardStreams(clientSocket, serverSocket, trackKey);
+      });
+
+      serverSocket.on('error', () => {
+        if (!clientSocket.destroyed) {
+          clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+          clientSocket.destroy();
+        }
+      });
+    }
+
+    doConnect();
   });
 
   server.listen(port, '0.0.0.0', () => {
@@ -371,29 +410,31 @@ function handleSocks5Request(socket, modem, boundAddress, trackKey) {
     // Pause socket during connection establishment so TLS handshake packets are not dropped
     socket.pause();
 
-    const opts = { host, port };
-    if (boundAddress) opts.localAddress = boundAddress;
+    async function doSocksConnect() {
+      const resolvedHost = await resolveHostFast(host);
+      const opts = { host: resolvedHost, port };
+      if (boundAddress) opts.localAddress = boundAddress;
 
-    const outbound = net.connect(opts, () => {
-      try {
-        outbound.setNoDelay(true);
-        outbound.setKeepAlive(true, 1000);
-      } catch {}
-      // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
-      const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
-      socket.write(resp, () => {
-        forwardStreams(socket, outbound, trackKey);
-        socket.resume();
+      const outbound = net.connect(opts, () => {
+        tuneSocket(outbound);
+        // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
+        const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+        socket.write(resp, () => {
+          forwardStreams(socket, outbound, trackKey);
+          socket.resume();
+        });
       });
-    });
 
-    outbound.on('error', () => {
-      if (!socket.destroyed) {
-        socket.resume();
-        socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
-        socket.destroy();
-      }
-    });
+      outbound.on('error', () => {
+        if (!socket.destroyed) {
+          socket.resume();
+          socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
+          socket.destroy();
+        }
+      });
+    }
+
+    doSocksConnect();
   });
 }
 

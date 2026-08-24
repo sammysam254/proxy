@@ -13,6 +13,9 @@
 
 'use strict';
 
+// ─── Uncap Libuv Threadpool for Instant Parallel DNS & Network I/O ───────────
+process.env.UV_THREADPOOL_SIZE = '128';
+
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const cron     = require('node-cron');
