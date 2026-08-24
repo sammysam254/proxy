@@ -14,6 +14,29 @@
 const http = require('http');
 const net  = require('net');
 const url  = require('url');
+const os   = require('os');
+
+// ─── Network Interface Binding Validator ──────────────────────────────────────
+function getAvailableLocalIps() {
+  const ips = new Set();
+  const ifaces = os.networkInterfaces();
+  for (const name in ifaces) {
+    for (const iface of ifaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        ips.add(iface.address);
+      }
+    }
+  }
+  return ips;
+}
+
+const availableIps = getAvailableLocalIps();
+
+function getValidLocalAddress(ip) {
+  if (!ip || ip === '0.0.0.0' || ip === '127.0.0.1' || ip.startsWith('127.')) return undefined;
+  if (availableIps.has(ip)) return ip;
+  return undefined;
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 // In-memory credential store: modemId → [ { username, password } ]
@@ -50,8 +73,8 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
   try {
     clientSocket.setNoDelay(true);
     serverSocket.setNoDelay(true);
-    clientSocket.setKeepAlive(true, 5000);
-    serverSocket.setKeepAlive(true, 5000);
+    clientSocket.setKeepAlive(true, 1000);
+    serverSocket.setKeepAlive(true, 1000);
   } catch {}
 
   let lastClientRead = clientSocket.bytesRead || 0;
@@ -69,10 +92,10 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
     }
   };
 
-  // Flush bandwidth periodically and on socket end without interrupting streaming
+  // Flush bandwidth periodically without interrupting streaming
   const interval = setInterval(flushBytes, 2000);
 
-  // Native kernel stream piping — delivers maximum 1 Gbps+ line speed
+  // Native kernel stream piping — delivers maximum line speed
   clientSocket.pipe(serverSocket);
   serverSocket.pipe(clientSocket);
 
@@ -91,17 +114,18 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
 
 const httpKeepAliveAgent = new http.Agent({
   keepAlive: true,
-  maxSockets: 2048,
-  maxFreeSockets: 512,
+  maxSockets: 4096,
+  maxFreeSockets: 1024,
   timeout: 60000,
-  keepAliveMsecs: 10000,
+  keepAliveMsecs: 5000,
 });
 
 // ─── HTTP / HTTPS CONNECT Proxy Server ───────────────────────────────────────
 function createHttpProxy(modem, port) {
-  const exitIp    = modem.ipAddress;
-  const modemId   = modem.id || modem.devicePath;
-  const trackKey  = modemId;
+  const exitIp       = modem.ipAddress;
+  const boundAddress = getValidLocalAddress(exitIp);
+  const modemId      = modem.id || modem.devicePath;
+  const trackKey     = modemId;
 
   const server = http.createServer((req, res) => {
     // 1. Check Auth for standard HTTP
@@ -123,7 +147,7 @@ function createHttpProxy(modem, port) {
       }
     }
 
-    // 2. Forward regular HTTP request through modem IP
+    // 2. Forward regular HTTP request
     const parsed = url.parse(req.url);
     const options = {
       hostname:     parsed.hostname,
@@ -132,7 +156,7 @@ function createHttpProxy(modem, port) {
       method:       req.method,
       headers:      req.headers,
       agent:        httpKeepAliveAgent,
-      localAddress: exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.') ? exitIp : undefined,
+      localAddress: boundAddress,
     };
 
     delete options.headers['proxy-authorization'];
@@ -156,7 +180,7 @@ function createHttpProxy(modem, port) {
   server.on('connect', (req, clientSocket, head) => {
     try {
       clientSocket.setNoDelay(true);
-      clientSocket.setKeepAlive(true, 5000);
+      clientSocket.setKeepAlive(true, 1000);
     } catch {}
 
     const authHeader = req.headers['proxy-authorization'];
@@ -179,38 +203,32 @@ function createHttpProxy(modem, port) {
 
     const [targetHost, targetPort] = req.url.split(':');
     const portNum = parseInt(targetPort || '443');
+    const opts = { host: targetHost, port: portNum };
+    if (boundAddress) opts.localAddress = boundAddress;
 
-    function doHttpConnect(tryLocal = true) {
-      const opts = { host: targetHost, port: portNum };
-      if (tryLocal && exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.')) {
-        opts.localAddress = exitIp;
+    const serverSocket = net.connect(opts, () => {
+      try {
+        serverSocket.setNoDelay(true);
+        serverSocket.setKeepAlive(true, 1000);
+      } catch {}
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head && head.length > 0) {
+        recordBandwidth(trackKey, 0, head.length);
+        serverSocket.write(head);
       }
+      forwardStreams(clientSocket, serverSocket, trackKey);
+    });
 
-      const serverSocket = net.connect(opts, () => {
-        clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        if (head && head.length > 0) {
-          recordBandwidth(trackKey, 0, head.length);
-          serverSocket.write(head);
-        }
-        forwardStreams(clientSocket, serverSocket, trackKey);
-      });
-
-      serverSocket.on('error', () => {
-        if (tryLocal && opts.localAddress) {
-          return doHttpConnect(false);
-        }
-        if (!clientSocket.destroyed) {
-          clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-          clientSocket.destroy();
-        }
-      });
-    }
-
-    doHttpConnect(true);
+    serverSocket.on('error', () => {
+      if (!clientSocket.destroyed) {
+        clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+        clientSocket.destroy();
+      }
+    });
   });
 
   server.listen(port, '0.0.0.0', () => {
-    console.log(`[ProxyEngine] HTTP/HTTPS proxy listening on 0.0.0.0:${port} (Exit: ${exitIp})`);
+    console.log(`[ProxyEngine] HTTP/HTTPS proxy listening on 0.0.0.0:${port} (Exit: ${exitIp || '0.0.0.0'})`);
   });
 
   return server;
@@ -218,14 +236,15 @@ function createHttpProxy(modem, port) {
 
 // ─── SOCKS5 / SOCKS4 Proxy Server ───────────────────────────────────────────
 function createSocksProxy(modem, port, isSocks4 = false) {
-  const exitIp    = modem.ipAddress;
-  const modemId   = modem.id || modem.devicePath;
-  const trackKey  = modemId;
+  const exitIp       = modem.ipAddress;
+  const boundAddress = getValidLocalAddress(exitIp);
+  const modemId      = modem.id || modem.devicePath;
+  const trackKey     = modemId;
 
   const server = net.createServer((socket) => {
     try {
       socket.setNoDelay(true);
-      socket.setKeepAlive(true, 5000);
+      socket.setKeepAlive(true, 1000);
     } catch {}
 
     socket.once('data', (firstChunk) => {
@@ -250,7 +269,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
 
             if (isAuthorized(modemId, u, p)) {
               socket.write(Buffer.from([0x01, 0x00])); // Auth success
-              handleSocks5Request(socket, modem, exitIp, trackKey);
+              handleSocks5Request(socket, modem, boundAddress, trackKey);
             } else {
               socket.write(Buffer.from([0x01, 0x01])); // Auth failed
               socket.destroy();
@@ -259,7 +278,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         } else {
           // No auth required (0x00)
           socket.write(Buffer.from([0x05, 0x00]));
-          handleSocks5Request(socket, modem, exitIp, trackKey);
+          handleSocks5Request(socket, modem, boundAddress, trackKey);
         }
       } else if (version === 0x04 || isSocks4) {
         // ── SOCKS4 Handshake ──────────────────────────────────────────────
@@ -268,30 +287,21 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         const destPort = firstChunk.readUInt16BE(2);
         const destIp   = `${firstChunk[4]}.${firstChunk[5]}.${firstChunk[6]}.${firstChunk[7]}`;
 
-        function doSocks4Connect(tryLocal = true) {
-          const opts = { host: destIp, port: destPort };
-          if (tryLocal && exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.')) {
-            opts.localAddress = exitIp;
-          }
+        const opts = { host: destIp, port: destPort };
+        if (boundAddress) opts.localAddress = boundAddress;
 
-          const outbound = net.connect(opts, () => {
-            try {
-              outbound.setNoDelay(true);
-              outbound.setKeepAlive(true, 5000);
-            } catch {}
-            socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
-            forwardStreams(socket, outbound, trackKey);
-          });
+        const outbound = net.connect(opts, () => {
+          try {
+            outbound.setNoDelay(true);
+            outbound.setKeepAlive(true, 1000);
+          } catch {}
+          socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+          forwardStreams(socket, outbound, trackKey);
+        });
 
-          outbound.on('error', () => {
-            if (tryLocal && opts.localAddress) {
-              return doSocks4Connect(false);
-            }
-            if (!socket.destroyed) socket.destroy();
-          });
-        }
-
-        doSocks4Connect(true);
+        outbound.on('error', () => {
+          if (!socket.destroyed) socket.destroy();
+        });
       } else {
         socket.destroy();
       }
@@ -301,13 +311,13 @@ function createSocksProxy(modem, port, isSocks4 = false) {
   });
 
   server.listen(port, '0.0.0.0', () => {
-    console.log(`[ProxyEngine] SOCKS${isSocks4 ? '4' : '5'} proxy listening on 0.0.0.0:${port} (Exit: ${exitIp})`);
+    console.log(`[ProxyEngine] SOCKS${isSocks4 ? '4' : '5'} proxy listening on 0.0.0.0:${port} (Exit: ${exitIp || '0.0.0.0'})`);
   });
 
   return server;
 }
 
-function handleSocks5Request(socket, modem, exitIp, trackKey) {
+function handleSocks5Request(socket, modem, boundAddress, trackKey) {
   socket.once('data', (req) => {
     if (req.length < 4 || req[0] !== 0x05) {
       return socket.destroy();
@@ -348,38 +358,29 @@ function handleSocks5Request(socket, modem, exitIp, trackKey) {
     // Pause socket during connection establishment so TLS handshake packets are not dropped
     socket.pause();
 
-    function doSocks5Connect(tryLocal = true) {
-      const opts = { host, port };
-      if (tryLocal && exitIp && exitIp !== '0.0.0.0' && exitIp !== '127.0.0.1' && !exitIp.startsWith('127.')) {
-        opts.localAddress = exitIp;
+    const opts = { host, port };
+    if (boundAddress) opts.localAddress = boundAddress;
+
+    const outbound = net.connect(opts, () => {
+      try {
+        outbound.setNoDelay(true);
+        outbound.setKeepAlive(true, 1000);
+      } catch {}
+      // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
+      const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+      socket.write(resp, () => {
+        forwardStreams(socket, outbound, trackKey);
+        socket.resume();
+      });
+    });
+
+    outbound.on('error', () => {
+      if (!socket.destroyed) {
+        socket.resume();
+        socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
+        socket.destroy();
       }
-
-      const outbound = net.connect(opts, () => {
-        try {
-          outbound.setNoDelay(true);
-          outbound.setKeepAlive(true, 5000);
-        } catch {}
-        // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
-        const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
-        socket.write(resp, () => {
-          forwardStreams(socket, outbound, trackKey);
-          socket.resume();
-        });
-      });
-
-      outbound.on('error', () => {
-        if (tryLocal && opts.localAddress) {
-          return doSocks5Connect(false);
-        }
-        if (!socket.destroyed) {
-          socket.resume();
-          socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
-          socket.destroy();
-        }
-      });
-    }
-
-    doSocks5Connect(true);
+    });
   });
 }
 
