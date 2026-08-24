@@ -27,9 +27,9 @@ export default function Navbar({ session }) {
           {/* Logo */}
           <Link to="/" className="logo">
             <div className="logo-icon">
-              <img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" />
+              <img src="/logo.jpg" alt="Vertext Proxies Logo" className="logo-img" />
             </div>
-            <span className="text-gradient">Vertex Proxies</span>
+            <span className="text-gradient">Vertext Proxies</span>
           </Link>
 
           {/* Desktop Nav Links */}

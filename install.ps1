@@ -1,10 +1,10 @@
-# Vertex Proxies - Installer & Launcher
+# Vertext Proxies - Installer & Launcher
 $ErrorActionPreference = 'Continue'
 try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "       VERTEX PROXIES -- ALL-IN-ONE SYSTEM INSTALLER            " -ForegroundColor Yellow
+Write-Host "       VERTEXT PROXIES -- ALL-IN-ONE SYSTEM INSTALLER           " -ForegroundColor Yellow
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 

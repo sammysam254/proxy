@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul 2>&1
 setlocal EnableExtensions EnableDelayedExpansion
-title Vertex Proxies -- All-in-One Setup and Launcher
+title Vertext Proxies -- All-in-One Setup and Launcher
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
@@ -16,7 +16,7 @@ if exist "C:\proxy\modem-manager\index.js" (
 
 :: Standalone runner detected (e.g. running from Downloads or Temp without full repository)
 echo ================================================================
-echo        VERTEX PROXIES -- STANDALONE INSTALLER
+echo        VERTEXT PROXIES -- STANDALONE INSTALLER
 echo ================================================================
 echo [*] Standalone mode detected. Initializing installation...
 echo.
@@ -24,13 +24,13 @@ echo.
 if exist "%SCRIPT_DIR%install.ps1" (
     powershell -NoProfile -File "%SCRIPT_DIR%install.ps1"
 ) else (
-    echo [*] Fetching complete Vertex Proxies codebase and dependencies from GitHub...
+    echo [*] Fetching complete Vertext Proxies codebase and dependencies from GitHub...
     powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; $tmp = Join-Path $env:TEMP 'install.ps1'; (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/sammysam254/proxy/main/install.ps1', $tmp); powershell -NoProfile -File $tmp"
 )
 
 if exist "C:\proxy\modem-manager\index.js" (
     echo.
-    echo [OK] Installation complete. Launching Vertex Proxies...
+    echo [OK] Installation complete. Launching Vertext Proxies...
     cd /d "C:\proxy\modem-manager"
     node index.js
 )
@@ -43,7 +43,7 @@ set "PROJ_DIR=%SCRIPT_DIR%"
 set "PATH=C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm;%LOCALAPPDATA%\Programs\node;%USERPROFILE%\AppData\Roaming\npm;C:\Program Files\Git\cmd;C:\Program Files\Git\bin;%PROJ_DIR%modem-manager\bin;%PROJ_DIR%modem-manager\bin\platform-tools;C:\Windows\System32\OpenSSH;%PATH%"
 
 echo ================================================================
-echo        VERTEX PROXIES -- ALL-IN-ONE SETUP AND LAUNCHER
+echo        VERTEXT PROXIES -- ALL-IN-ONE SETUP AND LAUNCHER
 echo ================================================================
 echo [*] Project Directory: %PROJ_DIR%
 echo.
@@ -109,15 +109,15 @@ if not exist "%PROJ_DIR%modem-manager\node_modules" (
 )
 
 :: 5. Register Startup
-powershell -NoProfile -Command "$sFolder = [Environment]::GetFolderPath('Startup'); $sFile = Join-Path $sFolder 'VertexProxies.lnk'; $w = New-Object -ComObject WScript.Shell; $sc = $w.CreateShortcut($sFile); $sc.TargetPath = 'wscript.exe'; $sc.Arguments = '\"%PROJ_DIR%start-hidden.vbs\"'; $sc.WorkingDirectory = '%PROJ_DIR%'; $sc.Description = 'Vertex Proxies Auto-Start'; $sc.Save()" >nul 2>&1
+powershell -NoProfile -Command "$sFolder = [Environment]::GetFolderPath('Startup'); $sFile = Join-Path $sFolder 'VertextProxies.lnk'; $w = New-Object -ComObject WScript.Shell; $sc = $w.CreateShortcut($sFile); $sc.TargetPath = 'wscript.exe'; $sc.Arguments = '\"%PROJ_DIR%start-hidden.vbs\"'; $sc.WorkingDirectory = '%PROJ_DIR%'; $sc.Description = 'Vertext Proxies Auto-Start'; $sc.Save()" >nul 2>&1
 echo [OK] Windows Boot Auto-Start configured.
 
 :: 6. Start Engine
 echo ================================================================
 echo   [SUCCESS] SYSTEM INITIALIZED AND READY
-echo   Starting Vertex Proxies High-Speed Wi-Fi Engine (USA)...
+echo   Starting Vertext Proxies High-Speed Wi-Fi Engine (USA)...
 echo   VPS Host:       64.227.3.211
-echo   Web Dashboard:  https://proxyke.netlify.app
+echo   Web Dashboard:  https://vertext.site
 echo ================================================================
 echo.
 

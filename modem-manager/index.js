@@ -386,11 +386,11 @@ async function waitForDevices(maxWaitMs = 15_000, intervalMs = 2_000) {
 // ─── Startup ──────────────────────────────────────────────────────────────────
 async function main() {
   console.log(chalk.cyan.bold('\n  ╔══════════════════════════════════════════╗'));
-  console.log(chalk.cyan.bold('  ║  Vertex Proxies — Residential Engine     ║'));
+  console.log(chalk.cyan.bold('  ║  Vertext Proxies — Residential Engine    ║'));
   console.log(chalk.cyan.bold('  ║  USA High-Speed Wi-Fi Proxies (12 Slots) ║'));
   console.log(chalk.cyan.bold('  ╚══════════════════════════════════════════╝\n'));
 
-  log.ok('🚀 Vertex Engine Build: v2.5.0 (0ms DNS Cache, 128 Threadpool, Uncapped Buffers)');
+  log.ok('🚀 Vertext Engine Build: v2.5.0 (0ms DNS Cache, 128 Threadpool, Uncapped Buffers)');
 
   // Terminate any previous instances & stale reverse tunnels
   await killPreviousInstances();

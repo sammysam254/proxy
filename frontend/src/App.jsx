@@ -31,7 +31,7 @@ export default function App() {
     return (
       <div className="loading-screen">
         <div className="loader" />
-        <span>Loading Vertex Proxies...</span>
+        <span>Loading Vertext Proxies...</span>
       </div>
     );
   }

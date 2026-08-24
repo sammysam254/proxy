@@ -71,10 +71,15 @@ export default function AuthPage() {
         padding: '40px 36px',
         position: 'relative',
       }}>
-        {/* Logo */}
-        <div className="flex items-center gap-sm" style={{ marginBottom: '32px', justifyContent: 'center' }}>
-          <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
-          <span className="text-gradient" style={{ fontSize: '1.3rem', fontWeight: 800 }}>Vertex Proxies</span>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <div className="logo-icon"><img src="/logo.jpg" alt="Vertext Proxies Logo" className="logo-img" /></div>
+            <span className="text-gradient" style={{ fontSize: '1.3rem', fontWeight: 800 }}>Vertext Proxies</span>
+          </div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 8px' }}>
+            {tab === 'signin' ? 'Welcome Back' : 'Create Your Account'}
+          </h1>
         </div>
 
         {/* Tab switcher */}

@@ -74,12 +74,12 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
       }}>
         {(!collapsed || isMobileDrawer) && (
           <Link to="/" onClick={() => setMobileOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
-            <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.15rem' }}>Vertex Proxies</span>
+            <div className="logo-icon"><img src="/logo.jpg" alt="Vertext Proxies Logo" className="logo-img" /></div>
+            <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.15rem' }}>Vertext Proxies</span>
           </Link>
         )}
         {(collapsed && !isMobileDrawer) && (
-          <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
+          <div className="logo-icon"><img src="/logo.jpg" alt="Vertext Proxies Logo" className="logo-img" /></div>
         )}
         {isMobileDrawer && (
           <button

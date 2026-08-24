@@ -171,7 +171,7 @@ export default function Storefront({ session }) {
         <section style={{ padding: '60px 0', background: 'var(--clr-bg-2)' }}>
           <div className="container">
             <h2 style={{ textAlign: 'center', fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', marginBottom: '8px' }}>
-              Why Vertex Mobile Proxies?
+              Why Vertext Mobile Proxies?
             </h2>
             <p style={{ textAlign: 'center', color: 'var(--clr-text-2)', marginBottom: '40px', fontSize: '0.95rem' }}>
               Built on real 4G/5G mobile carriers with dedicated hardware
