@@ -5,7 +5,6 @@ import { supabase } from './lib/supabase';
 import Storefront from './pages/Storefront';
 import ProxiesPage from './pages/ProxiesPage';
 import Dashboard from './pages/Dashboard';
-import CloudPhones from './pages/CloudPhones';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import AuthPage from './pages/AuthPage';
@@ -56,8 +55,6 @@ export default function App() {
         <Route path="/proxies"            element={<ProxiesPage session={session} />} />
         <Route path="/auth"               element={session ? <Navigate to="/dashboard" /> : <AuthPage />} />
         <Route path="/dashboard"          element={session ? <Dashboard session={session} /> : <Navigate to="/auth" />} />
-        <Route path="/cloud-phones"       element={session ? <CloudPhones session={session} /> : <Navigate to="/auth" />} />
-        <Route path="/dashboard/cloud-phones" element={session ? <CloudPhones session={session} /> : <Navigate to="/auth" />} />
         <Route path="/dashboard/settings" element={session ? <Settings session={session} /> : <Navigate to="/auth" />} />
         <Route path="/settings"           element={session ? <Settings session={session} /> : <Navigate to="/auth" />} />
         <Route path="/admin/*"            element={session ? <Admin session={session} /> : <Navigate to="/auth" />} />

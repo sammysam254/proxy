@@ -180,14 +180,14 @@ export default function Storefront({ session }) {
             <div className="grid grid-3" style={{ gap: '20px' }}>
               {[
                 {
-                  icon: <Smartphone size={24} color="#8b5cf6" />,
-                  title: 'Cloud Phones & In-Browser Player',
-                  desc: 'Rent virtual Android 13 Cloud Phones running on Oracle Cloud, pre-bound to your 4G SIM proxy with genuine anti-detect hardware profiles.',
+                  icon: <Zap size={24} color="#8b5cf6" />,
+                  title: 'Ultra High-Speed Residential Wi-Fi',
+                  desc: 'Genuine residential USA Wi-Fi nodes delivering true 100% clean IP reputation for bypass, streaming, and anti-detect browsing.',
                 },
                 {
-                  icon: <Zap size={24} color="#3b82f6" />,
-                  title: 'Real Hardware SIM Cards',
-                  desc: 'Every proxy is backed by an actual SIM card connected to a cellular tower — not simulated or emulated.',
+                  icon: <Shield size={24} color="#3b82f6" />,
+                  title: 'Real Hardware ISP Exit Nodes',
+                  desc: 'Every proxy is backed by an actual residential Wi-Fi connection and genuine ISP hardware — not simulated or datacenter IPs.',
                 },
                 {
                   icon: <RefreshCw size={24} color="#10b981" />,
