@@ -209,6 +209,7 @@ function createHttpProxy(modem, port) {
     keepAliveInitialDelay: 1000,
     keepAliveTimeout: 0,
   }, (req, res) => {
+    let authUser = null;
     // 1. Check Auth for standard HTTP
     const authHeader = req.headers['proxy-authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
@@ -220,6 +221,7 @@ function createHttpProxy(modem, port) {
         res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
         return res.end('Proxy Authentication Required');
       }
+      authUser = u;
     } else {
       const creds = credStore.get(modemId);
       if ((creds && creds.length > 0) || credStore.size > 0) {
@@ -244,11 +246,17 @@ function createHttpProxy(modem, port) {
 
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.on('data', chunk => recordBandwidth(trackKey, chunk.length, 0));
+      proxyRes.on('data', chunk => {
+        recordBandwidth(trackKey, chunk.length, 0);
+        if (authUser) recordUserBandwidth(authUser, chunk.length, 0);
+      });
       proxyRes.pipe(res);
     });
 
-    req.on('data', chunk => recordBandwidth(trackKey, 0, chunk.length));
+    req.on('data', chunk => {
+      recordBandwidth(trackKey, 0, chunk.length);
+      if (authUser) recordUserBandwidth(authUser, 0, chunk.length);
+    });
     req.pipe(proxyReq);
 
     proxyReq.on('error', () => {
@@ -264,6 +272,7 @@ function createHttpProxy(modem, port) {
       clientSocket.setKeepAlive(true, 1000);
     } catch {}
 
+    let authUser = null;
     const authHeader = req.headers['proxy-authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
@@ -274,6 +283,7 @@ function createHttpProxy(modem, port) {
         clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
         return clientSocket.end();
       }
+      authUser = u;
     } else {
       const creds = credStore.get(modemId);
       if ((creds && creds.length > 0) || credStore.size > 0) {
@@ -295,10 +305,10 @@ function createHttpProxy(modem, port) {
         clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         if (head && head.length > 0) {
           recordBandwidth(trackKey, 0, head.length);
-          if (u) recordUserBandwidth(u, 0, head.length);
+          if (authUser) recordUserBandwidth(authUser, 0, head.length);
           serverSocket.write(head);
         }
-        forwardStreams(clientSocket, serverSocket, trackKey, u);
+        forwardStreams(clientSocket, serverSocket, trackKey, authUser);
       });
 
       serverSocket.on('error', () => {
