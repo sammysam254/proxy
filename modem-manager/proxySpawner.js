@@ -121,8 +121,8 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
 
 const httpKeepAliveAgent = new http.Agent({
   keepAlive: true,
-  maxSockets: 8192,
-  maxFreeSockets: 2048,
+  maxSockets: 16384,
+  maxFreeSockets: 4096,
   timeout: 60000,
   keepAliveMsecs: 1000,
 });
@@ -135,7 +135,7 @@ function createHttpProxy(modem, port) {
   const trackKey     = modemId;
 
   const server = http.createServer({
-    highWaterMark: 1024 * 1024,
+    highWaterMark: 2 * 1024 * 1024,
     keepAlive: true,
     keepAliveInitialDelay: 1000,
     keepAliveTimeout: 60000,
@@ -255,7 +255,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
 
   const server = net.createServer({
     pauseOnConnect: false,
-    highWaterMark: 1024 * 1024,
+    highWaterMark: 2 * 1024 * 1024,
   }, (socket) => {
     tuneSocket(socket);
 

@@ -105,9 +105,12 @@ async function cleanRemoteVpsPorts() {
     const remoteCmd = [
       'fuser -k -9 41000:43050/tcp 2>/dev/null || true',
       'pkill -9 -f "sshd:.*@notty" 2>/dev/null || true',
-      'sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_wmem="4096 65536 16777216" net.ipv4.tcp_window_scaling=1 2>/dev/null || true',
+      'sysctl -w net.core.rmem_max=67108864 net.core.wmem_max=67108864 net.ipv4.tcp_rmem="4096 87380 67108864" net.ipv4.tcp_wmem="4096 65536 67108864" net.ipv4.tcp_window_scaling=1 net.ipv4.tcp_slow_start_after_idle=0 net.ipv4.tcp_mtu_probing=1 2>/dev/null || true',
       'mkdir -p /etc/ssh/sshd_config.d',
       'echo "GatewayPorts yes" > /etc/ssh/sshd_config.d/99-proxicell.conf 2>/dev/null || true',
+      'echo "MaxSessions 2048" >> /etc/ssh/sshd_config.d/99-proxicell.conf 2>/dev/null || true',
+      'echo "MaxStartups 2048:30:4096" >> /etc/ssh/sshd_config.d/99-proxicell.conf 2>/dev/null || true',
+      'echo "IPQoS throughput" >> /etc/ssh/sshd_config.d/99-proxicell.conf 2>/dev/null || true',
       'grep -q "^GatewayPorts yes" /etc/ssh/sshd_config 2>/dev/null || (echo "GatewayPorts yes" >> /etc/ssh/sshd_config 2>/dev/null && (systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true))',
     ].join('; ');
 
@@ -138,7 +141,7 @@ function buildSshArgs() {
     '-o', 'TCPKeepAlive=yes',
     '-o', 'IPQoS=throughput',          // optimize TCP buffers for maximum bandwidth
     '-o', 'Compression=no',            // disable CPU compression bottleneck for maximum speed
-    '-c', 'aes128-gcm@openssh.com,aes128-ctr,chacha20-poly1305@openssh.com', // hardware AES-NI acceleration
+    '-c', 'aes128-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-gcm@openssh.com', // hardware AES-NI acceleration
     '-p', String(VPS_SSH_PORT),
     '-i', keyPath,
     ...remoteForwards,
