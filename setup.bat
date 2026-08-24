@@ -50,9 +50,16 @@ echo.
 
 :: 0. Pull latest updates automatically
 if exist "%PROJ_DIR%.git" (
-    echo [*] Checking for updates...
-    git -C "%PROJ_DIR%" pull origin main >nul 2>&1
-    echo [OK] Code up to date.
+    echo [*] Checking for updates from GitHub...
+    git -C "%PROJ_DIR%" fetch --all >nul 2>&1
+    git -C "%PROJ_DIR%" reset --hard origin/main >nul 2>&1
+    for /f "tokens=*" %%i in ('git -C "%PROJ_DIR%" rev-parse --short HEAD 2^>nul') do set "GIT_COMMIT=%%i"
+    for /f "tokens=*" %%i in ('git -C "%PROJ_DIR%" log -1 --pretty=format:"%%s" 2^>nul') do set "GIT_MSG=%%i"
+    if defined GIT_COMMIT (
+        echo [OK] Code up to date at commit: !GIT_COMMIT! (!GIT_MSG!)
+    ) else (
+        echo [OK] Code up to date.
+    )
 )
 
 :: 1. Clean Stale Processes
