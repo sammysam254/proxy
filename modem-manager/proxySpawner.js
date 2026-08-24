@@ -104,6 +104,35 @@ function isAuthorized(modemId, username, password) {
   return false;
 }
 
+// User-level bandwidth store: username → { in: 0, out: 0, lastSyncedIn: 0, lastSyncedOut: 0 }
+const userBandwidthStore = new Map();
+
+function recordUserBandwidth(username, bytesIn, bytesOut) {
+  if (!username) return;
+  let entry = userBandwidthStore.get(username);
+  if (!entry) {
+    entry = { in: 0, out: 0, lastSyncedIn: 0, lastSyncedOut: 0 };
+    userBandwidthStore.set(username, entry);
+  }
+  entry.in  += bytesIn;
+  entry.out += bytesOut;
+}
+
+function getDeltaUserBandwidth(username) {
+  if (!username) return { deltaIn: 0, deltaOut: 0, totalDelta: 0 };
+  const entry = userBandwidthStore.get(username);
+  if (!entry) return { deltaIn: 0, deltaOut: 0, totalDelta: 0 };
+
+  const deltaIn  = Math.max(0, entry.in - entry.lastSyncedIn);
+  const deltaOut = Math.max(0, entry.out - entry.lastSyncedOut);
+  const totalDelta = deltaIn + deltaOut;
+
+  entry.lastSyncedIn  = entry.in;
+  entry.lastSyncedOut = entry.out;
+
+  return { deltaIn, deltaOut, totalDelta };
+}
+
 // ─── Socket Stream Tuning & Optimization (Uncapped Maximum Throughput) ───────
 function tuneSocket(sock) {
   if (!sock) return;
@@ -116,7 +145,7 @@ function tuneSocket(sock) {
 }
 
 // ─── Socket Stream Forwarder with Native Zero-Overhead C++ Stream Piping (1 Gbps+) ───
-function forwardStreams(clientSocket, serverSocket, trackingKey) {
+function forwardStreams(clientSocket, serverSocket, trackingKey, username) {
   tuneSocket(clientSocket);
   tuneSocket(serverSocket);
 
@@ -130,13 +159,16 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
     const deltaOut = Math.max(0, curServerRead - lastServerRead);
     if (deltaIn > 0 || deltaOut > 0) {
       recordBandwidth(trackingKey, deltaOut, deltaIn);
+      if (username) {
+        recordUserBandwidth(username, deltaOut, deltaIn);
+      }
       lastClientRead = curClientRead;
       lastServerRead = curServerRead;
     }
   };
 
   // Flush bandwidth periodically without interrupting streaming
-  const interval = setInterval(flushBytes, 2000);
+  const interval = setInterval(flushBytes, 1000);
 
   // Native kernel stream piping — delivers maximum line speed
   clientSocket.pipe(serverSocket);
@@ -263,9 +295,10 @@ function createHttpProxy(modem, port) {
         clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         if (head && head.length > 0) {
           recordBandwidth(trackKey, 0, head.length);
+          if (u) recordUserBandwidth(u, 0, head.length);
           serverSocket.write(head);
         }
-        forwardStreams(clientSocket, serverSocket, trackKey);
+        forwardStreams(clientSocket, serverSocket, trackKey, u);
       });
 
       serverSocket.on('error', () => {
@@ -321,7 +354,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
 
             if (isAuthorized(modemId, u, p)) {
               socket.write(Buffer.from([0x01, 0x00])); // Auth success
-              handleSocks5Request(socket, modem, boundAddress, trackKey);
+              handleSocks5Request(socket, modem, boundAddress, trackKey, u);
             } else {
               socket.write(Buffer.from([0x01, 0x01])); // Auth failed
               socket.destroy();
@@ -330,7 +363,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         } else {
           // No auth required (0x00)
           socket.write(Buffer.from([0x05, 0x00]));
-          handleSocks5Request(socket, modem, boundAddress, trackKey);
+          handleSocks5Request(socket, modem, boundAddress, trackKey, null);
         }
       } else if (version === 0x04 || isSocks4) {
         // ── SOCKS4 Handshake ──────────────────────────────────────────────
@@ -348,7 +381,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
             outbound.setKeepAlive(true, 1000);
           } catch {}
           socket.write(Buffer.from([0x00, 0x5a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
-          forwardStreams(socket, outbound, trackKey);
+          forwardStreams(socket, outbound, trackKey, null);
         });
 
         outbound.on('error', () => {
@@ -369,7 +402,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
   return server;
 }
 
-function handleSocks5Request(socket, modem, boundAddress, trackKey) {
+function handleSocks5Request(socket, modem, boundAddress, trackKey, username) {
   socket.once('data', (req) => {
     if (req.length < 4 || req[0] !== 0x05) {
       return socket.destroy();
@@ -420,7 +453,7 @@ function handleSocks5Request(socket, modem, boundAddress, trackKey) {
         // SOCKS5 success response (0x05, 0x00 = success, 0x00 = RSV, 0x01 = IPv4, 0.0.0.0:0)
         const resp = Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
         socket.write(resp, () => {
-          forwardStreams(socket, outbound, trackKey);
+          forwardStreams(socket, outbound, trackKey, username);
           socket.resume();
         });
       });
@@ -551,4 +584,6 @@ module.exports = {
   setExactCredentials,
   setAllActiveCredentials,
   getModemBandwidth,
+  getDeltaUserBandwidth,
+  recordUserBandwidth,
 };

@@ -131,86 +131,75 @@ async function markModemOffline(modemId) {
 // Track per-modem byte snapshots so we only sync the DELTA on each interval
 const _lastSyncedBytes = new Map(); // modemId → { bytesIn, bytesOut }
 
-// ─── Sync bandwidth usage ─────────────────────────────────────────────────────
+// ─── Sync bandwidth usage (Per-User Real MB Accounting) ──────────────────────
 async function syncBandwidth(modems) {
+  // 1. Sync per-modem slot cumulative counters
   for (const modem of modems) {
     if (!modem.id) continue;
-
     try {
       const { bytesIn, bytesOut } = await spawner.getModemBandwidth(modem);
-
-      // Compute delta since last sync (avoids counting same bytes twice)
       const prev       = _lastSyncedBytes.get(modem.id) || { bytesIn: 0, bytesOut: 0 };
       const deltaIn    = Math.max(0, bytesIn  - prev.bytesIn);
       const deltaOut   = Math.max(0, bytesOut - prev.bytesOut);
       const deltaBytes = deltaIn + deltaOut;
-
-      // Remember current totals for next iteration
       _lastSyncedBytes.set(modem.id, { bytesIn, bytesOut });
 
-      // Nothing new since last sync — skip
-      if (deltaBytes === 0) continue;
-
-      // Update modem-level cumulative counter in DB
-      const { error: rpcError } = await supabase.rpc('increment_modem_bytes', {
-        modem_id_input:  modem.id,
-        delta_bytes: deltaBytes,
-      });
-
-      if (rpcError) {
-        // Fallback: manual fetch + update if RPC doesn't exist yet
-        const { data: m } = await supabase
-          .from('modems').select('data_used_bytes').eq('id', modem.id).single();
-        const prev_bytes = m?.data_used_bytes || 0;
-        await supabase.from('modems').update({
-          data_used_bytes: prev_bytes + deltaBytes,
-        }).eq('id', modem.id);
+      if (deltaBytes > 0) {
+        const { error: rpcError } = await supabase.rpc('increment_modem_bytes', {
+          modem_id_input: modem.id,
+          delta_bytes: deltaBytes,
+        });
+        if (rpcError) {
+          const { data: m } = await supabase
+            .from('modems').select('data_used_bytes').eq('id', modem.id).single();
+          const prev_bytes = m?.data_used_bytes || 0;
+          await supabase.from('modems').update({
+            data_used_bytes: prev_bytes + deltaBytes,
+          }).eq('id', modem.id);
+        }
       }
+    } catch {}
+  }
 
-      // Find all active subscriptions for proxies on this modem
-      const { data: subs } = await supabase
-        .from('subscriptions')
-        .select('id, gb_used, gb_limit, proxy_username, proxy_id, proxies!inner(modem_id)')
-        .eq('proxies.modem_id', modem.id)
-        .eq('status', 'active');
+  // 2. Sync EXACT individual bandwidth per user subscription account
+  try {
+    const { data: subs } = await supabase
+      .from('subscriptions')
+      .select('id, gb_used, gb_limit, proxy_username, status, proxies(modem_id)')
+      .eq('status', 'active');
 
-      if (subs && subs.length > 0) {
-        const deltaGb = deltaBytes / (1024 ** 3);
-
-        for (const sub of subs) {
-          // Accumulate: add new delta on top of current stored value
-          const currentGb  = parseFloat(sub.gb_used || 0);
-          const newGbUsed  = parseFloat((currentGb + deltaGb).toFixed(6));
+    if (subs && subs.length > 0) {
+      for (const sub of subs) {
+        if (!sub.proxy_username) continue;
+        const { deltaIn, deltaOut, totalDelta } = spawner.getDeltaUserBandwidth(sub.proxy_username);
+        if (totalDelta > 0) {
+          const deltaGb = totalDelta / (1024 ** 3);
+          const currentGb = parseFloat(sub.gb_used || 0);
+          const newGbUsed = parseFloat((currentGb + deltaGb).toFixed(6));
           const updateData = { gb_used: newGbUsed };
 
-          // Auto-expire if GB cap hit
+          // Auto-expire if limit hit
           if (sub.gb_limit && newGbUsed >= parseFloat(sub.gb_limit)) {
             updateData.status = 'expired';
-            console.log(`[SupabaseSync] 📛 Subscription ${sub.id} expired (${newGbUsed.toFixed(4)} GB / ${sub.gb_limit} GB limit)`);
-            // ── Immediately revoke credentials so the user CANNOT connect anymore ──
-            if (sub.proxy_username && sub.proxies?.modem_id) {
-              await spawner.removeCredential(sub.proxy_username, sub.proxies.modem_id).catch(() => {});
-              console.log(`[SupabaseSync] 🔒 Credentials revoked for expired user '${sub.proxy_username}'`);
-            }
+            console.log(`[SupabaseSync] 📛 Subscription for user '${sub.proxy_username}' expired (${newGbUsed.toFixed(4)} GB / ${sub.gb_limit} GB limit)`);
+            await spawner.removeCredential(sub.proxy_username, sub.proxies?.modem_id).catch(() => {});
           }
 
           await supabase.from('subscriptions').update(updateData).eq('id', sub.id);
+
+          await supabase.from('usage_logs').insert([{
+            subscription_id: sub.id,
+            bytes_in: deltaIn,
+            bytes_out: deltaOut,
+            logged_at: new Date().toISOString(),
+          }]);
+
+          console.log(`[SupabaseSync] 📊 Account '${sub.proxy_username}': +${(totalDelta / (1024 * 1024)).toFixed(2)} MB (Total: ${(newGbUsed * 1024).toFixed(2)} MB / ${sub.gb_limit ? sub.gb_limit * 1024 + ' MB' : 'Unlimited'})`);
         }
-
-        // Append to usage_logs for history
-        const logEntries = subs.map(s => ({
-          subscription_id: s.id,
-          bytes_in:        deltaIn,
-          bytes_out:       deltaOut,
-          logged_at:       new Date().toISOString(),
-        }));
-        await supabase.from('usage_logs').insert(logEntries);
-
-        console.log(`[SupabaseSync] 📊 Bandwidth sync: +${(deltaBytes / 1024).toFixed(1)} KB for ${modems.length} modem(s), ${subs.length} subscription(s)`);
       }
-    } catch (e) {
-      console.warn(`[SupabaseSync] Bandwidth sync error for modem ${modem.id}:`, e.message);
     }
+  } catch (e) {
+    console.warn('[SupabaseSync] User bandwidth sync error:', e.message);
   }
 }
 
