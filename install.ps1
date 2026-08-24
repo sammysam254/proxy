@@ -12,37 +12,16 @@ Write-Host ""
 $projDir = "C:\proxy"
 $needsDownload = $true
 
-if (Test-Path "$projDir\modem-manager\index.js") {
-    $needsDownload = $false
-    if (Test-Path "$projDir\.git") {
-        Write-Host "[*] Automatically pulling latest updates from GitHub..." -ForegroundColor Cyan
-        try {
-            git -C $projDir fetch --all 2>$null
-            git -C $projDir reset --hard origin/main 2>$null
-            Write-Host "[OK] Code automatically updated to latest version." -ForegroundColor Green
-        } catch {}
-    }
-} elseif ($PSScriptRoot -and (Test-Path "$PSScriptRoot\modem-manager\index.js")) {
-    $projDir = $PSScriptRoot
-    $needsDownload = $false
-    if (Test-Path "$projDir\.git") {
-        Write-Host "[*] Automatically pulling latest updates from GitHub..." -ForegroundColor Cyan
-        try {
-            git -C $projDir fetch --all 2>$null
-            git -C $projDir reset --hard origin/main 2>$null
-            Write-Host "[OK] Code automatically updated to latest version." -ForegroundColor Green
-        } catch {}
-    }
-} elseif (Test-Path "$HOME\proxy\modem-manager\index.js") {
-    $projDir = "$HOME\proxy"
-    $needsDownload = $false
-    if (Test-Path "$projDir\.git") {
-        Write-Host "[*] Automatically pulling latest updates from GitHub..." -ForegroundColor Cyan
-        try {
-            git -C $projDir fetch --all 2>$null
-            git -C $projDir reset --hard origin/main 2>$null
-            Write-Host "[OK] Code automatically updated to latest version." -ForegroundColor Green
-        } catch {}
+if (Test-Path "$projDir\.git") {
+    Write-Host "[*] Automatically pulling latest updates from GitHub via Git..." -ForegroundColor Cyan
+    try {
+        git -C $projDir fetch --all 2>$null
+        git -C $projDir reset --hard origin/main 2>$null
+        $commit = git -C $projDir rev-parse --short HEAD 2>$null
+        Write-Host "[OK] Code updated to latest commit: $commit" -ForegroundColor Green
+        $needsDownload = $false
+    } catch {
+        $needsDownload = $true
     }
 }
 
@@ -58,12 +37,12 @@ if ($needsDownload) {
         }
     }
 
-    Write-Host "[*] Downloading complete Vertex Proxies codebase to $projDir..." -ForegroundColor Blue
+    Write-Host "[*] Fetching latest Vertex Proxies codebase from GitHub..." -ForegroundColor Blue
     $downloaded = $false
 
     try {
         $gitCmd = (Get-Command git -ErrorAction SilentlyContinue).Source
-        if ($gitCmd) {
+        if ($gitCmd -and -not (Test-Path "$projDir\modem-manager\index.js")) {
             Write-Host "[*] Cloning repository via Git..." -ForegroundColor Blue
             git clone --depth 1 https://github.com/sammysam254/proxy.git $projDir
             if (Test-Path "$projDir\modem-manager\index.js") { $downloaded = $true }
@@ -71,7 +50,7 @@ if ($needsDownload) {
     } catch {}
 
     if (-not $downloaded) {
-        Write-Host "[*] Downloading release ZIP from GitHub..." -ForegroundColor Blue
+        Write-Host "[*] Downloading latest release ZIP from GitHub..." -ForegroundColor Blue
         $zipUrl = "https://github.com/sammysam254/proxy/archive/refs/heads/main.zip"
         $zipFile = Join-Path $env:TEMP "proxy-repo.zip"
         $extractDir = Join-Path $env:TEMP "proxy-repo-extract"
@@ -81,6 +60,7 @@ if ($needsDownload) {
         Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
         Copy-Item -Path "$extractDir\proxy-main\*" -Destination $projDir -Recurse -Force
         Remove-Item -Recurse -Force $zipFile, $extractDir -ErrorAction SilentlyContinue
+        Write-Host "[OK] Latest code downloaded and extracted successfully." -ForegroundColor Green
     }
 }
 
