@@ -68,14 +68,14 @@ function isAuthorized(modemId, username, password) {
   return false;
 }
 
-// ─── Socket Stream Tuning & Optimization (1 Gbps+ WAN Scaling) ───────────────
+// ─── Socket Stream Tuning & Optimization (Uncapped Maximum Throughput) ───────
 function tuneSocket(sock) {
   if (!sock) return;
   try {
     sock.setNoDelay(true);
     sock.setKeepAlive(true, 1000);
-    if (sock.readableHighWaterMark !== undefined) sock.readableHighWaterMark = 1024 * 1024;
-    if (sock.writableHighWaterMark !== undefined) sock.writableHighWaterMark = 1024 * 1024;
+    if (sock.readableHighWaterMark !== undefined) sock.readableHighWaterMark = 64 * 1024 * 1024;
+    if (sock.writableHighWaterMark !== undefined) sock.writableHighWaterMark = 64 * 1024 * 1024;
   } catch {}
 }
 
@@ -121,9 +121,10 @@ function forwardStreams(clientSocket, serverSocket, trackingKey) {
 
 const httpKeepAliveAgent = new http.Agent({
   keepAlive: true,
-  maxSockets: 16384,
-  maxFreeSockets: 4096,
-  timeout: 60000,
+  maxSockets: Infinity,
+  maxFreeSockets: Infinity,
+  maxTotalSockets: Infinity,
+  timeout: 0,
   keepAliveMsecs: 1000,
 });
 
@@ -135,10 +136,10 @@ function createHttpProxy(modem, port) {
   const trackKey     = modemId;
 
   const server = http.createServer({
-    highWaterMark: 2 * 1024 * 1024,
+    highWaterMark: 64 * 1024 * 1024,
     keepAlive: true,
     keepAliveInitialDelay: 1000,
-    keepAliveTimeout: 60000,
+    keepAliveTimeout: 0,
   }, (req, res) => {
     // 1. Check Auth for standard HTTP
     const authHeader = req.headers['proxy-authorization'];
@@ -255,7 +256,7 @@ function createSocksProxy(modem, port, isSocks4 = false) {
 
   const server = net.createServer({
     pauseOnConnect: false,
-    highWaterMark: 2 * 1024 * 1024,
+    highWaterMark: 64 * 1024 * 1024,
   }, (socket) => {
     tuneSocket(socket);
 
