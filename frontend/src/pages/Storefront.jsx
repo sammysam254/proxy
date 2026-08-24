@@ -457,11 +457,11 @@ export default function Storefront({ session }) {
                 © {new Date().getFullYear()} <strong style={{ color: 'var(--clr-text)' }}>Vertext Proxies</strong>. All rights reserved. Real mobile & residential proxy network.
               </div>
               <div style={{ display: 'flex', gap: '20px' }}>
-                <span>Privacy Policy</span>
+                <Link to="/privacy" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Privacy Policy</Link>
                 <span>•</span>
-                <span>Terms of Service</span>
+                <Link to="/terms" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Terms of Service</Link>
                 <span>•</span>
-                <span>Anti-Abuse Policy</span>
+                <Link to="/terms" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Anti-Abuse Policy</Link>
               </div>
             </div>
           </div>

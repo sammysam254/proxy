@@ -8,6 +8,8 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import AuthPage from './pages/AuthPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
 import './index.css';
 
 export default function App() {
@@ -57,6 +59,8 @@ export default function App() {
         <Route path="/dashboard"          element={session ? <Dashboard session={session} /> : <Navigate to="/auth" />} />
         <Route path="/dashboard/settings" element={session ? <Settings session={session} /> : <Navigate to="/auth" />} />
         <Route path="/settings"           element={session ? <Settings session={session} /> : <Navigate to="/auth" />} />
+        <Route path="/terms"              element={<TermsPage session={session} />} />
+        <Route path="/privacy"            element={<PrivacyPage session={session} />} />
         <Route path="/admin/*"            element={session ? <Admin session={session} /> : <Navigate to="/auth" />} />
         <Route path="*"                   element={<Navigate to="/" />} />
       </Routes>
