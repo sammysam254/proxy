@@ -1,14 +1,12 @@
 /**
- * ProxiCell — Wi-Fi Network Detector
- * Detects connected Wi-Fi networks (including Mobile Hotspots) on Windows & Linux
- *
- * Allows generating proxies from the computer's connected Wi-Fi interface
- * without needing USB tethering.
+ * ProxiCell — Computer Wi-Fi Network Detector
+ * Detects connected Wi-Fi networks strictly on the local computer (Windows & Linux).
+ * Never touches mobile phone networks, Android ADB, or cellular modems.
  */
 
 'use strict';
 
-const { exec, execFile } = require('child_process');
+const { exec }           = require('child_process');
 const { promisify }      = require('util');
 const fs                 = require('fs');
 const path               = require('path');
@@ -26,31 +24,10 @@ async function run(cmd, opts = {}) {
   }
 }
 
-// ─── Check for ADB path (for optional hotspot airplane-mode rotation) ─────────
-function getAdbBin() {
-  const candidates = [
-    path.join(__dirname, 'bin', 'platform-tools', 'adb.exe'),
-    path.join(__dirname, 'bin', 'platform-tools', 'adb'),
-    path.join(process.cwd(), 'modem-manager', 'bin', 'platform-tools', 'adb.exe'),
-    path.join(process.cwd(), 'bin', 'platform-tools', 'adb.exe'),
-    'adb.exe',
-    'adb',
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return 'adb';
-}
+// ─── Mobile / Cellular Interface Filter ───────────────────────────────────────
+// Explicitly blacklist any mobile phone tethering, cellular modem, or virtual adapters
+const MOBILE_AND_VIRTUAL_FILTER = /rndis|remote ndis|apple mobile|samsung|android|pixel|cellular|mobile broadband|wwan|cdc[- ]?ncm|huawei|zte|qualcomm|tailscale|virtualbox|vmware|vethernet|hyper-v|loopback|docker/i;
 
-function runAdb(args) {
-  return new Promise((resolve) => {
-    const bin = getAdbBin();
-    execFile(bin, args, { timeout: 8000 }, (err, stdout) => {
-      if (err) return resolve(null);
-      resolve(stdout ? stdout.trim() : null);
-    });
-  });
-}
 
 // =============================================================================
 // ─── WINDOWS WI-FI DETECTION ─────────────────────────────────────────────────
@@ -187,6 +164,8 @@ async function detectWindowsWifiFallback() {
     if (adapter.ipv4.startsWith('192.168.56.') || adapter.ipv4.startsWith('192.168.57.')) return;
 
     const combined = `${adapter.type} ${adapter.name} ${adapter.description}`.toLowerCase();
+    if (MOBILE_AND_VIRTUAL_FILTER.test(combined)) return;
+
     const isWifi = /wireless|wi-fi|wlan|802\.11/i.test(combined);
 
     if (isWifi) {
@@ -212,7 +191,8 @@ async function detectWindowsWifiFallback() {
 
 /**
  * Primary adapter fallback: If computer does not have a dedicated Wi-Fi card or is connected
- * via LAN/Ethernet, use the primary internet connection to host the 12 residential proxies.
+ * via LAN/Ethernet, use the computer's primary local network connection.
+ * Strictly excludes any mobile phones, USB tethering, or cellular modems.
  */
 async function detectWindowsPrimaryAdapter() {
   const raw = await run('ipconfig /all', { shell: 'cmd.exe' });
@@ -263,7 +243,8 @@ async function detectWindowsPrimaryAdapter() {
     if (adapter.ipv4.startsWith('172.28.') || adapter.ipv4.startsWith('172.29.') || adapter.ipv4.startsWith('172.30.') || adapter.ipv4.startsWith('172.31.')) return; // WSL
 
     const combined = `${adapter.type} ${adapter.name} ${adapter.description}`.toLowerCase();
-    if (/tailscale|virtualbox|vmware|vethernet|hyper-v|loopback|docker/i.test(combined)) return;
+    // Strictly filter out mobile tethering, cellular modems, VPNs, and VMs
+    if (MOBILE_AND_VIRTUAL_FILTER.test(combined)) return;
 
     detected.push({
       devicePath: `wifi:${adapter.name.replace(/\s+/g, '_')}`,
@@ -295,6 +276,10 @@ async function detectWifiWindows() {
   for (const iface of wlanIfaces) {
     if (iface.state !== 'connected') continue;
 
+    // Filter out any mobile tethering adapter that might show under wlan
+    const combined = `${iface.name} ${iface.description}`.toLowerCase();
+    if (MOBILE_AND_VIRTUAL_FILTER.test(combined)) continue;
+
     const ipv4 = await getIpv4ForInterface(iface.name);
     if (!ipv4) continue;
 
@@ -325,7 +310,7 @@ async function detectWifiWindows() {
     detected.push(...fallback);
   }
 
-  // If still no wireless adapter found, use the computer's primary active internet connection
+  // If still no wireless adapter found, use the computer's primary active local network connection
   if (detected.length === 0) {
     const primary = await detectWindowsPrimaryAdapter();
     detected.push(...primary);
@@ -348,6 +333,9 @@ async function detectWifiLinux() {
     const wifiIfaces = dirs.filter(name => /^(wlan|wlp|wls|wifi)/.test(name));
 
     for (const iface of wifiIfaces) {
+      // Exclude any mobile phone usb tethering on linux (e.g. usb0, rndis, cdc)
+      if (MOBILE_AND_VIRTUAL_FILTER.test(iface)) continue;
+
       const ifPath = `${ifDir}/${iface}`;
       let operstate = 'down';
       try {
@@ -449,60 +437,28 @@ async function detectWifiDevices() {
 }
 
 /**
- * Rotates the Wi-Fi IP address.
- * 1. Checks if an Android phone is connected via ADB (even without USB tethering).
- *    If connected, toggles Airplane mode on the phone to rotate cellular IP for the hotspot!
- * 2. Otherwise, reconnects to the Wi-Fi network or refreshes DHCP.
+ * Rotates the Wi-Fi IP address strictly via computer network reconnect / DHCP renew.
+ * Never touches mobile phones or ADB.
  */
 async function rotateWifiIp(device) {
-  console.log(`[WifiDetector] Initiating IP rotation for Wi-Fi: ${device.label}...`);
+  console.log(`[WifiDetector] Initiating computer Wi-Fi IP rotation for: ${device.label}...`);
 
-  // Check if any ADB devices are connected (e.g. phone generating the mobile hotspot)
-  const adbDevicesOut = await runAdb(['devices']);
-  let rotatedViaAdb = false;
-
-  if (adbDevicesOut) {
-    const lines = adbDevicesOut.split('\n').slice(1);
-    for (const line of lines) {
-      const parts = line.trim().split(/\s+/);
-      if (parts.length >= 2 && parts[1] === 'device') {
-        const serial = parts[0];
-        console.log(`[WifiDetector] Found Android ADB device (${serial}). Toggling Airplane mode for mobile hotspot IP rotation...`);
-        try {
-          // Toggle Airplane mode on phone
-          await runAdb(['-s', serial, 'shell', 'cmd connectivity airplane-mode enable']).catch(() => {});
-          await runAdb(['-s', serial, 'shell', 'settings put global airplane_mode_on 1']).catch(() => {});
-          await runAdb(['-s', serial, 'shell', 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true']).catch(() => {});
-          await new Promise(r => setTimeout(r, 3000));
-          await runAdb(['-s', serial, 'shell', 'cmd connectivity airplane-mode disable']).catch(() => {});
-          await runAdb(['-s', serial, 'shell', 'settings put global airplane_mode_on 0']).catch(() => {});
-          await runAdb(['-s', serial, 'shell', 'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false']).catch(() => {});
-          rotatedViaAdb = true;
-          console.log(`[WifiDetector] Successfully toggled Airplane mode on ADB device ${serial}.`);
-          break;
-        } catch (e) {
-          console.warn(`[WifiDetector] Failed ADB airplane mode toggle:`, e.message);
-        }
-      }
-    }
-  }
-
-  if (!rotatedViaAdb) {
-    console.log(`[WifiDetector] Performing network reconnect / DHCP release-renew for ${device.interface}...`);
-    if (IS_WIN) {
-      if (device.ssid) {
-        await run(`netsh wlan disconnect interface="${device.interface}"`, { shell: 'cmd.exe' });
-        await new Promise(r => setTimeout(r, 2000));
-        await run(`netsh wlan connect name="${device.ssid}" interface="${device.interface}"`, { shell: 'cmd.exe' });
-      } else {
-        await run(`ipconfig /renew "${device.interface}"`, { shell: 'cmd.exe' });
-      }
+  if (IS_WIN) {
+    if (device.ssid) {
+      console.log(`[WifiDetector] Reconnecting Wi-Fi SSID "${device.ssid}" on interface "${device.interface}"...`);
+      await run(`netsh wlan disconnect interface="${device.interface}"`, { shell: 'cmd.exe' });
+      await new Promise(r => setTimeout(r, 2000));
+      await run(`netsh wlan connect name="${device.ssid}" interface="${device.interface}"`, { shell: 'cmd.exe' });
     } else {
-      await run(`nmcli device reapply ${device.interface} 2>/dev/null || dhclient -r ${device.interface} && dhclient ${device.interface}`);
+      console.log(`[WifiDetector] Renewing DHCP lease for interface "${device.interface}"...`);
+      await run(`ipconfig /renew "${device.interface}"`, { shell: 'cmd.exe' });
     }
+  } else {
+    console.log(`[WifiDetector] Reapplying network configuration for interface ${device.interface}...`);
+    await run(`nmcli device reapply ${device.interface} 2>/dev/null || (dhclient -r ${device.interface} && dhclient ${device.interface})`);
   }
 
-  // Wait for network to stabilize
+  // Wait for network negotiation and local DHCP assignment
   await new Promise(r => setTimeout(r, 4000));
 
   // Re-fetch IP
@@ -522,3 +478,4 @@ module.exports = {
   expandWifiSlots,
   rotateWifiIp,
 };
+

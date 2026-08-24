@@ -17,8 +17,6 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const cron     = require('node-cron');
 const chalk    = require('chalk');
-const detector = require('./modemDetector');
-const android  = require('./androidDetector');
 const wifi     = require('./wifiDetector');
 const spawner  = require('./proxySpawner');
 const tunnel   = require('./tunnelManager');
@@ -26,9 +24,7 @@ const sync     = require('./supabaseSync');
 
 // ─── Device Type Helper ───────────────────────────────────────────────────────
 function getDeviceTag(device) {
-  if (device.isAndroid) return '📱 Android';
-  if (device.isWifi)    return '📶 Wi-Fi';
-  return '📡 Modem';
+  return '📶 Wi-Fi';
 }
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
@@ -240,12 +236,6 @@ async function runCycle() {
         existing.operator       = freshDevice.operator;
         existing.status         = freshDevice.status;
         existing.interface      = freshDevice.interface || existing.interface;
-        // Android-specific
-        if (freshDevice.isAndroid) {
-          existing.battery        = freshDevice.battery;
-          existing.androidVersion = freshDevice.androidVersion;
-          existing.model          = freshDevice.model;
-        }
 
         if (!hadIp && hasIpNow) {
           // ── Device CAME ONLINE — start its proxy ─────────────────────────
@@ -439,22 +429,6 @@ async function main() {
     }
   });
 
-  // Android battery refresh: every 2 minutes
-  cron.schedule('*/2 * * * *', async () => {
-    for (const device of registry.values()) {
-      if (device.isAndroid && device.adbSerial) {
-        try {
-          const info = await android.refreshAndroidStatus(device.adbSerial);
-          if (info) {
-            device.battery = info.battery;
-            device.signal  = info.signal;
-            await sync.updateModemStatus(device.id, { ...device, status: device.state === 'proxying' ? 'online' : 'offline' });
-          }
-        } catch {}
-      }
-    }
-  });
-
   // Tunnel health check: every 2 minutes
   cron.schedule('*/2 * * * *', async () => {
     const healthy = await tunnel.checkTunnelHealth().catch(() => false);
@@ -504,14 +478,8 @@ async function executeRotation(device) {
     // 1. Bring proxy offline during rotation
     await bringOffline(device, 'IP rotation');
 
-    // 2. Trigger rotation on hardware / network
-    if (device.isAndroid) {
-      await android.rotateAndroidIp(device);
-    } else if (device.isWifi) {
-      await wifi.rotateWifiIp(device);
-    } else {
-      await detector.rotateModemIp(device);
-    }
+    // 2. Trigger rotation strictly on computer Wi-Fi interface
+    await wifi.rotateWifiIp(device);
 
     // 3. Wait for network negotiation and local DHCP assignment
     await new Promise(r => setTimeout(r, 4000));
@@ -607,14 +575,13 @@ function startWebhookServer() {
           const statusList = [...registry.values()].map(d => ({
             id:         d.id,
             label:      d.label,
-            type:       d.isAndroid ? 'android' : (d.isWifi ? 'wifi' : 'modem'),
+            type:       'wifi',
             state:      d.state,
             ip:         d.ipAddress,
             interface:  d.interface,
             ports:      d.portSet,
             signal:     d.signal,
             operator:   d.operator,
-            battery:    d.battery,
           }));
           res.writeHead(200).end(JSON.stringify({ devices: statusList }));
 
