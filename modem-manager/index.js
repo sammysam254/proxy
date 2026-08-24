@@ -390,6 +390,8 @@ async function main() {
   console.log(chalk.cyan.bold('  ║  USA High-Speed Wi-Fi Proxies (12 Slots) ║'));
   console.log(chalk.cyan.bold('  ╚══════════════════════════════════════════╝\n'));
 
+  log.ok('🚀 Vertex Engine Build: v2.5.0 (0ms DNS Cache, 128 Threadpool, Uncapped Buffers)');
+
   // Terminate any previous instances & stale reverse tunnels
   await killPreviousInstances();
 

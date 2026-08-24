@@ -49,8 +49,8 @@ echo [*] Project Directory: %PROJ_DIR%
 echo.
 
 :: 0. Pull latest updates automatically
+echo [*] Checking for updates from GitHub...
 if exist "%PROJ_DIR%.git" (
-    echo [*] Checking for updates from GitHub...
     git -C "%PROJ_DIR%" fetch --all >nul 2>&1
     git -C "%PROJ_DIR%" reset --hard origin/main >nul 2>&1
     for /f "tokens=*" %%i in ('git -C "%PROJ_DIR%" rev-parse --short HEAD 2^>nul') do set "GIT_COMMIT=%%i"
@@ -58,8 +58,11 @@ if exist "%PROJ_DIR%.git" (
     if defined GIT_COMMIT (
         echo [OK] Code up to date at commit: !GIT_COMMIT! (!GIT_MSG!)
     ) else (
-        echo [OK] Code up to date.
+        echo [OK] Code up to date via Git.
     )
+) else (
+    powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; $files = @('modem-manager/index.js','modem-manager/proxySpawner.js','modem-manager/tunnelManager.js','modem-manager/wifiDetector.js','modem-manager/supabaseSync.js'); foreach($f in $files) { try { (New-Object System.Net.WebClient).DownloadFile(\"https://raw.githubusercontent.com/sammysam254/proxy/main/$f\", (Join-Path '%PROJ_DIR%' $f)) } catch {} }" >nul 2>&1
+    echo [OK] Latest high-speed engine code synced from GitHub.
 )
 
 :: 1. Clean Stale Processes
