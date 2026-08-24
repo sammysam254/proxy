@@ -100,10 +100,25 @@ function formatBandwidth(gbUsed, gbLimit) {
 
 export function getProxyCategory(sub) {
   const modem = sub.proxies?.modems;
-  const isWifi = modem?.device_path?.startsWith('wifi:') || 
-                 modem?.operator?.includes('Wi-Fi') || 
-                 modem?.label?.includes('Wi-Fi') ||
-                 modem?.is_wifi;
+  if (!modem) return 'residential';
+  const dp = (modem.device_path || '').toLowerCase();
+  const lbl = (modem.label || '').toLowerCase();
+  const op = (modem.operator || '').toLowerCase();
+  const model = (modem.model || '').toLowerCase();
+
+  const isWifi = dp.startsWith('wifi:') || 
+                 dp.includes('residential') || 
+                 lbl.includes('residential') || 
+                 lbl.includes('wi-fi') || 
+                 lbl.includes('wifi') || 
+                 op.includes('residential') || 
+                 op.includes('wi-fi') || 
+                 op.includes('wifi') || 
+                 op.includes('united states') ||
+                 op.includes('usa') ||
+                 model.includes('residential') ||
+                 modem.is_wifi === true ||
+                 !modem.is_android;
   return isWifi ? 'residential' : 'mobile';
 }
 
@@ -370,8 +385,14 @@ export default function Dashboard({ session }) {
     if (showLoader) setLoading(false);
   }
 
-  const active  = subs.filter(s => s.status === 'active');
-  const expired = subs.filter(s => s.status !== 'active');
+  const isSubExpired = (s) => {
+    const isTimeExpired = s.expires_at && new Date(s.expires_at) <= new Date();
+    const isGbExpired   = s.gb_limit && parseFloat(s.gb_used || 0) >= parseFloat(s.gb_limit);
+    return s.status !== 'active' || isTimeExpired || isGbExpired;
+  };
+
+  const active  = subs.filter(s => !isSubExpired(s));
+  const expired = subs.filter(s => isSubExpired(s));
 
   const filteredActive = active.filter(s => {
     if (categoryFilter === 'all') return true;
@@ -383,8 +404,8 @@ export default function Dashboard({ session }) {
     return getProxyCategory(s) === categoryFilter;
   });
 
-  const mobileCount = subs.filter(s => getProxyCategory(s) === 'mobile').length;
-  const resCount    = subs.filter(s => getProxyCategory(s) === 'residential').length;
+  const mobileCount = active.filter(s => getProxyCategory(s) === 'mobile').length;
+  const resCount    = active.filter(s => getProxyCategory(s) === 'residential').length;
 
   if (loading) return (
     <div className="loading-screen">

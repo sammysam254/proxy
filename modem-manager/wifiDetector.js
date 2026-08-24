@@ -415,13 +415,14 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
         ...base,
         devicePath: `residential_usa_slot_${slot}`,
         label:      `USA Residential Proxy #${slot}`,
-        operator:   'United States (USA) 🇺🇸',
+        operator:   'United States (USA) Residential Wi-Fi 🇺🇸',
         model:      `USA High-Speed Residential Node #${slot}`,
         location:   'United States (USA)',
         country:    'USA',
         countryCode:'US',
         signal:     99,
         slotNumber: slot,
+        isWifi:     true,
       });
     }
   }

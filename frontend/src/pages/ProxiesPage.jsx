@@ -53,15 +53,30 @@ export default function ProxiesPage({ session }) {
 
   const isProxyWifi = (p) => {
     const m = p.modems;
-    return m?.device_path?.startsWith('wifi:') || 
-           m?.operator?.includes('Wi-Fi') || 
-           m?.label?.includes('Wi-Fi') ||
-           m?.is_wifi;
+    if (!m) return false;
+    const dp = (m.device_path || '').toLowerCase();
+    const lbl = (m.label || '').toLowerCase();
+    const op = (m.operator || '').toLowerCase();
+    const model = (m.model || '').toLowerCase();
+
+    return dp.startsWith('wifi:') || 
+           dp.includes('residential') || 
+           lbl.includes('residential') || 
+           lbl.includes('wi-fi') || 
+           lbl.includes('wifi') || 
+           op.includes('residential') || 
+           op.includes('wi-fi') || 
+           op.includes('wifi') || 
+           op.includes('united states') ||
+           op.includes('usa') ||
+           model.includes('residential') ||
+           m.is_wifi === true ||
+           !m.is_android;
   };
 
-  const onlineProxies = proxies.filter(p => p.modems?.status === 'online');
-  const mobileCount   = onlineProxies.filter(p => !isProxyWifi(p)).length;
+  const onlineProxies = proxies.filter(p => p.active !== false && p.modems?.status === 'online');
   const resCount      = onlineProxies.filter(p => isProxyWifi(p)).length;
+  const mobileCount   = onlineProxies.filter(p => !isProxyWifi(p)).length;
 
   const filteredProxies = onlineProxies.filter(p => {
     const isWifi = isProxyWifi(p);

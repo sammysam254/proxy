@@ -426,6 +426,23 @@ async function addCredential(username, password, modemId) {
   }
 }
 
+async function removeCredential(username, modemId) {
+  if (username) {
+    globalUserMap.delete(username);
+  }
+  if (modemId && credStore.has(modemId)) {
+    const list = credStore.get(modemId) || [];
+    const filtered = list.filter(c => c.username !== username);
+    credStore.set(modemId, filtered);
+  }
+  if (username && !modemId) {
+    for (const [mId, list] of credStore) {
+      credStore.set(mId, (list || []).filter(c => c.username !== username));
+    }
+  }
+  console.log(`[ProxyEngine] 🔒 Revoked and invalidated credential for user '${username}'`);
+}
+
 async function setExactCredentials(modemId, credsList) {
   credStore.set(modemId, credsList || []);
   for (const c of credsList || []) {
@@ -454,7 +471,7 @@ module.exports = {
   stopProxy,
   reloadConfig: async () => {},
   addCredential,
-  removeCredential: () => {},
+  removeCredential,
   setExactCredentials,
   setAllActiveCredentials,
   getModemBandwidth,
