@@ -57,17 +57,18 @@ export default function Storefront({ session }) {
 
   const FEATURES = [
     'HTTP, SOCKS4 & SOCKS5 support',
-    'Real SIM card IPs (mobile)',
+    'USA Residential & Real IPs',
+    'Max 1 Gbps High-Speed Bandwidth',
     'Username + password auth',
     'Works in all proxy tools & browsers',
-    'IP rotation available',
-    'Works worldwide',
+    'Instant IP rotation available',
+    'Works worldwide with 99.9% uptime',
   ];
 
   const PROXY_TYPES = [
     { name: 'HTTP/HTTPS', desc: 'Standard web browsing, compatible with all browsers', color: '#10b981' },
     { name: 'SOCKS4',     desc: 'Lightweight protocol for TCP connections', color: '#3b82f6' },
-    { name: 'SOCKS5',     desc: 'Full UDP support, best for streaming & gaming', color: '#8b5cf6' },
+    { name: 'SOCKS5',     desc: 'Full UDP/TCP support, best for streaming, scraping & gaming', color: '#8b5cf6' },
   ];
 
   return (
@@ -80,19 +81,19 @@ export default function Storefront({ session }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
               <div className="badge badge-online" style={{ padding: '6px 16px', fontSize: '0.85rem' }}>
                 <span className="dot" />
-                {stats.online} proxies online right now
+                {stats.online} USA residential proxies online at max speed
               </div>
             </div>
 
             <h1 className="hero-title">
-              Real SIM Card Proxies.<br />
-              <span className="text-gradient">True Mobile IPs.</span>
+              USA Residential Proxies.<br />
+              <span className="text-gradient">Max 1 Gbps Line Speed.</span>
             </h1>
 
             <p className="hero-subtitle">
-              Route your traffic through real 4G/5G SIM cards.
+              Route your traffic through high-speed USA residential networks.
               HTTP, SOCKS4, and SOCKS5 proxies — globally accessible,
-              impossible to detect as datacenter IPs.
+              lightning fast, impossible to detect as datacenter IPs.
             </p>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>

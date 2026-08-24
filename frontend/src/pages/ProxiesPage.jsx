@@ -296,7 +296,7 @@ export default function ProxiesPage({ session }) {
 
                       <div>
                         <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Speed</div>
-                        <div style={{ fontWeight: 600, color: 'var(--clr-green)' }}>Max Wi-Fi ⚡</div>
+                        <div style={{ fontWeight: 700, color: 'var(--clr-green)' }}>1 Gbps (Max Speed) ⚡</div>
                       </div>
 
                       <div>
