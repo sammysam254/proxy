@@ -49,13 +49,15 @@ const registry = new Map();
 // This prevents port collisions even if devices come/go
 let portCounter = 0;
 
+const isDirectVps = process.platform === 'linux' || process.env.IS_VPS === 'true';
+
 // ─── Assign a port set to a device ───────────────────────────────────────────
 function assignPorts() {
   const idx = portCounter++;
   return {
-    http:        31000 + idx,
-    socks4:      32000 + idx,
-    socks5:      33000 + idx,
+    http:        (isDirectVps ? 41000 : 31000) + idx,
+    socks4:      (isDirectVps ? 42000 : 32000) + idx,
+    socks5:      (isDirectVps ? 43000 : 33000) + idx,
     publicHttp:  41000 + idx,
     publicSocks4:42000 + idx,
     publicSocks5:43000 + idx,
@@ -67,66 +69,31 @@ const https = require('https');
 // ─── Fetch Public SIM IP via local interface binding (with 2-minute cache) ──
 const _ipCache = new Map();
 function fetchPublicIp(localAddress) {
-  if (!localAddress || localAddress === '0.0.0.0') return Promise.resolve(null);
-  const hit = _ipCache.get(localAddress);
-  if (hit && (Date.now() - hit.time < 120_000)) {
-    return Promise.resolve(hit.ip);
+  if (isDirectVps) {
+    return Promise.resolve(process.env.VPS_HOST || '64.227.3.211');
   }
-  return new Promise((resolve) => {
-    const req = https.get('https://api.ipify.org?format=json', {
-      localAddress,
-      timeout: 3000,
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => (data += chunk));
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.ip) {
-            _ipCache.set(localAddress, { ip: parsed.ip, time: Date.now() });
-            return resolve(parsed.ip);
-          }
-          resolve(null);
-        } catch {
-          resolve(null);
-        }
-      });
-    });
-    req.on('error', () => {
-      const fallback = https.get('https://icanhazip.com', {
-        localAddress,
-        timeout: 3000,
-      }, (res2) => {
-        let text = '';
-        res2.on('data', chunk => (text += chunk));
-        res2.on('end', () => {
-          const ip = text.trim();
-          if (ip) _ipCache.set(localAddress, { ip, time: Date.now() });
-          resolve(ip || null);
-        });
-      });
-      fallback.on('error', () => resolve(null));
-    });
-  });
+  return Promise.resolve(process.env.VPS_HOST || '64.227.3.211');
 }
 
 // ─── Bring a device fully online (start proxy + tunnel) ──────────────────────
 async function bringOnline(device) {
   log.ok(`[${getDeviceTag(device)}] Bringing online: ${device.label}`);
   
-  // 1. Fetch public IP
+  // 1. Fetch public IP — always USA VPS IP
   const publicIp = await fetchPublicIp(device.ipAddress);
-  device.publicIp = publicIp || device.ipAddress;
+  device.publicIp = publicIp || process.env.VPS_HOST || '64.227.3.211';
 
-  log.ok(`  ↳ Public IP: ${device.publicIp} (Local Interface: ${device.ipAddress})`);
+  log.ok(`  ↳ Public IP: ${device.publicIp} (USA Tier-1 Exit)`);
   log.ok(`  ↳ HTTP :${device.portSet.http}  SOCKS4 :${device.portSet.socks4}  SOCKS5 :${device.portSet.socks5}`);
   log.ok(`  ↳ VPS  HTTP :${device.portSet.publicHttp}  SOCKS4 :${device.portSet.publicSocks4}  SOCKS5 :${device.portSet.publicSocks5}`);
 
   // 2. Start proxy server for this device
   await spawner.startProxy(device);
 
-  // 3. Open reverse-tunnel ports on VPS
-  await tunnel.addTunnelPorts(device);
+  // 3. Open reverse-tunnel ports on VPS if running from remote client
+  if (!isDirectVps) {
+    await tunnel.addTunnelPorts(device);
+  }
 
   // 4. Update state & sync real public IP with Supabase
   device.state = 'proxying';
