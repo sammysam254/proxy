@@ -232,12 +232,18 @@ function createHttpProxy(modem, port) {
 
     // 2. Forward regular HTTP request
     const parsed = url.parse(req.url);
+    const rawHost = req.headers['host'] || '';
+    const hostParts = rawHost.split(':');
+    const targetHost = parsed.hostname || hostParts[0] || '127.0.0.1';
+    const targetPort = parsed.port || (hostParts[1] ? parseInt(hostParts[1], 10) : 80);
+    const targetPath = parsed.path || req.url || '/';
+
     const options = {
-      hostname:     parsed.hostname,
-      port:         parsed.port || 80,
-      path:         parsed.path,
+      hostname:     targetHost,
+      port:         targetPort,
+      path:         targetPath,
       method:       req.method,
-      headers:      req.headers,
+      headers:      { ...req.headers },
       agent:        httpKeepAliveAgent,
       localAddress: boundAddress,
     };
@@ -259,8 +265,10 @@ function createHttpProxy(modem, port) {
     });
     req.pipe(proxyReq);
 
-    proxyReq.on('error', () => {
-      if (!res.headersSent) res.writeHead(502);
+    proxyReq.on('error', (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'text/plain' });
+      }
       res.end('Bad Gateway');
     });
   });
@@ -313,8 +321,11 @@ function createHttpProxy(modem, port) {
 
       serverSocket.on('error', () => {
         if (!clientSocket.destroyed) {
-          clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-          clientSocket.destroy();
+          try {
+            clientSocket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 11\r\n\r\nBad Gateway');
+          } catch {
+            clientSocket.destroy();
+          }
         }
       });
     }
