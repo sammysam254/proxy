@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Wifi, Globe, Shield, Zap, ChevronRight, Check,
-  Server, Activity, Lock, RefreshCw, Smartphone
+  Server, Activity, Lock, RefreshCw, Smartphone,
+  Phone, Mail, MessageCircle, ExternalLink, MapPin
 } from 'lucide-react';
 import { getPlans, getAvailableProxies } from '../lib/supabase';
 import PurchaseModal from '../components/PurchaseModal';
@@ -302,20 +303,167 @@ export default function Storefront({ session }) {
           </div>
         </section>
 
-        {/* ─── Footer ───────────────────────────────────────────────── */}
+        {/* ─── Professional Footer ────────────────────────────────────────────── */}
         <footer style={{
           borderTop: '1px solid var(--clr-border)',
-          padding: '32px 0',
-          textAlign: 'center',
-          color: 'var(--clr-text-3)',
-          fontSize: '0.875rem',
+          background: 'var(--clr-bg-2)',
+          paddingTop: '60px',
+          paddingBottom: '30px',
+          color: 'var(--clr-text-2)',
+          fontSize: '0.9rem',
         }}>
           <div className="container">
-            <div className="flex items-center justify-center gap-md" style={{ marginBottom: '12px' }}>
-              <div className="logo-icon"><img src="/logo.jpg" alt="Vertex Proxies Logo" className="logo-img" /></div>
-              <span className="text-gradient" style={{ fontWeight: 700 }}>Vertex Proxies</span>
+            {/* Top Footer Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '40px',
+              marginBottom: '50px',
+            }}>
+              {/* Col 1: Brand & About */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="logo-icon"><img src="/logo.jpg" alt="Vertext Proxies Logo" className="logo-img" /></div>
+                  <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.25rem' }}>Vertext Proxies</span>
+                </div>
+                <p style={{ color: 'var(--clr-text-3)', lineHeight: 1.6, fontSize: '0.875rem', margin: 0 }}>
+                  High-speed, enterprise-grade USA Residential & 4G/5G Mobile Proxies powered by real hardware Wi-Fi and SIM cards. 100% clean IP reputation with zero detection.
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <span style={{ display: 'inline-flex', width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span>
+                  <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>All Systems Operational (99.9% SLA)</span>
+                </div>
+              </div>
+
+              {/* Col 2: Direct Contact & Support */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <h4 style={{ color: 'var(--clr-text)', fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Contact & Support
+                </h4>
+                
+                {/* Phone Call */}
+                <a
+                  href="tel:+254706499848"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: 'var(--clr-text)',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem',
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#3b82f6'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--clr-text)'}
+                >
+                  <div style={{ padding: '6px', background: 'rgba(59, 130, 246, 0.12)', borderRadius: '6px', color: '#3b82f6' }}>
+                    <Phone size={16} />
+                  </div>
+                  <span>+254 706 499 848 (Call)</span>
+                </a>
+
+                {/* WhatsApp */}
+                <a
+                  href="https://wa.me/254706499848?text=Hello%20Vertext%20Proxies%2C%20I%20would%20like%20to%20inquire%20about%20your%20proxy%20services."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: '#25D366',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    transition: 'opacity 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  <div style={{ padding: '6px', background: 'rgba(37, 211, 102, 0.12)', borderRadius: '6px', color: '#25D366' }}>
+                    <MessageCircle size={16} />
+                  </div>
+                  <span>Chat on WhatsApp (24/7)</span>
+                </a>
+
+                {/* Email */}
+                <a
+                  href="mailto:sammyseth260@gmail.com"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: 'var(--clr-text)',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem',
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#8b5cf6'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--clr-text)'}
+                >
+                  <div style={{ padding: '6px', background: 'rgba(139, 92, 246, 0.12)', borderRadius: '6px', color: '#8b5cf6' }}>
+                    <Mail size={16} />
+                  </div>
+                  <span>sammyseth260@gmail.com</span>
+                </a>
+
+                {/* Location */}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', color: 'var(--clr-text-3)', fontSize: '0.85rem' }}>
+                  <div style={{ padding: '6px', background: 'var(--clr-surface)', borderRadius: '6px' }}>
+                    <MapPin size={16} />
+                  </div>
+                  <span>USA Residential & Global Exit Nodes</span>
+                </div>
+              </div>
+
+              {/* Col 3: Proxy Products & Solutions */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h4 style={{ color: 'var(--clr-text)', fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Proxy Network
+                </h4>
+                <div style={{ color: 'var(--clr-text-3)', fontSize: '0.875rem' }}>• USA Residential Wi-Fi Proxies</div>
+                <div style={{ color: 'var(--clr-text-3)', fontSize: '0.875rem' }}>• 4G/5G Rotating Mobile SIM Proxies</div>
+                <div style={{ color: 'var(--clr-text-3)', fontSize: '0.875rem' }}>• Dual SOCKS5 & HTTP/HTTPS Protocols</div>
+                <div style={{ color: 'var(--clr-text-3)', fontSize: '0.875rem' }}>• Uncapped 1 Gbps+ Kernel Throughput</div>
+                <div style={{ color: 'var(--clr-text-3)', fontSize: '0.875rem' }}>• Real-Time Byte & Quota Tracking</div>
+              </div>
+
+              {/* Col 4: Quick Navigation & Account */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h4 style={{ color: 'var(--clr-text)', fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Navigation
+                </h4>
+                <Link to="/" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Home Store</Link>
+                <Link to="/proxies" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Available Proxies</Link>
+                <Link to="/dashboard" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Client Dashboard</Link>
+                <Link to="/auth" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Sign In / Register</Link>
+                <Link to="/settings" style={{ color: 'var(--clr-text-3)', textDecoration: 'none', transition: 'color 0.2s' }}>Account Settings</Link>
+              </div>
             </div>
-            <p>© {new Date().getFullYear()} Vertex Proxies. Real mobile proxies for professionals.</p>
+
+            {/* Bottom Divider & Legal Bar */}
+            <div style={{
+              borderTop: '1px solid var(--clr-border)',
+              paddingTop: '24px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              color: 'var(--clr-text-3)',
+              fontSize: '0.825rem',
+            }}>
+              <div>
+                © {new Date().getFullYear()} <strong style={{ color: 'var(--clr-text)' }}>Vertext Proxies</strong>. All rights reserved. Real mobile & residential proxy network.
+              </div>
+              <div style={{ display: 'flex', gap: '20px' }}>
+                <span>Privacy Policy</span>
+                <span>•</span>
+                <span>Terms of Service</span>
+                <span>•</span>
+                <span>Anti-Abuse Policy</span>
+              </div>
+            </div>
           </div>
         </footer>
 
