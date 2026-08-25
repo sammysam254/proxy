@@ -1,0 +1,4 @@
+# Keep SSH keys with exact LF line endings
+keys/* text eol=lf
+*.pub text eol=lf
+proxicell_tunnel text eol=lf

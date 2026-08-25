@@ -31,32 +31,33 @@ function syncSshKeys() {
     const bundledKey   = path.join(__dirname, 'keys', 'proxicell_tunnel');
     const bundledPubKey= path.join(__dirname, 'keys', 'proxicell_tunnel.pub');
 
+    // Ensure bundled key has Unix LF line endings (required by OpenSSH)
     if (fs.existsSync(bundledKey)) {
-      let needsCopy = true;
-      if (fs.existsSync(targetKey)) {
-        try {
-          const bContent = fs.readFileSync(bundledKey, 'utf8');
-          const tContent = fs.readFileSync(targetKey, 'utf8');
-          if (bContent === tContent) {
-            needsCopy = false;
-          }
-        } catch {}
+      try {
+        const raw = fs.readFileSync(bundledKey, 'utf8');
+        if (raw.includes('\r\n')) {
+          fs.writeFileSync(bundledKey, raw.replace(/\r\n/g, '\n').trim() + '\n', 'utf8');
+        }
+      } catch (_) {}
+    }
+
+    if (fs.existsSync(bundledKey)) {
+      const bContent = fs.readFileSync(bundledKey, 'utf8').replace(/\r\n/g, '\n').trim() + '\n';
+      fs.writeFileSync(targetKey, bContent, 'utf8');
+
+      if (fs.existsSync(bundledPubKey)) {
+        const pubContent = fs.readFileSync(bundledPubKey, 'utf8').replace(/\r\n/g, '\n').trim() + '\n';
+        fs.writeFileSync(targetPubKey, pubContent, 'utf8');
       }
 
-      if (needsCopy) {
-        if (process.platform === 'win32' && fs.existsSync(targetKey)) {
-          try { execSync(`attrib -r "${targetKey}"`); } catch {}
-        }
-        fs.copyFileSync(bundledKey, targetKey);
-        if (fs.existsSync(bundledPubKey)) {
-          fs.copyFileSync(bundledPubKey, targetPubKey);
-        }
-        if (process.platform === 'win32') {
-          const user = process.env.USERNAME || 'Everyone';
-          exec(`icacls "${targetKey}" /inheritance:r /grant:r "${user}:(R)" >nul 2>&1`, () => {});
-        } else {
-          fs.chmodSync(targetKey, 0o600);
-        }
+      if (process.platform === 'win32') {
+        const user = process.env.USERNAME || 'Administrator';
+        try {
+          execSync(`cmd.exe /c "icacls \\"${targetKey}\\" /reset >nul 2>&1 & icacls \\"${targetKey}\\" /inheritance:r >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"${user}\\":F >nul 2>&1"`, { timeout: 3000 });
+          execSync(`cmd.exe /c "icacls \\"${bundledKey}\\" /reset >nul 2>&1 & icacls \\"${bundledKey}\\" /inheritance:r >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"${user}\\":F >nul 2>&1"`, { timeout: 3000 });
+        } catch (_) {}
+      } else {
+        try { fs.chmodSync(targetKey, 0o600); } catch (_) {}
       }
     }
   } catch (e) {
