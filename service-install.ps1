@@ -12,7 +12,23 @@ Write-Host "    VERTEX PROXIES -- AUTONOMOUS 24/7 SERVICE INSTALLER        " -Fo
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Verify Node.js
+# 1. Ensure project directory and latest code
+if (-not (Test-Path $projDir)) {
+    New-Item -ItemType Directory -Path $projDir -Force | Out-Null
+}
+
+if (Test-Path (Join-Path $projDir ".git")) {
+    Write-Host "[*] Pulling latest repository updates from GitHub..." -ForegroundColor Cyan
+    try {
+        Push-Location $projDir
+        git fetch origin main >$null 2>&1
+        git reset --hard origin/main >$null 2>&1
+        Pop-Location
+        Write-Host "[OK] Local repository synced to latest main branch." -ForegroundColor Green
+    } catch {}
+}
+
+# 2. Verify Node.js
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodeCmd) {
     Write-Host "[WARN] Node.js not detected in current PATH. Searching common paths..." -ForegroundColor Yellow
