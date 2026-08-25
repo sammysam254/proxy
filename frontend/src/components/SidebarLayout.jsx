@@ -8,21 +8,24 @@ import {
 import { signOut, isAdmin } from '../lib/supabase';
 
 const CUSTOMER_NAV = [
-  { to: '/',             icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/proxies',      icon: <Server size={18} />,          label: 'Proxies' },
-  { to: '/dashboard',    icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
-  { to: '/settings',     icon: <Settings size={18} />,        label: 'Settings' },
+  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',            icon: <Wifi size={18} />,            label: 'Residential Proxies' },
+  { to: '/datacenter-proxies', icon: <Server size={18} />,          label: 'Datacenter Proxies' },
+  { to: '/dashboard',          icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
+  { to: '/settings',           icon: <Settings size={18} />,        label: 'Settings' },
 ];
 
 const GUEST_NAV = [
-  { to: '/',             icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/proxies',      icon: <Server size={18} />,          label: 'Proxies' },
-  { to: '/auth',         icon: <Users size={18} />,           label: 'Sign In / Register' },
+  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',            icon: <Wifi size={18} />,            label: 'Residential Proxies' },
+  { to: '/datacenter-proxies', icon: <Server size={18} />,          label: 'Datacenter Proxies' },
+  { to: '/auth',               icon: <Users size={18} />,           label: 'Sign In / Register' },
 ];
 
 const ADMIN_NAV = [
   { to: '/admin',              icon: <Activity size={18} />,   label: 'Overview' },
-  { to: '/admin/modems',       icon: <Wifi size={18} />,       label: 'Modems' },
+  { to: '/admin/modems',       icon: <Wifi size={18} />,       label: 'Residential Modems' },
+  { to: '/admin/datacenter',   icon: <Server size={18} />,     label: 'Datacenter Proxies' },
   { to: '/admin/marketplace',  icon: <Server size={18} />,     label: 'Marketplace Proxies' },
   { to: '/admin/plans',        icon: <DollarSign size={18} />, label: 'Plans & Pricing' },
   { to: '/admin/subscriptions',icon: <Users size={18} />,      label: 'Subscriptions' },

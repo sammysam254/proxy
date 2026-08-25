@@ -50,10 +50,12 @@ export default function Storefront({ session }) {
   };
 
   const PLAN_ICONS = {
-    'Pay Per GB': <Activity size={24} />,
-    'Daily':      <Zap size={24} />,
-    'Weekly':     <Shield size={24} />,
-    'Monthly':    <Globe size={24} />,
+    'Pay Per GB':          <Activity size={24} />,
+    'Daily':               <Zap size={24} />,
+    'Weekly':              <Shield size={24} />,
+    'Monthly':             <Globe size={24} />,
+    'Datacenter Monthly':  <Server size={24} />,
+    'Cloud Phone Only':    <Smartphone size={24} />,
   };
 
   const FEATURES = [

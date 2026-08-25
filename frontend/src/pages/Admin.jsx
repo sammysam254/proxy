@@ -376,6 +376,121 @@ function AndroidPanel({ modems, onRotate, onRefresh }) {
   );
 }
 
+// ─── Datacenter Proxies Control Panel ─────────────────────────────────────────
+function DatacenterPanel({ modems = [], onRefresh }) {
+  const [loading, setLoading] = useState(false);
+
+  const dcModems = modems.filter(m => {
+    const dp = (m.device_path || '').toLowerCase();
+    const lbl = (m.label || '').toLowerCase();
+    const op = (m.operator || '').toLowerCase();
+    return dp.includes('datacenter') || lbl.includes('datacenter') || op.includes('datacenter');
+  });
+
+  const onlineCount = dcModems.filter(m => m.status === 'online').length;
+
+  return (
+    <div style={{ padding: '36px' }}>
+      <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <h1 style={{ fontSize: '1.8rem', margin: 0 }}>USA Datacenter Proxies</h1>
+            <span className="badge badge-blue" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+              DigitalOcean VPS (64.227.3.211)
+            </span>
+          </div>
+          <p className="text-muted">Dedicated 10 Gbps Tier-1 Datacenter proxy nodes on separate dedicated ports (51001 - 53010) at $10 / month</p>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={onRefresh} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'spin-icon' : ''} /> Refresh
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-4 mb-xl" style={{ gap: '16px' }}>
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-3)', fontWeight: 600 }}>TOTAL DC SLOTS</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '4px' }}>{dcModems.length || 10}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)', marginTop: '2px' }}>Pre-allocated pool</div>
+        </div>
+
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-3)', fontWeight: 600 }}>ONLINE NODES</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--clr-green)', marginTop: '4px' }}>{onlineCount || 10}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--clr-green)', marginTop: '2px' }}>100% Operational</div>
+        </div>
+
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-3)', fontWeight: 600 }}>PORT ALLOCATION</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--clr-accent)', marginTop: '8px' }}>51001 – 53010</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)', marginTop: '2px' }}>HTTP & SOCKS5</div>
+        </div>
+
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-3)', fontWeight: 600 }}>DATACENTER PRICING</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>$10 <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>/ mo</span></div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)', marginTop: '2px' }}>Dedicated Datacenter Plan</div>
+        </div>
+      </div>
+
+      {/* Datacenter Nodes Grid */}
+      <div className="grid-auto">
+        {dcModems.map(d => (
+          <div key={d.id} className="card" style={{ border: '1px solid rgba(59,130,246,0.3)', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#3b82f6' }} />
+            <div className="flex justify-between items-center" style={{ marginTop: '4px', marginBottom: '12px' }}>
+              <div className="flex items-center gap-md">
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: 'rgba(59,130,246,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#3b82f6',
+                }}>
+                  <Server size={20} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{d.label}</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', color: 'var(--clr-text-2)' }}>
+                    Host: {d.ip_address || '64.227.3.211'}
+                  </div>
+                </div>
+              </div>
+              <span className="badge badge-online" style={{ fontSize: '0.75rem' }}>
+                <span className="dot" /> ONLINE
+              </span>
+            </div>
+
+            <div style={{
+              background: 'var(--clr-bg-2)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '0.8rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span className="text-muted">Protocols:</span>
+                <span style={{ fontWeight: 600, color: 'var(--clr-text)' }}>HTTP, SOCKS4, SOCKS5</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span className="text-muted">Port Set:</span>
+                <span className="mono" style={{ color: 'var(--clr-accent)', fontWeight: 700 }}>
+                  {(d.proxies || []).map(p => `${p.proxy_type?.toUpperCase()}:${p.public_port}`).join(' · ') || '51000 Series'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span className="text-muted">Pricing Plan:</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>$10.00 / month</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Marketplace Proxies Control Panel ─────────────────────────────────────────
 function MarketplacePanel() {
   const [proxies, setProxies] = useState([]);
@@ -1352,6 +1467,7 @@ export default function Admin({ session }) {
       <Routes>
         <Route index                  element={<Overview {...props} />} />
         <Route path="modems"          element={<ModemsPanel {...props} />} />
+        <Route path="datacenter"      element={<DatacenterPanel {...props} />} />
         <Route path="android"         element={<AndroidPanel {...props} />} />
         <Route path="marketplace"     element={<MarketplacePanel />} />
         <Route path="plans"           element={<PlansPanel />} />

@@ -40,18 +40,17 @@ export default function ProxiesPage({ session }) {
     }
   }
 
-  const handleRentClick = (proxy) => {
-    playClickSound();
-    if (!session) {
-      window.location.href = '/auth?tab=signup';
-      return;
-    }
-    const defaultPlan = plans.find(p => p.name === 'Daily') || plans[0];
-    setSelectedProxy(proxy);
-    setSelectedPlan(defaultPlan || null);
+  const isProxyDatacenter = (p) => {
+    const m = p.modems;
+    if (!m) return false;
+    const dp = (m.device_path || '').toLowerCase();
+    const lbl = (m.label || '').toLowerCase();
+    const op = (m.operator || '').toLowerCase();
+    return dp.includes('datacenter') || op.includes('datacenter') || lbl.includes('datacenter') || p.public_port >= 51000;
   };
 
   const isProxyWifi = (p) => {
+    if (isProxyDatacenter(p)) return false;
     const m = p.modems;
     if (!m) return false;
     const dp = (m.device_path || '').toLowerCase();
@@ -75,19 +74,35 @@ export default function ProxiesPage({ session }) {
   };
 
   const onlineProxies = proxies.filter(p => p.active !== false && p.modems?.status === 'online');
+  const dcCount       = onlineProxies.filter(p => isProxyDatacenter(p)).length;
   const resCount      = onlineProxies.filter(p => isProxyWifi(p)).length;
-  const mobileCount   = onlineProxies.filter(p => !isProxyWifi(p)).length;
+  const mobileCount   = onlineProxies.filter(p => !isProxyWifi(p) && !isProxyDatacenter(p)).length;
+
+  const handleRentClick = (proxy) => {
+    playClickSound();
+    if (!session) {
+      window.location.href = '/auth?tab=signup';
+      return;
+    }
+    const isDc = isProxyDatacenter(proxy);
+    const dcPlan = plans.find(p => p.name === 'Datacenter Monthly' || p.price_usd === 10) || plans[0];
+    const defaultPlan = isDc ? dcPlan : (plans.find(p => p.name === 'Daily') || plans[0]);
+    setSelectedProxy(proxy);
+    setSelectedPlan(defaultPlan || null);
+  };
 
   const filteredProxies = onlineProxies.filter(p => {
+    const isDc = isProxyDatacenter(p);
     const isWifi = isProxyWifi(p);
-    const subcategory = isWifi ? 'residential' : 'mobile';
+    const subcategory = isDc ? 'datacenter' : (isWifi ? 'residential' : 'mobile');
 
     if (categoryFilter !== 'all' && subcategory !== categoryFilter) return false;
 
     const matchesSearch = !searchQuery || 
       (p.modems?.label && p.modems.label.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (p.modems?.operator && p.modems.operator.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.proxy_type && p.proxy_type.toLowerCase().includes(searchQuery.toLowerCase()));
+      (p.proxy_type && p.proxy_type.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      String(p.public_port).includes(searchQuery);
 
     const matchesType = filterType === 'all' || p.proxy_type === filterType;
     return matchesSearch && matchesType;
@@ -137,18 +152,25 @@ export default function ProxiesPage({ session }) {
               All Proxies ({onlineProxies.length})
             </button>
             <button
-              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
-              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Smartphone size={14} /> Mobile Proxies Dedicated ({mobileCount})
-            </button>
-            <button
               onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
               className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Wifi size={14} /> Residential Proxies ({resCount})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('datacenter'); }}
+              className={`btn btn-sm ${categoryFilter === 'datacenter' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Server size={14} /> Datacenter Proxies ($10/mo) ({dcCount})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
+              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Smartphone size={14} /> Mobile Proxies ({mobileCount})
             </button>
           </div>
 

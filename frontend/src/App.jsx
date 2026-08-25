@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { supabase } from './lib/supabase';
 import Storefront from './pages/Storefront';
 import ProxiesPage from './pages/ProxiesPage';
+import DatacenterProxiesPage from './pages/DatacenterProxiesPage';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
@@ -55,6 +56,8 @@ export default function App() {
       <Routes>
         <Route path="/"                   element={<Storefront session={session} />} />
         <Route path="/proxies"            element={<ProxiesPage session={session} />} />
+        <Route path="/datacenter"         element={<DatacenterProxiesPage session={session} />} />
+        <Route path="/datacenter-proxies" element={<DatacenterProxiesPage session={session} />} />
         <Route path="/auth"               element={session ? <Navigate to="/dashboard" /> : <AuthPage />} />
         <Route path="/dashboard"          element={session ? <Dashboard session={session} /> : <Navigate to="/auth" />} />
         <Route path="/dashboard/settings" element={session ? <Settings session={session} /> : <Navigate to="/auth" />} />
