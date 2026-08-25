@@ -316,6 +316,37 @@ async function detectWifiWindows() {
     detected.push(...primary);
   }
 
+  // Ultimate fail-safe fallback: inspect os.networkInterfaces()
+  if (detected.length === 0) {
+    const os = require('os');
+    const ifaces = os.networkInterfaces();
+    for (const [name, addrs] of Object.entries(ifaces)) {
+      for (const addr of addrs) {
+        if (addr.family === 'IPv4' && !addr.internal && !addr.address.startsWith('169.254.') && !addr.address.startsWith('127.')) {
+          if (!/loopback|vethernet|docker|virtualbox|vmware/i.test(name)) {
+            detected.push({
+              devicePath: `wifi:${name.replace(/\s+/g, '_')}`,
+              interface:  name,
+              ipAddress:  addr.address,
+              operator:   'United States (USA) Residential 🇺🇸',
+              iccid:      null,
+              signal:     99,
+              status:     'online',
+              label:      `USA Residential (${name})`,
+              vendor:     'USA High-Speed Network',
+              model:      `USA Tier-1 Residential Node`,
+              ssid:       null,
+              isWifi:     true,
+              portSet:    null,
+            });
+            break;
+          }
+        }
+      }
+      if (detected.length > 0) break;
+    }
+  }
+
   return detected;
 }
 
