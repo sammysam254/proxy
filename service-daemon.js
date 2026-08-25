@@ -1,12 +1,15 @@
 /**
- * Vertex Proxies — Background Service Daemon Supervisor
- * Runs continuously in the background, auto-restarts crashed workers,
- * and redirects logs to rotating log files.
+ * Vertex Proxies — Background Service Daemon Supervisor & Autonomous Healing Engine
+ * Runs continuously in the background, enforces single-instance execution,
+ * auto-restarts crashed workers, performs periodic health-checks,
+ * and maintains rotating log files.
  */
+
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 
 const BASE_DIR = __dirname;
 const LOGS_DIR = path.join(BASE_DIR, 'logs');
@@ -16,7 +19,7 @@ const WORKERS_PID_FILE = path.join(LOGS_DIR, 'workers.json');
 const SERVICE_LOG = path.join(LOGS_DIR, 'service.log');
 const ERROR_LOG = path.join(LOGS_DIR, 'error.log');
 
-const MAX_LOG_SIZE = 15 * 1024 * 1024; // 15 MB rotation limit
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB rotation limit
 
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {
@@ -36,22 +39,42 @@ const extraPaths = [
 const currentPath = process.env.PATH || '';
 process.env.PATH = extraPaths.filter(p => fs.existsSync(p)).join(';') + ';' + currentPath;
 
+function isProcessAlive(pid) {
+  if (!pid || isNaN(pid)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ─── Single-Instance Enforcement ─────────────────────────────────────────────
+if (fs.existsSync(PID_FILE)) {
+  try {
+    const existingPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    if (existingPid && existingPid !== process.pid && isProcessAlive(existingPid)) {
+      // Check if that PID is actually a node process running service-daemon
+      try {
+        const ps = `Get-CimInstance Win32_Process -Filter "ProcessId = ${existingPid}" -ErrorAction SilentlyContinue | Select-Object CommandLine | ConvertTo-Json`;
+        const raw = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`, {
+          timeout: 4000,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore']
+        }).toString().trim();
+        if (raw && raw.includes('service-daemon.js')) {
+          // Another daemon is already running! Exit silently.
+          process.exit(0);
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+}
+
 // Write master PID file
 try {
   fs.writeFileSync(PID_FILE, process.pid.toString(), 'utf8');
 } catch (e) {}
-
-function updateWorkersPidFile() {
-  try {
-    const data = {
-      daemon: process.pid,
-      main: processes.main.child ? processes.main.child.pid : null,
-      bandwidth: processes.bandwidth.child ? processes.bandwidth.child.pid : null,
-      updatedAt: new Date().toISOString()
-    };
-    fs.writeFileSync(WORKERS_PID_FILE, JSON.stringify(data, null, 2), 'utf8');
-  } catch (e) {}
-}
 
 function rotateLogIfNeeded(filePath) {
   try {
@@ -102,9 +125,25 @@ const processes = {
   }
 };
 
+function updateWorkersPidFile() {
+  try {
+    const data = {
+      daemon: process.pid,
+      main: processes.main.child ? processes.main.child.pid : null,
+      bandwidth: processes.bandwidth.child ? processes.bandwidth.child.pid : null,
+      updatedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(WORKERS_PID_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {}
+}
+
 function spawnWorker(key) {
   const proc = processes[key];
   if (proc.isShuttingDown) return;
+
+  if (proc.child && isProcessAlive(proc.child.pid)) {
+    return; // Already running
+  }
 
   const targetPath = path.join(MODEM_DIR, proc.file);
   if (!fs.existsSync(targetPath)) {
@@ -135,12 +174,15 @@ function spawnWorker(key) {
 
   child.stderr.on('data', (data) => {
     const text = data.toString();
-    rotateLogIfNeeded(ERROR_LOG);
-    rotateLogIfNeeded(SERVICE_LOG);
-    try {
-      fs.appendFileSync(ERROR_LOG, text, 'utf8');
-      fs.appendFileSync(SERVICE_LOG, text, 'utf8');
-    } catch (e) {}
+    // Filter out benign noise from stderr
+    if (!text.includes('Debugger attached') && !text.includes('ExperimentalWarning')) {
+      rotateLogIfNeeded(ERROR_LOG);
+      rotateLogIfNeeded(SERVICE_LOG);
+      try {
+        fs.appendFileSync(ERROR_LOG, text, 'utf8');
+        fs.appendFileSync(SERVICE_LOG, text, 'utf8');
+      } catch (e) {}
+    }
   });
 
   child.on('exit', (code, signal) => {
@@ -156,7 +198,7 @@ function spawnWorker(key) {
         proc.restartCount++;
       }
 
-      const delay = Math.min(30000, 2000 * Math.pow(1.5, Math.min(proc.restartCount, 6)));
+      const delay = Math.min(20000, 1500 * Math.pow(1.3, Math.min(proc.restartCount, 5)));
       logMessage('INFO', `Restarting ${key} worker in ${(delay / 1000).toFixed(1)}s (restart count: ${proc.restartCount})...`);
       setTimeout(() => spawnWorker(key), delay);
     }
@@ -167,10 +209,47 @@ function spawnWorker(key) {
   });
 }
 
+// ─── Clean up any orphaned child processes from earlier ───────────────────────
+try {
+  const ps = `Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne ${process.pid} -and ($_.CommandLine -like "*modem-manager*index.js*" -or $_.CommandLine -like "*bandwidthTracker.js*") } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+  execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`, {
+    timeout: 5000,
+    windowsHide: true,
+    stdio: ['ignore', 'ignore', 'ignore']
+  });
+} catch (_) {}
+
 // Start all workers
 spawnWorker('main');
 spawnWorker('bandwidth');
 updateWorkersPidFile();
+
+// ─── Autonomous Health Check Loop (every 30 seconds) ─────────────────────────
+setInterval(() => {
+  if (processes.main.isShuttingDown) return;
+
+  const mainDead = !processes.main.child || !isProcessAlive(processes.main.child.pid);
+  const bwDead = !processes.bandwidth.child || !isProcessAlive(processes.bandwidth.child.pid);
+
+  if (mainDead) {
+    logMessage('WARN', '[HealthCheck] Main proxy engine was not running — autonomously restarting...');
+    spawnWorker('main');
+  }
+
+  if (bwDead) {
+    logMessage('WARN', '[HealthCheck] Bandwidth tracker was not running — autonomously restarting...');
+    spawnWorker('bandwidth');
+  }
+
+  updateWorkersPidFile();
+}, 30 * 1000);
+
+// Heartbeat log every 5 minutes
+setInterval(() => {
+  const mainAlive = processes.main.child && isProcessAlive(processes.main.child.pid);
+  const bwAlive = processes.bandwidth.child && isProcessAlive(processes.bandwidth.child.pid);
+  logMessage('INFO', `[Heartbeat] Service running normally (Main: ${mainAlive ? 'OK' : 'DOWN'}, Bandwidth: ${bwAlive ? 'OK' : 'DOWN'})`);
+}, 5 * 60 * 1000);
 
 // Handle termination signals
 function shutdown(signal) {
@@ -200,7 +279,6 @@ function shutdown(signal) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// Crucial: Ignore terminal closure SIGHUP so it keeps running in the background
 process.on('SIGHUP', () => {
   logMessage('INFO', 'Console disconnected / closed — daemon continuing 24/7 background execution.');
 });
@@ -212,10 +290,3 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   logMessage('ERROR', `Unhandled rejection in daemon supervisor: ${reason}`);
 });
-
-// Keep-alive heartbeat every 5 minutes in logs
-setInterval(() => {
-  const mainAlive = !!processes.main.child;
-  const bwAlive = !!processes.bandwidth.child;
-  logMessage('INFO', `[Heartbeat] Service running normally (Main: ${mainAlive ? 'OK' : 'DOWN'}, Bandwidth: ${bwAlive ? 'OK' : 'DOWN'})`);
-}, 5 * 60 * 1000);

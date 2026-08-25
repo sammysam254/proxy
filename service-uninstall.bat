@@ -20,16 +20,18 @@ if %errorlevel% neq 0 (
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "Write-Host '[*] Stopping running service...' -ForegroundColor Cyan;" ^
-    "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -like '*service-daemon.js*' -or $_.CommandLine -like '*modem-manager*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };" ^
-    "Write-Host '[*] Unregistering Windows Scheduled Task...' -ForegroundColor Cyan;" ^
+    "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -like '*service-daemon.js*' -or $_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*bandwidthTracker.js*' -or $_.CommandLine -like '*watchdog.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };" ^
+    "Write-Host '[*] Unregistering Windows Scheduled Tasks...' -ForegroundColor Cyan;" ^
     "try { Unregister-ScheduledTask -TaskName 'VertexProxiesBackgroundService' -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {};" ^
+    "try { Unregister-ScheduledTask -TaskName 'VertexProxiesWatchdog' -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {};" ^
     "schtasks /delete /tn 'VertexProxiesBackgroundService' /f 2>$null | Out-Null;" ^
-    "schtasks /delete /tn 'VertexProxiesBackgroundService_Boot' /f 2>$null | Out-Null;" ^
-    "Write-Host '[*] Removing Startup folder shortcut...' -ForegroundColor Cyan;" ^
+    "schtasks /delete /tn 'VertexProxiesWatchdog' /f 2>$null | Out-Null;" ^
+    "Write-Host '[*] Removing Registry Auto-Run and Startup shortcuts...' -ForegroundColor Cyan;" ^
+    "Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'VertexProxies' -ErrorAction SilentlyContinue | Out-Null;" ^
     "$sFolder = [Environment]::GetFolderPath('Startup');" ^
     "$sFile = Join-Path $sFolder 'VertexProxies.lnk';" ^
     "if (Test-Path $sFile) { Remove-Item -Force $sFile -ErrorAction SilentlyContinue };" ^
-    "Write-Host '[SUCCESS] Vertex Proxies background service and startup triggers uninstalled.' -ForegroundColor Green;"
+    "Write-Host '[SUCCESS] Vertex Proxies background service and autonomous watchdog uninstalled.' -ForegroundColor Green;"
 
 echo.
 pause

@@ -42,19 +42,26 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 const snapshots = new Map();
 
 // ─── Fetch Windows interface byte stats via PowerShell ───────────────────────
+let cachedActiveAdapter = null;
+
 function getInterfaceStats(interfaceName) {
-  if (!interfaceName) return null;
   try {
-    // Escape single quotes in interface name
-    const safeName = interfaceName.replace(/'/g, "''");
-    const ps = `Get-NetAdapterStatistics -Name '${safeName}' | ` +
-               `Select-Object ReceivedBytes,SentBytes | ConvertTo-Json`;
-    const raw = execSync(`powershell -NoProfile -Command "${ps}"`, {
+    const targetName = interfaceName || cachedActiveAdapter || 'Ethernet';
+    const safeName = targetName.replace(/'/g, "''");
+    const ps = `$stat = Get-NetAdapterStatistics -Name '${safeName}' -ErrorAction SilentlyContinue; ` +
+               `if (-not $stat) { $stat = Get-NetAdapterStatistics -ErrorAction SilentlyContinue | Select-Object -First 1 }; ` +
+               `if ($stat) { $stat | Select-Object Name, ReceivedBytes, SentBytes | ConvertTo-Json }`;
+    const raw = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`, {
       timeout: 6000,
       windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore']
     }).toString().trim();
 
+    if (!raw) return null;
     const data = JSON.parse(raw);
+    if (data.Name && !cachedActiveAdapter) {
+      cachedActiveAdapter = data.Name;
+    }
     return {
       bytesIn:  parseInt(data.ReceivedBytes || 0),
       bytesOut: parseInt(data.SentBytes     || 0),
@@ -68,8 +75,8 @@ function getInterfaceStats(interfaceName) {
 function listAdapters() {
   try {
     const raw = execSync(
-      `powershell -NoProfile -Command "Get-NetAdapter | Select-Object Name,Status | ConvertTo-Json"`,
-      { timeout: 6000, windowsHide: true }
+      `powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetAdapter -ErrorAction SilentlyContinue | Select-Object Name,Status | ConvertTo-Json"`,
+      { timeout: 6000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }
     ).toString().trim();
     return JSON.parse(raw);
   } catch {

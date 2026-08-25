@@ -7,38 +7,46 @@ if (-not (Test-Path "$projDir\logs")) {
 }
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "          VERTEX PROXIES -- BACKGROUND SERVICE STATUS          " -ForegroundColor Yellow
+Write-Host "     VERTEX PROXIES -- AUTONOMOUS SERVICE STATUS DASHBOARD      " -ForegroundColor Yellow
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Auto-start inspection
-Write-Host "--- [AUTO-START CONFIGURATION] ---" -ForegroundColor Cyan
+Write-Host "--- [AUTO-START & SELF-HEALING ENGINE] ---" -ForegroundColor Cyan
 $task = Get-ScheduledTask -TaskName 'VertexProxiesBackgroundService' -ErrorAction SilentlyContinue
 if ($task) {
-    Write-Host "  Scheduled Task:  " -NoNewline
+    Write-Host "  Service Task (Boot/Lock): " -NoNewline
     Write-Host "[REGISTERED: $($task.State)]" -ForegroundColor Green
 } else {
-    Write-Host "  Scheduled Task:  [NOT REGISTERED - Using Registry & Startup Folder]" -ForegroundColor Yellow
+    Write-Host "  Service Task (Boot/Lock): [NOT REGISTERED]" -ForegroundColor Yellow
+}
+
+$wdTask = Get-ScheduledTask -TaskName 'VertexProxiesWatchdog' -ErrorAction SilentlyContinue
+if ($wdTask) {
+    Write-Host "  1-Min Watchdog Task:      " -NoNewline
+    Write-Host "[ACTIVE: Auto-checks every 1 min]" -ForegroundColor Green
+} else {
+    Write-Host "  1-Min Watchdog Task:      [STANDBY / NOT REGISTERED]" -ForegroundColor Yellow
 }
 
 $regKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $regVal = (Get-ItemProperty -Path $regKey -Name "VertexProxies" -ErrorAction SilentlyContinue).VertexProxies
 if ($regVal) {
-    Write-Host "  Registry Run:    " -NoNewline
-    Write-Host "[ACTIVE: Auto-starts on Windows Boot/Logon]" -ForegroundColor Green
+    Write-Host "  Registry Boot Auto-Run:   " -NoNewline
+    Write-Host "[ACTIVE]" -ForegroundColor Green
 }
 
 $sFolder = [Environment]::GetFolderPath('Startup')
 $sFile = Join-Path $sFolder 'VertexProxies.lnk'
 if (Test-Path $sFile) {
-    Write-Host "  Startup Folder:  " -NoNewline
-    Write-Host "[ACTIVE: Auto-start shortcut installed]" -ForegroundColor Green
+    Write-Host "  Startup Shortcut:         " -NoNewline
+    Write-Host "[ACTIVE]" -ForegroundColor Green
 }
 
 Write-Host ""
 
 # 2. Process inspection via workers.json & Process Table
-Write-Host "--- [BACKGROUND PROCESSES] ---" -ForegroundColor Cyan
+Write-Host "--- [BACKGROUND WORKERS] ---" -ForegroundColor Cyan
 
 $workersJsonPath = Join-Path $projDir "logs\workers.json"
 $workersInfo = $null
@@ -68,24 +76,13 @@ if ($workersInfo) {
     }
 }
 
-# Fallback checking PID file
-if (-not $daemonPid) {
-    $pidPath = Join-Path $projDir "logs\service.pid"
-    if (Test-Path $pidPath) {
-        $savedPid = (Get-Content $pidPath -ErrorAction SilentlyContinue).Trim()
-        if ($savedPid) {
-            $p = Get-Process -Id $savedPid -ErrorAction SilentlyContinue
-            if ($p) { $daemonPid = $savedPid }
-        }
-    }
-}
-
-# Fallback checking listening port 9001
-if (-not $mainPid) {
-    try {
-        $tcp = Get-NetTCPConnection -LocalPort 9001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($tcp) { $mainPid = $tcp.OwningProcess }
-    } catch {}
+# Fallback scan running node processes directly
+$nodeProcs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue
+foreach ($np in $nodeProcs) {
+    $cmd = $np.CommandLine
+    if (-not $daemonPid -and $cmd -like "*service-daemon.js*") { $daemonPid = $np.ProcessId }
+    if (-not $mainPid -and ($cmd -like "*modem-manager*index.js*" -or $cmd -like "*modem-manager\index.js*")) { $mainPid = $np.ProcessId }
+    if (-not $bwPid -and $cmd -like "*bandwidthTracker.js*") { $bwPid = $np.ProcessId }
 }
 
 # SSH VPS tunnels
@@ -136,10 +133,10 @@ if ($tunnelPids.Count -gt 0) {
 Write-Host ""
 
 # 3. Recent logs
-Write-Host "--- [RECENT LOGS (Last 15 Lines)] ---" -ForegroundColor Cyan
+Write-Host "--- [RECENT LOGS (Last 12 Lines)] ---" -ForegroundColor Cyan
 $logPath = Join-Path $projDir "logs\service.log"
 if (Test-Path $logPath) {
-    $lines = Get-Content $logPath -Tail 15
+    $lines = Get-Content $logPath -Tail 12
     foreach ($l in $lines) {
         Write-Host "  $l" -ForegroundColor Gray
     }
