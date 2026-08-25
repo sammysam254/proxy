@@ -1,5 +1,5 @@
 param(
-    [string]$Username = "dennis"
+    [string]$Username = "DENNIS"
 )
 
 $projDir = "C:\proxy"
