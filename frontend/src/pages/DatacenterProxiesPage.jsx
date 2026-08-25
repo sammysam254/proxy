@@ -4,7 +4,7 @@ import {
   Server, Zap, Shield, Globe, ChevronRight, CheckCircle,
   RefreshCw, Filter, Search, Copy, Check, Activity, Lock, Cpu
 } from 'lucide-react';
-import { getAvailableProxies, getPlans } from '../lib/supabase';
+import { getAvailableDatacenterProxies, getPlans } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import PurchaseModal from '../components/PurchaseModal';
 import { playClickSound, playSuccessSound } from '../lib/sound';
@@ -27,21 +27,12 @@ export default function DatacenterProxiesPage({ session }) {
     setLoading(true);
     try {
       const [proxiesRes, plansRes] = await Promise.all([
-        getAvailableProxies(),
+        getAvailableDatacenterProxies(),
         getPlans(),
       ]);
 
       if (proxiesRes.data) {
-        // Filter strictly for Datacenter proxies (device_path starts with datacenter or operator has datacenter)
-        const dcList = proxiesRes.data.filter(p => {
-          const m = p.modems;
-          if (!m) return false;
-          const dp = (m.device_path || '').toLowerCase();
-          const op = (m.operator || '').toLowerCase();
-          const lbl = (m.label || '').toLowerCase();
-          return dp.includes('datacenter') || op.includes('datacenter') || lbl.includes('datacenter') || p.public_port >= 51000;
-        });
-        setProxies(dcList);
+        setProxies(proxiesRes.data);
       }
 
       if (plansRes.data) {

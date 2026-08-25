@@ -63,6 +63,20 @@ export async function getAvailableProxies() {
   return { data, error };
 }
 
+export async function getAvailableDatacenterProxies() {
+  const { data, error } = await supabase
+    .from('proxies')
+    .select(`
+      *,
+      modems!inner (
+        id, label, operator, signal, status, ip_address, is_android, model, battery, adb_serial, device_path
+      )
+    `)
+    .gte('public_port', 51000)
+    .order('public_port', { ascending: true });
+  return { data, error };
+}
+
 export async function getMySubscriptions() {
   const { data: sess } = await supabase.auth.getSession();
   const userId = sess?.session?.user?.id;
