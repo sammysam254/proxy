@@ -20,13 +20,10 @@ Write-Host "  Remote User:   $Username" -ForegroundColor White
 Write-Host "  Relay Host:    $vpsHost (Encrypted Jump Tunnel)" -ForegroundColor Gray
 Write-Host "  Auth Key:      $keyPath" -ForegroundColor Gray
 Write-Host ""
-
-Write-Host ""
-Write-Host "[*] Establishing private tunnel to USA PC PowerShell..." -ForegroundColor Green
+Write-Host "[*] Connecting to USA PC ($Username)..." -ForegroundColor Green
 Write-Host ""
 
-# Connect privately via VPS SSH Jump:
-# 1. Connects securely to VPS ($vpsUser@$vpsHost)
-# 2. Hops into the private reverse tunnel on 127.0.0.1:2222
-# 3. USA machine IP & location remain 100% hidden with zero public open ports.
-ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$keyPath" -J "$vpsUser@$vpsHost" -p $remotePort "$Username@127.0.0.1"
+# Use ProxyCommand with key so neither VPS nor USA PC prompts for unnecessary passwords
+$proxyCmd = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i `"$keyPath`" -W %h:%p $vpsUser@$vpsHost"
+
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$keyPath" -o "ProxyCommand=$proxyCmd" -p $remotePort "$Username@127.0.0.1"
