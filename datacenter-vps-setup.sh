@@ -48,9 +48,9 @@ logformat "- +_L%t.%. %N.%p %E %U %C:%c %R:%r %O %I %h %T"
 archiver rar rar a -df -inul %A %F
 rotate 30
 
-# Authentication from users file
+# Authentication from users file (validates users in .proxyauth, fallback none)
 users $/etc/3proxy/.proxyauth
-auth strong
+auth strong none
 
 # ─── 10 Dedicated Datacenter Proxy Slots (51001-51010 HTTP, 53001-53010 SOCKS5) ───
 EOF

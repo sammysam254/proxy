@@ -425,6 +425,9 @@ async function main() {
     await dcSync.syncDatacenter().catch(() => {});
   } catch (_) {}
 
+  // Auto-sync all active customer credentials from DB
+  await sync.syncActiveCredentials().catch(() => {});
+
   // Run first detection cycle immediately
   await runCycle();
 
@@ -439,8 +442,9 @@ async function main() {
     } catch (_) {}
   });
 
-  // Bandwidth sync: every 15 seconds
+  // Bandwidth & credentials sync: every 15 seconds
   cron.schedule('*/15 * * * * *', async () => {
+    await sync.syncActiveCredentials().catch(() => {});
     const proxying = [...registry.values()].filter(d => d.state === 'proxying');
     if (proxying.length > 0) {
       await sync.syncBandwidth(proxying).catch(e => {
