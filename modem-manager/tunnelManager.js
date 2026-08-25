@@ -16,8 +16,8 @@ const { promisify} = require('util');
 const { exec }     = require('child_process');
 const execAsync    = promisify(exec);
 
-const VPS_HOST      = process.env.VPS_HOST || '157.151.206.163';
-const VPS_USER      = process.env.VPS_USER || 'opc';
+const VPS_HOST      = process.env.VPS_HOST || '64.227.3.211';
+const VPS_USER      = process.env.VPS_USER || 'root';
 const VPS_SSH_PORT  = parseInt(process.env.VPS_SSH_PORT || '22');
 
 function syncSshKeys() {

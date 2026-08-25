@@ -8,8 +8,8 @@ if (-not (Test-Path $keyPath)) {
     $keyPath = Join-Path (Join-Path $env:USERPROFILE ".ssh") "proxicell_tunnel"
 }
 
-$vpsHost = "157.151.206.163"
-$vpsUser = "opc"
+$vpsHost = "64.227.3.211"
+$vpsUser = "root"
 $remotePort = "2222"
 
 Write-Host "================================================================" -ForegroundColor Cyan
