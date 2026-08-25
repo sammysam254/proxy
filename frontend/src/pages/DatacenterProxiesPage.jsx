@@ -237,7 +237,7 @@ export default function DatacenterProxiesPage({ session }) {
               gap: '20px',
             }}>
               {filteredProxies.map((p) => {
-                const isOnline = p.modems?.status === 'online';
+                const isOnline = p.active !== false;
                 const host = p.vps_host || '64.227.3.211';
                 const port = p.public_port;
                 const endpoint = `${host}:${port}`;
