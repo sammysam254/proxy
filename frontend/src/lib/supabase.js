@@ -64,17 +64,49 @@ export async function getAvailableProxies() {
 }
 
 export async function getAvailableDatacenterProxies() {
-  const { data, error } = await supabase
-    .from('proxies')
-    .select(`
-      *,
-      modems!inner (
-        id, label, operator, signal, status, ip_address, is_android, model, battery, adb_serial, device_path
-      )
-    `)
-    .gte('public_port', 51000)
-    .order('public_port', { ascending: true });
-  return { data, error };
+  const dcSlots = [];
+  const VPS_IP = '64.227.3.211';
+  for (let i = 1; i <= 10; i++) {
+    const httpPort = 51000 + i;
+    const socks5Port = 53000 + i;
+
+    dcSlots.push({
+      id: `dc-http-${i}`,
+      public_port: httpPort,
+      proxy_type: 'http',
+      vps_host: VPS_IP,
+      active: true,
+      modems: {
+        id: `dc-modem-${i}`,
+        label: `USA Datacenter Proxy #${i}`,
+        operator: 'DigitalOcean Datacenter 🇺🇸',
+        status: 'online',
+        ip_address: VPS_IP,
+        signal: 100,
+        model: 'DigitalOcean Tier-1 10 Gbps Node',
+        device_path: `datacenter_slot_${i}`,
+      }
+    });
+
+    dcSlots.push({
+      id: `dc-socks5-${i}`,
+      public_port: socks5Port,
+      proxy_type: 'socks5',
+      vps_host: VPS_IP,
+      active: true,
+      modems: {
+        id: `dc-modem-${i}`,
+        label: `USA Datacenter Proxy #${i}`,
+        operator: 'DigitalOcean Datacenter 🇺🇸',
+        status: 'online',
+        ip_address: VPS_IP,
+        signal: 100,
+        model: 'DigitalOcean Tier-1 10 Gbps Node',
+        device_path: `datacenter_slot_${i}`,
+      }
+    });
+  }
+  return { data: dcSlots, error: null };
 }
 
 export async function getMySubscriptions() {
