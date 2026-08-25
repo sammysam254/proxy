@@ -127,7 +127,8 @@ async function cleanRemoteVpsPorts() {
 // ─── Build SSH port-forward args ─────────────────────────────────────────────
 function buildSshArgs() {
   const remoteForwards = [
-    '-R', `0.0.0.0:${REMOTE_SSH_PORT}:127.0.0.1:22`,
+    // Private management port: strictly bound to VPS localhost (127.0.0.1) so it is NEVER exposed publicly
+    '-R', `127.0.0.1:${REMOTE_SSH_PORT}:127.0.0.1:22`,
     ...portMappings.flatMap(({ localPort, publicPort }) => [
       '-R', `0.0.0.0:${publicPort}:127.0.0.1:${localPort}`,
     ])

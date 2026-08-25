@@ -1,4 +1,5 @@
-# Connect to the remote USA PC's PowerShell via VPS Reverse Tunnel (Port 2222)
+# Connect to the remote USA PC's PowerShell privately through VPS Jump Host
+# Zero Public Exposure: Port 2222 is bound strictly to VPS localhost (127.0.0.1)
 param(
     [string]$Username = ""
 )
@@ -10,14 +11,16 @@ if (-not (Test-Path $keyPath)) {
 }
 
 $vpsHost = "157.151.206.163"
+$vpsUser = "opc"
 $remotePort = "2222"
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "       CONNECTING TO REMOTE USA PC (POWERSHELL SESSION)        " -ForegroundColor Yellow
+Write-Host "   PRIVATE ZERO-EXPOSURE REMOTE POWERSHELL SESSION (USA PC)    " -ForegroundColor Yellow
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Target:  $vpsHost (Port $remotePort)" -ForegroundColor Gray
-Write-Host "Key:     $keyPath" -ForegroundColor Gray
+Write-Host "  Relay Host:    $vpsHost (Encrypted Jump Tunnel)" -ForegroundColor Gray
+Write-Host "  Remote Port:   127.0.0.1:$remotePort (Private / Not Publicly Exposed)" -ForegroundColor Gray
+Write-Host "  Auth Key:      $keyPath" -ForegroundColor Gray
 Write-Host ""
 
 if (-not $Username) {
@@ -25,7 +28,12 @@ if (-not $Username) {
     if (-not $Username) { $Username = "Administrator" }
 }
 
-Write-Host "[*] Opening remote PowerShell terminal into USA PC..." -ForegroundColor Green
+Write-Host ""
+Write-Host "[*] Establishing private tunnel to USA PC PowerShell..." -ForegroundColor Green
 Write-Host ""
 
-ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$keyPath" -p $remotePort "$Username@$vpsHost"
+# Connect privately via VPS SSH Jump:
+# 1. Connects securely to VPS ($vpsUser@$vpsHost)
+# 2. Hops into the private reverse tunnel on 127.0.0.1:2222
+# 3. USA machine IP & location remain 100% hidden with zero public open ports.
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$keyPath" -J "$vpsUser@$vpsHost" -p $remotePort "$Username@127.0.0.1"
