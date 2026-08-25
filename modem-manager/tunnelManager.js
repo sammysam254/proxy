@@ -357,7 +357,7 @@ async function ensureTunnelConnected() {
   return true;
 }
 
-// ─── Check tunnel health via SSH test command ────────────────────────────────
+// ─── Check tunnel health via process state and connection ────────────────────
 async function checkTunnelHealth() {
   if (!VPS_HOST) return false;
 
@@ -366,8 +366,14 @@ async function checkTunnelHealth() {
     return false;
   }
 
+  // If the background SSH process is active and running without error, it is healthy
+  if (running) {
+    return true;
+  }
+
   try {
     const keyPath = getSshKeyPath();
+    if (!keyPath || !fs.existsSync(keyPath)) return false;
     await execAsync(
       `ssh -i "${keyPath}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 ` +
       `-p ${VPS_SSH_PORT} ${VPS_USER}@${VPS_HOST} echo ok`,
