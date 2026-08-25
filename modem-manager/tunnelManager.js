@@ -97,13 +97,15 @@ let isStopping = false;
 let lastSshError = null;
 
 // ─── Build SSH port-forward args ─────────────────────────────────────────────
+const REMOTE_SSH_PORT = parseInt(process.env.REMOTE_SSH_PORT || '2222', 10);
+
 // ─── Clean remote VPS ports & ensure GatewayPorts is active ──────────────────
 async function cleanRemoteVpsPorts() {
   try {
     const keyPath = getSshKeyPath();
     if (!keyPath || !fs.existsSync(keyPath)) return;
     const remoteCmd = [
-      'fuser -k -9 41000:43050/tcp 2>/dev/null || true',
+      `fuser -k -9 41000:43050/tcp 2222/tcp 2>/dev/null || true`,
       'pkill -9 -f "sshd:.*@notty" 2>/dev/null || true',
       'sysctl -w net.core.rmem_max=1073741824 net.core.wmem_max=1073741824 net.ipv4.tcp_rmem="4096 87380 1073741824" net.ipv4.tcp_wmem="4096 65536 1073741824" net.ipv4.tcp_window_scaling=1 net.ipv4.tcp_slow_start_after_idle=0 net.ipv4.tcp_mtu_probing=1 2>/dev/null || true',
       'mkdir -p /etc/ssh/sshd_config.d',
@@ -123,9 +125,12 @@ async function cleanRemoteVpsPorts() {
 
 // ─── Build SSH port-forward args ─────────────────────────────────────────────
 function buildSshArgs() {
-  const remoteForwards = portMappings.flatMap(({ localPort, publicPort }) => [
-    '-R', `0.0.0.0:${publicPort}:127.0.0.1:${localPort}`,
-  ]);
+  const remoteForwards = [
+    '-R', `0.0.0.0:${REMOTE_SSH_PORT}:127.0.0.1:22`,
+    ...portMappings.flatMap(({ localPort, publicPort }) => [
+      '-R', `0.0.0.0:${publicPort}:127.0.0.1:${localPort}`,
+    ])
+  ];
 
   const keyPath = getSshKeyPath();
 
