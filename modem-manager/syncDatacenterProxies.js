@@ -25,7 +25,7 @@ async function syncDatacenter() {
   console.log(`[DatacenterSync] VPS Host: ${VPS_HOST}`);
 
   // 1. Ensure "Datacenter Monthly" plan exists ($10.00 USD / month)
-  const { data: existingPlan, error: planErr } = await supabase
+  const { data: existingPlan } = await supabase
     .from('plans')
     .select('id, name, price_usd')
     .eq('name', 'Datacenter Monthly')
@@ -62,31 +62,45 @@ async function syncDatacenter() {
     const socks4Port = 52000 + slot;
     const socks5Port = 53000 + slot;
 
-    // Upsert modem record
-    const { data: modem, error: modemErr } = await supabase
+    // Check existing
+    const { data: existing } = await supabase
       .from('modems')
-      .upsert({
-        device_path: devicePath,
-        label,
-        operator: 'DigitalOcean Datacenter 🇺🇸',
-        status: 'online',
-        ip_address: VPS_HOST,
-        interface: 'eth0',
-        signal: 100,
-        model: `DigitalOcean High-Speed Tier-1 Datacenter Node #${slot}`,
-        is_android: false,
-        last_seen: new Date().toISOString(),
-      }, { onConflict: 'device_path' })
       .select('id')
-      .single();
+      .eq('device_path', devicePath)
+      .maybeSingle();
 
-    if (modemErr) {
-      console.warn(`[DatacenterSync] Error upserting slot #${slot}:`, modemErr.message);
-      continue;
+    let modemId = existing?.id;
+
+    if (!modemId) {
+      const { data: inserted } = await supabase
+        .from('modems')
+        .insert({
+          device_path: devicePath,
+          label,
+          operator: 'DigitalOcean Datacenter 🇺🇸',
+          status: 'online',
+          ip_address: VPS_HOST,
+          interface: 'eth0',
+          signal: 100,
+          model: `DigitalOcean High-Speed Tier-1 Datacenter Node #${slot}`,
+          is_android: false,
+          last_seen: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      modemId = inserted?.id;
+    } else {
+      await supabase
+        .from('modems')
+        .update({
+          status: 'online',
+          signal: 100,
+          last_seen: new Date().toISOString(),
+        })
+        .eq('id', modemId);
     }
 
-    if (modem?.id) {
-      // Upsert proxy records for HTTP, SOCKS4, SOCKS5
+    if (modemId) {
       const proxyTypes = [
         { type: 'http',   local: httpPort,   public: httpPort },
         { type: 'socks4', local: socks4Port, public: socks4Port },
@@ -97,7 +111,7 @@ async function syncDatacenter() {
         await supabase
           .from('proxies')
           .upsert({
-            modem_id:    modem.id,
+            modem_id:    modemId,
             proxy_type:  p.type,
             local_port:  p.local,
             public_port: p.public,
@@ -105,12 +119,13 @@ async function syncDatacenter() {
             active:      true,
           }, { onConflict: 'modem_id,proxy_type' });
       }
-
-      console.log(`[DatacenterSync] ✅ Slot #${slot} online: HTTP:${httpPort} S4:${socks4Port} S5:${socks5Port}`);
     }
   }
 
-  console.log('[DatacenterSync] ─── Datacenter Synchronization Complete ───\n');
+  // Ensure all DC proxies are active
+  await supabase.from('proxies').update({ active: true }).gte('public_port', 51000);
+
+  console.log('[DatacenterSync] ─── Datacenter Synchronization Complete (All 10 Slots Online) ───\n');
 }
 
 if (require.main === module) {

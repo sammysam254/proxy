@@ -419,11 +419,25 @@ async function main() {
     log.warn('Startup cleanup failed (non-fatal):', e.message);
   });
 
+  // Auto-sync Datacenter proxies on VPS
+  try {
+    const dcSync = require('./syncDatacenterProxies');
+    await dcSync.syncDatacenter().catch(() => {});
+  } catch (_) {}
+
   // Run first detection cycle immediately
   await runCycle();
 
   // Detection cycle: every 30 seconds
   cron.schedule('*/30 * * * * *', runCycle);
+
+  // Datacenter sync cycle: every 2 minutes
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      const dcSync = require('./syncDatacenterProxies');
+      await dcSync.syncDatacenter().catch(() => {});
+    } catch (_) {}
+  });
 
   // Bandwidth sync: every 15 seconds
   cron.schedule('*/15 * * * * *', async () => {

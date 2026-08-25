@@ -357,6 +357,16 @@ async function reconcileOnlineModems(activeModemIds = []) {
     if (error || !dbModems) return;
 
     for (const m of dbModems) {
+      // Never mark Datacenter modems offline (they run permanently on DigitalOcean VPS)
+      const dp = (m.device_path || '').toLowerCase();
+      const op = (m.operator || '').toLowerCase();
+      const lbl = (m.label || '').toLowerCase();
+      if (dp.includes('datacenter') || op.includes('datacenter') || lbl.includes('datacenter')) {
+        // Ensure datacenter proxies are always active
+        await supabase.from('proxies').update({ active: true }).eq('modem_id', m.id);
+        continue;
+      }
+
       if (!activeSet.has(m.id)) {
         console.log(`[SupabaseSync] Deactivating stale online modem: ${m.label} (${m.id})`);
         await markModemOffline(m.id);
