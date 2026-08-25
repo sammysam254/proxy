@@ -106,6 +106,10 @@ export function getProxyCategory(sub) {
   const op = (modem.operator || '').toLowerCase();
   const model = (modem.model || '').toLowerCase();
 
+  if (dp.includes('datacenter') || lbl.includes('datacenter') || op.includes('datacenter') || (sub.proxies?.public_port >= 51000)) {
+    return 'datacenter';
+  }
+
   const isWifi = dp.startsWith('wifi:') || 
                  dp.includes('residential') || 
                  lbl.includes('residential') || 
@@ -140,10 +144,11 @@ function ProxyCredCard({ sub }) {
     : null;
 
   const category = getProxyCategory(sub);
+  const isDatacenter = category === 'datacenter';
   const isResidential = category === 'residential';
-  const CategoryIcon = isResidential ? Wifi : Smartphone;
-  const categoryAccent = isResidential ? '#06b6d4' : '#8b5cf6';
-  const categoryLabel = isResidential ? 'Residential (Wi-Fi)' : 'Mobile (Dedicated)';
+  const CategoryIcon = isDatacenter ? Server : (isResidential ? Wifi : Smartphone);
+  const categoryAccent = isDatacenter ? '#3b82f6' : (isResidential ? '#06b6d4' : '#8b5cf6');
+  const categoryLabel = isDatacenter ? 'Datacenter (DigitalOcean)' : (isResidential ? 'USA Residential (Wi-Fi)' : 'Mobile (Dedicated 4G/5G)');
 
   const handleRotate = async () => {
     setRotating(true);
@@ -290,23 +295,35 @@ function ProxyCredCard({ sub }) {
 
             <div className="divider" style={{ margin: '4px 0' }} />
 
-            {/* Full connection string */}
+            {/* Standard IP:PORT:USER:PASS connection string */}
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', marginBottom: '6px' }}>
-                SOCKS5 connection string
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--clr-accent)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>Standard Format (IP:PORT:USERNAME:PASSWORD)</span>
               </div>
               <CopyBtn
-                value={`socks5://${sub.proxy_username}:${sub.proxy_password}@${vpsHost}:${port}`}
-                label="SOCKS5 string"
+                value={`${vpsHost}:${port}:${sub.proxy_username}:${sub.proxy_password}`}
+                label="IP:PORT:USER:PASS"
               />
             </div>
+
+            {/* Full Protocol connection strings */}
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', marginBottom: '6px' }}>
-                HTTP connection string
+                HTTP / HTTPS URL Format
               </div>
               <CopyBtn
                 value={`http://${sub.proxy_username}:${sub.proxy_password}@${vpsHost}:${port}`}
-                label="HTTP string"
+                label="HTTP URL"
+              />
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', marginBottom: '6px' }}>
+                SOCKS5 URL Format
+              </div>
+              <CopyBtn
+                value={`socks5://${sub.proxy_username}:${sub.proxy_password}@${vpsHost}:${port}`}
+                label="SOCKS5 URL"
               />
             </div>
           </div>
