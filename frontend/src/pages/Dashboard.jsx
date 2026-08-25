@@ -348,11 +348,18 @@ function ProxyCredCard({ sub }) {
 }
 
 export default function Dashboard({ session }) {
+  const location = useLocation();
   const [subs, setSubs]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [liveUpdate, setLiveUpdate] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'mobile' | 'residential'
+  const initialCategory = new URLSearchParams(location.search).get('category') || 'all';
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
   const channelRef = useRef(null);
+
+  useEffect(() => {
+    const qCat = new URLSearchParams(location.search).get('category');
+    if (qCat) setCategoryFilter(qCat);
+  }, [location.search]);
 
   useEffect(() => {
     loadSubs(true);
@@ -421,8 +428,9 @@ export default function Dashboard({ session }) {
     return getProxyCategory(s) === categoryFilter;
   });
 
-  const mobileCount = active.filter(s => getProxyCategory(s) === 'mobile').length;
+  const dcCount     = active.filter(s => getProxyCategory(s) === 'datacenter').length;
   const resCount    = active.filter(s => getProxyCategory(s) === 'residential').length;
+  const mobileCount = active.filter(s => getProxyCategory(s) === 'mobile').length;
 
   if (loading) return (
     <div className="loading-screen">
@@ -439,7 +447,11 @@ export default function Dashboard({ session }) {
         <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <h1 style={{ fontSize: '2rem', margin: 0 }}>My Proxies</h1>
+              <h1 style={{ fontSize: '2rem', margin: 0 }}>
+                {categoryFilter === 'datacenter' ? '🏛️ Datacenter Proxies Dashboard' : 
+                 categoryFilter === 'residential' ? '📶 USA Residential Proxies Dashboard' : 
+                 'My Active Proxies'}
+              </h1>
               <div title="Live traffic data — updates in real-time" style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
                 padding: '3px 10px', borderRadius: '20px',
@@ -460,18 +472,23 @@ export default function Dashboard({ session }) {
             </div>
             <p className="text-muted">{session?.user?.email}</p>
           </div>
-          <a href="/#pricing" className="btn btn-primary">
-            + Get More Proxies
-          </a>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <a href="/datacenter-proxies" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Server size={15} /> + Datacenter ($10/mo)
+            </a>
+            <a href="/proxies" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Wifi size={15} /> + Residential Proxy
+            </a>
+          </div>
         </div>
 
         {/* Stats */}
         <div className="stats-grid mb-xl">
           {[
-            { label: 'Active Proxies',  value: active.length, sub: 'currently running' },
-            { label: 'Mobile Proxies',  value: mobileCount,   sub: 'dedicated cellular' },
-            { label: 'Residential',     value: resCount,      sub: 'routed via Wi-Fi' },
-            { label: 'Total Purchased', value: subs.length,   sub: 'all time' },
+            { label: 'Total Active',     value: active.length, sub: 'currently online' },
+            { label: 'Datacenter Slots', value: dcCount,       sub: '10 Gbps unmetered ($10/mo)' },
+            { label: 'USA Residential',  value: resCount,      sub: 'routed via USA Wi-Fi' },
+            { label: 'Mobile Proxies',   value: mobileCount,   sub: 'dedicated SIM' },
           ].map(s => (
             <div key={s.label} className="stat-card">
               <div className="stat-label">{s.label}</div>
@@ -502,18 +519,25 @@ export default function Dashboard({ session }) {
               All Proxies ({subs.length})
             </button>
             <button
-              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
-              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Smartphone size={14} /> Mobile Proxies Dedicated ({mobileCount})
-            </button>
-            <button
               onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
               className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Wifi size={14} /> Residential Proxies ({resCount})
+              <Wifi size={14} color="#06b6d4" /> 📶 USA Residential ({resCount})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('datacenter'); }}
+              className={`btn btn-sm ${categoryFilter === 'datacenter' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Server size={14} color="#3b82f6" /> 🏛️ Datacenter ($10/mo) ({dcCount})
+            </button>
+            <button
+              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
+              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Smartphone size={14} color="#8b5cf6" /> 📱 Mobile Modems ({mobileCount})
             </button>
           </div>
         )}

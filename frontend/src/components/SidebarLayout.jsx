@@ -8,11 +8,12 @@ import {
 import { signOut, isAdmin } from '../lib/supabase';
 
 const CUSTOMER_NAV = [
-  { to: '/',                   icon: <Home size={18} />,            label: 'Home / Store' },
-  { to: '/proxies',            icon: <Wifi size={18} />,            label: 'Residential Proxies' },
-  { to: '/datacenter-proxies', icon: <Server size={18} />,          label: 'Datacenter Proxies' },
-  { to: '/dashboard',          icon: <LayoutDashboard size={18} />, label: 'My Proxies' },
-  { to: '/settings',           icon: <Settings size={18} />,        label: 'Settings' },
+  { to: '/',                               icon: <Home size={18} />,            label: 'Home / Store' },
+  { to: '/proxies',                        icon: <Wifi size={18} />,            label: 'Residential Proxies' },
+  { to: '/datacenter-proxies',             icon: <Server size={18} />,          label: 'Datacenter Proxies' },
+  { to: '/dashboard?category=residential', icon: <Wifi size={18} />,            label: 'My Residential Proxies' },
+  { to: '/dashboard?category=datacenter',  icon: <Server size={18} />,          label: 'My Datacenter Proxies' },
+  { to: '/settings',                       icon: <Settings size={18} />,        label: 'Settings' },
 ];
 
 const GUEST_NAV = [
