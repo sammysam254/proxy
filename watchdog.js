@@ -81,9 +81,11 @@ async function inspectAndHeal() {
 
   for (const p of procs) {
     const cmd = p.CommandLine || '';
-    if (cmd.includes('service-daemon.js')) daemonFound = true;
-    if (cmd.includes('modem-manager\\index.js') || cmd.includes('modem-manager/index.js')) mainFound = true;
-    if (cmd.includes('bandwidthTracker.js')) bandwidthFound = true;
+    if (cmd.includes('proxy') || cmd.includes('modem-manager')) {
+      if (cmd.includes('service-daemon.js')) daemonFound = true;
+      if (cmd.includes('modem-manager\\index.js') || cmd.includes('modem-manager/index.js')) mainFound = true;
+      if (cmd.includes('bandwidthTracker.js')) bandwidthFound = true;
+    }
   }
 
   // Also check PID files

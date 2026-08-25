@@ -77,7 +77,7 @@ if ($workersInfo) {
 }
 
 # Fallback scan running node processes directly
-$nodeProcs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue
+$nodeProcs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*" }
 foreach ($np in $nodeProcs) {
     $cmd = $np.CommandLine
     if (-not $daemonPid -and $cmd -like "*service-daemon.js*") { $daemonPid = $np.ProcessId }
@@ -85,11 +85,11 @@ foreach ($np in $nodeProcs) {
     if (-not $bwPid -and $cmd -like "*bandwidthTracker.js*") { $bwPid = $np.ProcessId }
 }
 
-# SSH VPS tunnels
+# SSH VPS tunnels (strictly proxy tunnels only)
 $tunnelPids = @()
-$sshList = @(Get-Process -Name "ssh" -ErrorAction SilentlyContinue)
+$sshList = @(Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*proxicell*' -or ($_.CommandLine -like '*-R*' -and ($_.CommandLine -like '*4100*' -or $_.CommandLine -like '*31000*')) })
 foreach ($sp in $sshList) {
-    $tunnelPids += $sp.Id
+    $tunnelPids += $sp.ProcessId
 }
 
 if ($daemonPid) {

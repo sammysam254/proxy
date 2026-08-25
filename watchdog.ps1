@@ -33,9 +33,11 @@ $bwRunning = $false
 
 foreach ($p in $procs) {
     $cmd = $p.CommandLine
-    if ($cmd -like "*service-daemon.js*") { $daemonRunning = $true }
-    if ($cmd -like "*modem-manager*index.js*" -or $cmd -like "*modem-manager\index.js*") { $mainRunning = $true }
-    if ($cmd -like "*bandwidthTracker.js*") { $bwRunning = $true }
+    if ($cmd -like "*proxy*" -or $cmd -like "*\proxy\*") {
+        if ($cmd -like "*service-daemon.js*") { $daemonRunning = $true }
+        if ($cmd -like "*modem-manager*index.js*" -or $cmd -like "*modem-manager\index.js*") { $mainRunning = $true }
+        if ($cmd -like "*bandwidthTracker.js*") { $bwRunning = $true }
+    }
 }
 
 # 2. Check if all are alive

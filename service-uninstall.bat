@@ -20,7 +20,8 @@ if %errorlevel% neq 0 (
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "Write-Host '[*] Stopping running service...' -ForegroundColor Cyan;" ^
-    "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -like '*service-daemon.js*' -or $_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*bandwidthTracker.js*' -or $_.CommandLine -like '*watchdog.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };" ^
+    "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" -ErrorAction SilentlyContinue | Where-Object { ($_.CommandLine -like '*proxy*' -or $_.CommandLine -like '*\proxy\*') -and ($_.CommandLine -like '*service-daemon.js*' -or $_.CommandLine -like '*modem-manager*' -or $_.CommandLine -like '*bandwidthTracker.js*' -or $_.CommandLine -like '*watchdog.js*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };" ^
+    "Get-CimInstance Win32_Process -Filter \"Name = 'ssh.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*proxicell*' -or ($_.CommandLine -like '*-R*' -and ($_.CommandLine -like '*4100*' -or $_.CommandLine -like '*31000*')) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };" ^
     "Write-Host '[*] Unregistering Windows Scheduled Tasks...' -ForegroundColor Cyan;" ^
     "try { Unregister-ScheduledTask -TaskName 'VertexProxiesBackgroundService' -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {};" ^
     "try { Unregister-ScheduledTask -TaskName 'VertexProxiesWatchdog' -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {};" ^

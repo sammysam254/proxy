@@ -10,13 +10,15 @@ Write-Host "          VERTEX PROXIES -- STARTING BACKGROUND SERVICE        " -Fo
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Stop older instances
-Write-Host "[*] Stopping any existing instances..." -ForegroundColor Cyan
+# 1. Stop older proxy instances
+Write-Host "[*] Stopping existing proxy instances..." -ForegroundColor Cyan
 try {
-    Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" | Where-Object { 
-        $_.CommandLine -like "*service-daemon.js*" -or 
-        $_.CommandLine -like "*modem-manager*index.js*" -or 
-        $_.CommandLine -like "*bandwidthTracker.js*" 
+    Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
+        ($_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*") -and
+        ($_.CommandLine -like "*service-daemon.js*" -or 
+         $_.CommandLine -like "*modem-manager*index.js*" -or 
+         $_.CommandLine -like "*bandwidthTracker.js*" -or
+         $_.CommandLine -like "*watchdog.js*")
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 } catch {}
 

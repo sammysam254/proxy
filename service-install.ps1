@@ -175,15 +175,20 @@ try {
     Write-Host "[OK] Startup folder auto-start configured." -ForegroundColor Green
 } catch {}
 
-# 7. Terminate old stale processes and launch fresh
+# 7. Terminate old stale proxy processes and launch fresh
 Write-Host ""
-Write-Host "[*] Stopping old instances and starting autonomous service fresh..." -ForegroundColor Cyan
+Write-Host "[*] Stopping old proxy instances and starting autonomous service fresh..." -ForegroundColor Cyan
 try {
     Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
-        $_.CommandLine -like "*service-daemon.js*" -or 
-        $_.CommandLine -like "*modem-manager*index.js*" -or 
-        $_.CommandLine -like "*bandwidthTracker.js*" -or
-        $_.CommandLine -like "*watchdog.js*"
+        ($_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*") -and
+        ($_.CommandLine -like "*service-daemon.js*" -or 
+         $_.CommandLine -like "*modem-manager*index.js*" -or 
+         $_.CommandLine -like "*bandwidthTracker.js*" -or
+         $_.CommandLine -like "*watchdog.js*")
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+    Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 
+        $_.CommandLine -like "*proxicell*" -or ($_.CommandLine -like "*-R*" -and ($_.CommandLine -like "*4100*" -or $_.CommandLine -like "*31000*"))
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 } catch {}
 
