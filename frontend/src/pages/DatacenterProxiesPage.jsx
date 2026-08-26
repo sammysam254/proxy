@@ -119,7 +119,7 @@ export default function DatacenterProxiesPage({ session }) {
                     <CheckCircle size={16} color="#10b981" /> Dedicated Port Range (51001 - 53010)
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--clr-text)' }}>
-                    <CheckCircle size={16} color="#10b981" /> Static Dedicated IP (64.227.3.211)
+                    <CheckCircle size={16} color="#10b981" /> Static Dedicated IP (104.131.118.5)
                   </div>
                 </div>
               </div>

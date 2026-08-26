@@ -65,7 +65,7 @@ export async function getAvailableProxies() {
 
 export async function getAvailableDatacenterProxies() {
   const dcSlots = [];
-  const VPS_IP = '64.227.3.211';
+  const VPS_IP = '104.131.118.5';
   for (let i = 1; i <= 10; i++) {
     const httpPort = 51000 + i;
     const socks5Port = 53000 + i;
