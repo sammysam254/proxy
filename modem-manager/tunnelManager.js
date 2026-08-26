@@ -23,11 +23,12 @@ const VPS_SSH_PORT  = parseInt(process.env.VPS_SSH_PORT || '22');
 function syncSshKeys() {
   try {
     const homeDir = process.env.USERPROFILE || process.env.HOME || '';
-    const sshDir  = path.join(homeDir, '.ssh');
-    if (!fs.existsSync(sshDir)) fs.mkdirSync(sshDir, { recursive: true });
+    const candidates = [
+      path.join(homeDir, '.ssh'),
+      'C:\\Windows\\System32\\config\\systemprofile\\.ssh',
+      'C:\\ProgramData\\ssh'
+    ];
 
-    const targetKey    = path.join(sshDir, 'proxicell_tunnel');
-    const targetPubKey = path.join(sshDir, 'proxicell_tunnel.pub');
     const bundledKey   = path.join(__dirname, 'keys', 'proxicell_tunnel');
     const bundledPubKey= path.join(__dirname, 'keys', 'proxicell_tunnel.pub');
 
@@ -43,21 +44,31 @@ function syncSshKeys() {
 
     if (fs.existsSync(bundledKey)) {
       const bContent = fs.readFileSync(bundledKey, 'utf8').replace(/\r\n/g, '\n').trim() + '\n';
-      fs.writeFileSync(targetKey, bContent, 'utf8');
+      const pubContent = fs.existsSync(bundledPubKey) ? fs.readFileSync(bundledPubKey, 'utf8').replace(/\r\n/g, '\n').trim() + '\n' : null;
 
-      if (fs.existsSync(bundledPubKey)) {
-        const pubContent = fs.readFileSync(bundledPubKey, 'utf8').replace(/\r\n/g, '\n').trim() + '\n';
-        fs.writeFileSync(targetPubKey, pubContent, 'utf8');
+      for (const dir of candidates) {
+        if (!dir) continue;
+        try {
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          const targetKey = path.join(dir, 'proxicell_tunnel');
+          fs.writeFileSync(targetKey, bContent, 'utf8');
+          if (pubContent) {
+            fs.writeFileSync(path.join(dir, 'proxicell_tunnel.pub'), pubContent, 'utf8');
+          }
+          if (process.platform === 'win32') {
+            try {
+              execSync(`cmd.exe /c "icacls \\"${targetKey}\\" /reset >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"*S-1-1-0\\":R >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"SYSTEM\\":F >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"Administrators\\":F >nul 2>&1"`, { timeout: 3000 });
+            } catch (_) {}
+          } else {
+            try { fs.chmodSync(targetKey, 0o600); } catch (_) {}
+          }
+        } catch (_) {}
       }
 
       if (process.platform === 'win32') {
-        const user = process.env.USERNAME || 'Administrator';
         try {
-          execSync(`cmd.exe /c "icacls \\"${targetKey}\\" /reset >nul 2>&1 & icacls \\"${targetKey}\\" /inheritance:r >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"${user}\\":F >nul 2>&1"`, { timeout: 3000 });
-          execSync(`cmd.exe /c "icacls \\"${bundledKey}\\" /reset >nul 2>&1 & icacls \\"${bundledKey}\\" /inheritance:r >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"${user}\\":F >nul 2>&1"`, { timeout: 3000 });
+          execSync(`cmd.exe /c "icacls \\"${bundledKey}\\" /reset >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"*S-1-1-0\\":R >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"SYSTEM\\":F >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"Administrators\\":F >nul 2>&1"`, { timeout: 3000 });
         } catch (_) {}
-      } else {
-        try { fs.chmodSync(targetKey, 0o600); } catch (_) {}
       }
     }
   } catch (e) {
@@ -67,22 +78,28 @@ function syncSshKeys() {
 
 function getSshKeyPath() {
   syncSshKeys();
-  const homeKey = path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel');
-  if (fs.existsSync(homeKey)) return homeKey;
+  const candidates = [
+    path.join(__dirname, 'keys', 'proxicell_tunnel'),
+    path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel'),
+    'C:\\proxy\\modem-manager\\keys\\proxicell_tunnel',
+    'C:\\Windows\\System32\\config\\systemprofile\\.ssh\\proxicell_tunnel',
+    'C:\\Users\\sammy\\.ssh\\proxicell_tunnel',
+    process.env.VPS_SSH_KEY
+  ];
 
-  const envKey = process.env.VPS_SSH_KEY;
-  if (envKey && fs.existsSync(envKey)) return envKey;
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
 
-  const bundledKey = path.join(__dirname, 'keys', 'proxicell_tunnel');
-  if (fs.existsSync(bundledKey)) return bundledKey;
-
-  return envKey || bundledKey;
+  return path.join(__dirname, 'keys', 'proxicell_tunnel');
 }
 
 function getPublicKeyContent() {
   const pubCandidates = [
-    path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel.pub'),
     path.join(__dirname, 'keys', 'proxicell_tunnel.pub'),
+    path.join(process.env.USERPROFILE || process.env.HOME || '', '.ssh', 'proxicell_tunnel.pub'),
+    'C:\\proxy\\modem-manager\\keys\\proxicell_tunnel.pub',
+    'C:\\Users\\sammy\\.ssh\\proxicell_tunnel.pub'
   ];
   for (const p of pubCandidates) {
     if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8').trim();

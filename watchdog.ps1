@@ -26,10 +26,12 @@ function Log-Message([string]$msg) {
 
 # 1. Inspect running processes
 $procs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue
+$sshProcs = Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue
 
 $daemonRunning = $false
 $mainRunning = $false
 $bwRunning = $false
+$sshRunning = $false
 
 foreach ($p in $procs) {
     $cmd = $p.CommandLine
@@ -40,6 +42,13 @@ foreach ($p in $procs) {
     }
 }
 
+foreach ($s in $sshProcs) {
+    $cmd = $s.CommandLine
+    if ($cmd -like "*-R*" -or $cmd -like "*104.131.118.5*") {
+        $sshRunning = $true
+    }
+}
+
 # 2. Check if all are alive
 if ($daemonRunning -and $mainRunning -and $bwRunning) {
     # All healthy, silent return
@@ -47,7 +56,7 @@ if ($daemonRunning -and $mainRunning -and $bwRunning) {
 }
 
 # 3. Auto-Heal & Restart
-Log-Message "Health check failed! Daemon=$daemonRunning, Main=$mainRunning, Bandwidth=$bwRunning"
+Log-Message "Health check failed! Daemon=$daemonRunning, Main=$mainRunning, Bandwidth=$bwRunning, SSH=$sshRunning"
 Log-Message "Triggering autonomous self-healing restart..."
 
 try {

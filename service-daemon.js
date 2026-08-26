@@ -224,8 +224,45 @@ spawnWorker('main');
 spawnWorker('bandwidth');
 updateWorkersPidFile();
 
-// ─── Autonomous Health Check Loop (every 30 seconds) ─────────────────────────
-setInterval(() => {
+const net = require('net');
+
+// ─── Active Autonomous Health Check Loop (every 20 seconds) ─────────────────
+let consecutiveFailures = 0;
+
+async function checkLocalProxyPort(port = 31000) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(2500);
+    socket.on('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on('error', () => {
+      resolve(false);
+    });
+    socket.connect(port, '127.0.0.1');
+  });
+}
+
+function checkSshProcessAlive() {
+  try {
+    const ps = `Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*-R*" -or $_.CommandLine -like "*104.131.118.5*" } | Select-Object -ExpandProperty ProcessId`;
+    const out = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`, {
+      timeout: 3000,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).toString().trim();
+    return !!out;
+  } catch {
+    return true; // Don't false-positive on shell timeout
+  }
+}
+
+setInterval(async () => {
   if (processes.main.isShuttingDown) return;
 
   const mainDead = !processes.main.child || !isProcessAlive(processes.main.child.pid);
@@ -241,8 +278,29 @@ setInterval(() => {
     spawnWorker('bandwidth');
   }
 
+  // If workers are running, verify end-to-end proxy connectivity & SSH tunnel
+  if (!mainDead) {
+    const portOpen = await checkLocalProxyPort(31000);
+    const sshAlive = checkSshProcessAlive();
+
+    if (!portOpen && !sshAlive) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= 2) {
+        logMessage('WARN', '[HealthCheck] Proxy port and SSH tunnel unresponsive for 2 cycles — restarting main worker to restore routing...');
+        if (processes.main.child) {
+          try { processes.main.child.kill('SIGKILL'); } catch (_) {}
+          processes.main.child = null;
+        }
+        consecutiveFailures = 0;
+        spawnWorker('main');
+      }
+    } else {
+      consecutiveFailures = 0;
+    }
+  }
+
   updateWorkersPidFile();
-}, 30 * 1000);
+}, 20 * 1000);
 
 // Heartbeat log every 5 minutes
 setInterval(() => {

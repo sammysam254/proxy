@@ -53,24 +53,35 @@ async function resolveHostFast(hostname) {
 }
 
 // ─── Network Interface Binding Validator ──────────────────────────────────────
+let _cachedAvailableIps = new Set();
+let _lastIpScanTime = 0;
+
 function getAvailableLocalIps() {
+  const now = Date.now();
+  if (now - _lastIpScanTime < 5000 && _cachedAvailableIps.size > 0) {
+    return _cachedAvailableIps;
+  }
   const ips = new Set();
-  const ifaces = os.networkInterfaces();
-  for (const name in ifaces) {
-    for (const iface of ifaces[name] || []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        ips.add(iface.address);
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const name in ifaces) {
+      for (const iface of ifaces[name] || []) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          ips.add(iface.address);
+        }
       }
     }
-  }
+  } catch {}
+  _cachedAvailableIps = ips;
+  _lastIpScanTime = now;
   return ips;
 }
 
-const availableIps = getAvailableLocalIps();
-
 function getValidLocalAddress(ip) {
   if (!ip || ip === '0.0.0.0' || ip === '127.0.0.1' || ip.startsWith('127.')) return undefined;
-  if (availableIps.has(ip)) return ip;
+  const ips = getAvailableLocalIps();
+  if (ips.has(ip)) return ip;
+  // If exact IP is not directly bound or changed, return undefined (System Direct Gateway routing for full speed & 100% uptime)
   return undefined;
 }
 
