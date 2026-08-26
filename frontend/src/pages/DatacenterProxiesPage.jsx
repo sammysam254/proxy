@@ -7,6 +7,7 @@ import {
 import { getAvailableDatacenterProxies, getPlans } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import PurchaseModal from '../components/PurchaseModal';
+import ProxyTestModal from '../components/ProxyTestModal';
 import { playClickSound, playSuccessSound } from '../lib/sound';
 
 export default function DatacenterProxiesPage({ session }) {
@@ -15,6 +16,7 @@ export default function DatacenterProxiesPage({ session }) {
   const [loading, setLoading]         = useState(true);
   const [selectedPlan, setSelectedPlan]   = useState(null);
   const [selectedProxy, setSelectedProxy] = useState(null);
+  const [testingProxy, setTestingProxy]   = useState(null);
   const [filterType, setFilterType]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedPort, setCopiedPort]   = useState(null);
@@ -340,24 +342,47 @@ export default function DatacenterProxiesPage({ session }) {
                       </div>
                     </div>
 
-                    {/* Action button */}
-                    <button
-                      onClick={() => handleRentClick(p)}
-                      className="btn btn-primary"
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        fontSize: '0.9rem',
-                        marginTop: 'auto',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                      disabled={!isOnline}
-                    >
-                      Rent for $10 / mo <ChevronRight size={15} />
-                    </button>
+                    {/* Action buttons row */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          setTestingProxy(p);
+                        }}
+                        className="btn btn-secondary"
+                        style={{
+                          flex: '1',
+                          padding: '10px 8px',
+                          fontSize: '0.82rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '5px',
+                          border: '1px solid rgba(59,130,246,0.3)',
+                          color: '#38bdf8',
+                        }}
+                        title="Test live connection & ISP response"
+                      >
+                        <Activity size={14} /> Test Live
+                      </button>
+
+                      <button
+                        onClick={() => handleRentClick(p)}
+                        className="btn btn-primary"
+                        style={{
+                          flex: '2',
+                          padding: '10px 12px',
+                          fontSize: '0.88rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                        disabled={!isOnline}
+                      >
+                        Rent $10/mo <ChevronRight size={15} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -366,6 +391,18 @@ export default function DatacenterProxiesPage({ session }) {
 
         </div>
       </div>
+
+      {/* Live Proxy Connection Test Modal */}
+      {testingProxy && (
+        <ProxyTestModal
+          proxy={testingProxy}
+          onClose={() => setTestingProxy(null)}
+          onRent={(proxy) => {
+            setTestingProxy(null);
+            handleRentClick(proxy);
+          }}
+        />
+      )}
 
       {/* Purchase Modal */}
       {selectedPlan && selectedProxy && (

@@ -7,6 +7,7 @@ import {
 import { getAvailableProxies, getPlans } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import PurchaseModal from '../components/PurchaseModal';
+import ProxyTestModal from '../components/ProxyTestModal';
 import { playClickSound } from '../lib/sound';
 
 export default function ProxiesPage({ session }) {
@@ -15,6 +16,7 @@ export default function ProxiesPage({ session }) {
   const [loading, setLoading]     = useState(true);
   const [selectedPlan, setSelectedPlan]   = useState(null);
   const [selectedProxy, setSelectedProxy] = useState(null);
+  const [testingProxy, setTestingProxy]   = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'mobile' | 'residential'
   const [filterType, setFilterType]       = useState('all');
   const [searchQuery, setSearchQuery]     = useState('');
@@ -329,18 +331,40 @@ export default function ProxiesPage({ session }) {
                       </div>
                     </div>
 
-                    {/* Rent Action */}
-                    <div style={{ marginTop: 'auto' }}>
+                    {/* Actions Row */}
+                    <div style={{ marginTop: 'auto', display: 'flex', gap: '8px' }}>
                       <button
-                        className="btn btn-primary btn-full"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          playClickSound();
+                          setTestingProxy(p);
+                        }}
+                        style={{
+                          flex: '1',
+                          padding: '10px 8px',
+                          fontSize: '0.82rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '5px',
+                          border: '1px solid rgba(16,185,129,0.3)',
+                          color: '#10b981',
+                        }}
+                        title="Test live connection & ISP response"
+                      >
+                        <Zap size={14} /> Test Live
+                      </button>
+
+                      <button
+                        className="btn btn-primary"
                         onClick={() => handleRentClick(p)}
                         disabled={!isOnline}
-                        style={{ padding: '12px' }}
+                        style={{ flex: '2', padding: '10px 12px', fontSize: '0.88rem' }}
                       >
                         {isOnline ? (
-                          <>Rent This Proxy <ChevronRight size={16} /></>
+                          <>Rent Proxy <ChevronRight size={15} /></>
                         ) : (
-                          'Currently Offline'
+                          'Offline'
                         )}
                       </button>
                     </div>
@@ -350,6 +374,18 @@ export default function ProxiesPage({ session }) {
             </div>
           )}
         </div>
+
+        {/* Live Proxy Connection Test Modal */}
+        {testingProxy && (
+          <ProxyTestModal
+            proxy={testingProxy}
+            onClose={() => setTestingProxy(null)}
+            onRent={(proxy) => {
+              setTestingProxy(null);
+              handleRentClick(proxy);
+            }}
+          />
+        )}
 
         {/* Purchase Modal */}
         {selectedPlan && selectedProxy && (

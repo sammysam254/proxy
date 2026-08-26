@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { getPlans, getAvailableProxies } from '../lib/supabase';
 import PurchaseModal from '../components/PurchaseModal';
+import ProxyTestModal from '../components/ProxyTestModal';
 import SidebarLayout from '../components/SidebarLayout';
+import { playClickSound } from '../lib/sound';
 
 export default function Storefront({ session }) {
   const [plans, setPlans] = useState([]);
@@ -15,6 +17,7 @@ export default function Storefront({ session }) {
   const [stats, setStats] = useState({ total: 0, online: 0, types: [] });
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [selectedProxy, setSelectedProxy] = useState(null);
+  const [testingProxy, setTestingProxy] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -219,6 +222,141 @@ export default function Storefront({ session }) {
                   <p className="text-muted text-sm">{f.desc}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Live Proxy Fleet & Instant Tester ──────────────────────── */}
+        <section style={{ padding: '60px 0', borderTop: '1px solid var(--clr-border)' }}>
+          <div className="container">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
+              <div>
+                <div className="badge badge-online" style={{ marginBottom: '10px', fontSize: '0.8rem' }}>
+                  <span className="dot" /> Live Active Nodes
+                </div>
+                <h2 style={{ fontSize: 'clamp(1.6rem, 4vw, 2.3rem)', marginBottom: '6px' }}>
+                  Test Any Proxy Live Before Buying
+                </h2>
+                <p style={{ color: 'var(--clr-text-2)', fontSize: '0.95rem', margin: 0 }}>
+                  Click <strong>"Test Live"</strong> on any card to run an instant ISP probe, check ping latency, and verify real Comcast residential IP details.
+                </p>
+              </div>
+              <Link to="/proxies" className="btn btn-secondary btn-sm" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+                View All {proxies.length} Proxies <ChevronRight size={14} />
+              </Link>
+            </div>
+
+            {/* Live Proxies Showcase Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '18px' }}>
+              {proxies.slice(0, 6).map((p) => {
+                const modem = p.modems;
+                const isOnline = modem?.status === 'online';
+                const isDc = (p.public_port >= 51000) || (modem?.operator || '').includes('Datacenter');
+                const isRes = !isDc;
+
+                return (
+                  <div
+                    key={p.id}
+                    className="card"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      background: 'var(--clr-surface)',
+                      border: isOnline ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--clr-border)',
+                      borderRadius: '16px',
+                      padding: '18px',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: 38, height: 38, borderRadius: '10px',
+                          background: isRes ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)',
+                          color: isRes ? '#10b981' : '#3b82f6',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {isRes ? <Wifi size={18} /> : <Server size={18} />}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
+                            {modem?.label || `USA Proxy #${p.public_port}`}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
+                            {isRes ? 'Comcast Residential 🇺🇸' : 'DigitalOcean Datacenter 🇺🇸'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
+                        <span className="dot" /> {isOnline ? 'Online' : 'Standby'}
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(0,0,0,0.25)',
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.78rem',
+                      marginBottom: '14px',
+                    }}>
+                      <div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Type</div>
+                        <div style={{ fontWeight: 700, color: 'var(--clr-accent)', textTransform: 'uppercase' }}>
+                          {p.proxy_type}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Speed</div>
+                        <div style={{ fontWeight: 700, color: '#10b981' }}>
+                          {isRes ? '1 Gbps Max' : '10 Gbps Port'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Port</div>
+                        <div className="mono" style={{ fontWeight: 600 }}>:{p.public_port}</div>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          playClickSound();
+                          setTestingProxy(p);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px',
+                          fontSize: '0.8rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          border: '1px solid rgba(16,185,129,0.3)',
+                          color: '#10b981',
+                        }}
+                      >
+                        <Zap size={13} /> Test Live
+                      </button>
+
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                          const plan = plans.find(pl => isRes ? pl.name === 'Daily' : pl.name === 'Datacenter Monthly') || plans[0];
+                          handleSelectPlan(plan);
+                        }}
+                        style={{ flex: 1.5, padding: '8px 12px', fontSize: '0.82rem' }}
+                      >
+                        Rent Proxy <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -468,6 +606,21 @@ export default function Storefront({ session }) {
             </div>
           </div>
         </footer>
+
+        {/* ─── Live Proxy Connection Test Modal ───────────────────── */}
+        {testingProxy && (
+          <ProxyTestModal
+            proxy={testingProxy}
+            onClose={() => setTestingProxy(null)}
+            onRent={(proxy) => {
+              setTestingProxy(null);
+              const isRes = !((proxy.public_port >= 51000) || (proxy.modems?.operator || '').includes('Datacenter'));
+              const plan = plans.find(pl => isRes ? pl.name === 'Daily' : pl.name === 'Datacenter Monthly') || plans[0];
+              setSelectedProxy(proxy);
+              handleSelectPlan(plan);
+            }}
+          />
+        )}
 
         {/* ─── Purchase Modal ───────────────────────────────────────── */}
         {selectedPlan && (
