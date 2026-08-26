@@ -166,8 +166,8 @@ function ProxyCredCard({ sub }) {
     }
   };
 
-  const isDc = isDatacenter || (proxy?.public_port >= 51000);
-  const vpsHost = isDc ? '104.131.118.5' : (proxy?.vps_host || '104.131.118.5');
+  const legacyIps = ['64.227.3.211', '157.151.206.163', '150.136.63.18', 'N/A'];
+  const vpsHost = (proxy?.vps_host && !legacyIps.includes(proxy.vps_host)) ? proxy.vps_host : '104.131.118.5';
   const port    = proxy?.public_port || 'N/A';
 
   return (
