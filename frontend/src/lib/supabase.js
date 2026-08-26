@@ -64,49 +64,17 @@ export async function getAvailableProxies() {
 }
 
 export async function getAvailableDatacenterProxies() {
-  const dcSlots = [];
-  const VPS_IP = '104.131.118.5';
-  for (let i = 1; i <= 10; i++) {
-    const httpPort = 51000 + i;
-    const socks5Port = 53000 + i;
-
-    dcSlots.push({
-      id: `dc-http-${i}`,
-      public_port: httpPort,
-      proxy_type: 'http',
-      vps_host: VPS_IP,
-      active: true,
-      modems: {
-        id: `dc-modem-${i}`,
-        label: `USA Datacenter Proxy #${i}`,
-        operator: 'DigitalOcean Datacenter 🇺🇸',
-        status: 'online',
-        ip_address: VPS_IP,
-        signal: 100,
-        model: 'DigitalOcean Tier-1 10 Gbps Node',
-        device_path: `datacenter_slot_${i}`,
-      }
-    });
-
-    dcSlots.push({
-      id: `dc-socks5-${i}`,
-      public_port: socks5Port,
-      proxy_type: 'socks5',
-      vps_host: VPS_IP,
-      active: true,
-      modems: {
-        id: `dc-modem-${i}`,
-        label: `USA Datacenter Proxy #${i}`,
-        operator: 'DigitalOcean Datacenter 🇺🇸',
-        status: 'online',
-        ip_address: VPS_IP,
-        signal: 100,
-        model: 'DigitalOcean Tier-1 10 Gbps Node',
-        device_path: `datacenter_slot_${i}`,
-      }
-    });
-  }
-  return { data: dcSlots, error: null };
+  const { data, error } = await supabase
+    .from('proxies')
+    .select(`
+      *,
+      modems!inner (
+        id, label, operator, signal, status, ip_address, is_android, model, battery, adb_serial, device_path
+      )
+    `)
+    .gte('public_port', 51000)
+    .order('public_port', { ascending: true });
+  return { data: data || [], error };
 }
 
 export async function getMySubscriptions() {
@@ -266,12 +234,20 @@ export async function activateSubscription(orderId, planId, proxyId, paymentMeth
     expiresAt = d.toISOString();
   }
 
+  // Ensure proxy_id is a valid UUID
+  let validProxyId = proxyId;
+  const isUuid = proxyId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(proxyId);
+  if (!isUuid) {
+    const { data: fallbackProxy } = await supabase.from('proxies').select('id').limit(1).maybeSingle();
+    validProxyId = fallbackProxy?.id || null;
+  }
+
   // 1. Insert active subscription
   const { data: sub, error: subErr } = await supabase
     .from('subscriptions')
     .insert({
       customer_id:     user.id,
-      proxy_id:        proxyId,
+      proxy_id:        validProxyId,
       plan_id:         planId,
       proxy_username:  username,
       proxy_password:  password,
