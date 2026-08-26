@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, Activity, Smartphone, Server, Shield } from 'lucide-react';
 import { getMySubscriptions, requestIpRotation, supabase } from '../lib/supabase';
