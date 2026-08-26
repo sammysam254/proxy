@@ -1,19 +1,29 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { createOrder, supabase, simulateAdminSubscription, activateSubscription, isAdmin } from '../lib/supabase';
+import { X, CreditCard, Bitcoin, Wifi, ChevronRight, Lock, Zap, ShieldCheck, AlertTriangle, Server, Check } from 'lucide-react';
+import { createOrder, supabase, simulateAdminSubscription, activateSubscription, isAdmin, getPlans } from '../lib/supabase';
 import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 const NOWPAYMENTS_API_KEY = import.meta.env.VITE_NOWPAYMENTS_API_KEY;
 
-export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess }) {
+export default function PurchaseModal({ plan, proxy, proxies, plans = [], onClose, onSuccess }) {
   const onlineProxies = (proxies || []).filter(p => p.modems?.status === 'online');
-  const [step, setStep]           = useState('select');  // select | payment | confirm
-  const [payMethod, setPayMethod] = useState('paystack');
-  const [selProxy, setSelProxy]   = useState(proxy || onlineProxies[0] || null);
-  const [loading, setLoading]     = useState(false);
-  const [adminUser, setAdminUser] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState(plans || []);
+  const [activePlan, setActivePlan]         = useState(plan);
+  const [step, setStep]                     = useState('select');  // select | payment | confirm
+  const [payMethod, setPayMethod]           = useState('paystack');
+  const [selProxy, setSelProxy]             = useState(proxy || onlineProxies[0] || null);
+  const [loading, setLoading]               = useState(false);
+  const [adminUser, setAdminUser]           = useState(false);
+
+  // Helper to check if a proxy is datacenter
+  const isDatacenterProxy = (p) => {
+    if (!p) return false;
+    return (p.public_port >= 51000) ||
+      (p.modems?.operator || '').toLowerCase().includes('datacenter') ||
+      (p.modems?.device_path || '').toLowerCase().includes('datacenter');
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -22,6 +32,15 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         isAdmin(user.id, user.email).then(setAdminUser);
       }
     });
+
+    if (!plans || plans.length === 0) {
+      getPlans().then(res => {
+        if (res.data && res.data.length > 0) {
+          setAvailablePlans(res.data);
+          if (!activePlan) setActivePlan(res.data[0]);
+        }
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -30,16 +49,44 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     }
   }, [proxies]);
 
+  // Auto-switch to matching Admin plan when proxy changes
+  useEffect(() => {
+    if (!selProxy || !availablePlans || availablePlans.length === 0) return;
+
+    const isDc = isDatacenterProxy(selProxy);
+    if (isDc) {
+      const dcPlan = availablePlans.find(p => 
+        p.name.toLowerCase().includes('datacenter') ||
+        p.description?.toLowerCase().includes('datacenter') ||
+        p.category === 'datacenter'
+      ) || availablePlans.find(p => p.duration_days === 30 || p.name.toLowerCase().includes('monthly')) || availablePlans[0];
+      if (dcPlan && (!activePlan || activePlan.id !== dcPlan.id)) {
+        setActivePlan(dcPlan);
+      }
+    } else {
+      // If previous plan was Datacenter-only, switch to standard residential plan
+      if (activePlan?.name?.toLowerCase()?.includes('datacenter')) {
+        const resPlan = availablePlans.find(p => !p.name.toLowerCase().includes('datacenter')) || availablePlans[0];
+        if (resPlan) setActivePlan(resPlan);
+      }
+    }
+  }, [selProxy, availablePlans]);
+
   // Admin Instant Test Simulation
   const handleAdminSimulate = async () => {
+    const curPlan = activePlan || plan;
     if (!selProxy) {
       toast.error('Please select an online proxy/SIM first.');
+      return;
+    }
+    if (!curPlan) {
+      toast.error('Please select an active plan first.');
       return;
     }
     setLoading(true);
     playClickSound();
     try {
-      await simulateAdminSubscription(plan.id, selProxy.id);
+      await simulateAdminSubscription(curPlan.id, selProxy.id);
       playSuccessSound();
       toast.success('⚡ Admin Simulation: Proxy rented & activated successfully!');
       onSuccess();
@@ -64,14 +111,19 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   }, []);
 
   const handlePayWithPaystack = async () => {
+    const curPlan = activePlan || plan;
     if (!selProxy) {
       toast.error('Please select an online proxy/SIM first.');
+      return;
+    }
+    if (!curPlan) {
+      toast.error('Please select a valid plan.');
       return;
     }
     setLoading(true);
     try {
       // 1. Create order in Supabase
-      const { data: order, error } = await createOrder(plan.id, selProxy.id, 'paystack');
+      const { data: order, error } = await createOrder(curPlan.id, selProxy.id, 'paystack');
       if (error) throw error;
 
       // 2. Initialize Paystack in KES (1 USD = 133 KES)
@@ -80,7 +132,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
       const liveKey = PAYSTACK_PUBLIC_KEY || 'pk_live_558e1ed8114c63c09b135b1523443ecfffb60524';
       const refCode = 'PK_' + order.id.replace(/-/g, '').substring(0, 10) + '_' + Date.now();
       
-      const usdAmount = parseFloat(plan.price_usd);
+      const usdAmount = parseFloat(curPlan.price_usd);
       const kesAmount = Math.round(usdAmount * 133);
       const amountSubunits = kesAmount * 100; // Paystack takes subunits (cents)
 
@@ -95,7 +147,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
             currency:  'KES',
             reference: refCode,
             onSuccess: (transaction) => {
-              activateSubscription(order.id, plan.id, selProxy.id, 'paystack', transaction.reference || transaction.trxref)
+              activateSubscription(order.id, curPlan.id, selProxy.id, 'paystack', transaction.reference || transaction.trxref)
                 .then(() => {
                   playSuccessSound();
                   toast.success('🎉 Payment successful! Your proxy has been activated.');
@@ -128,7 +180,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
           currency:  'KES',
           ref:       refCode,
           callback: function(response) {
-            activateSubscription(order.id, plan.id, selProxy.id, 'paystack', response.reference || response.trxref)
+            activateSubscription(order.id, curPlan.id, selProxy.id, 'paystack', response.reference || response.trxref)
               .then(() => {
                 playSuccessSound();
                 toast.success('🎉 Payment successful! Your proxy has been activated.');
@@ -172,6 +224,7 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   };
 
   const createCryptoPayment = async (networkKey, orderId) => {
+    const curPlan = activePlan || plan;
     const net = NETWORK_MAP[networkKey] || NETWORK_MAP.BEP20;
     const apiKey = NOWPAYMENTS_API_KEY || 'QNJ3N44-2JP4AKM-PGPJXCK-3AQPC3T';
 
@@ -182,11 +235,11 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        price_amount: parseFloat(plan.price_usd),
+        price_amount: parseFloat(curPlan.price_usd),
         price_currency: 'usd',
         pay_currency: net.code,
         order_id: orderId,
-        order_description: `Vertex Proxies ${plan.name} Proxy Subscription`,
+        order_description: `Vertex Proxies ${curPlan.name} Proxy Subscription`,
       }),
     });
 
@@ -200,10 +253,10 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          price_amount: parseFloat(plan.price_usd),
+          price_amount: parseFloat(curPlan.price_usd),
           price_currency: 'usd',
           order_id: orderId,
-          order_description: `Vertex Proxies ${plan.name} Proxy Subscription`,
+          order_description: `Vertex Proxies ${curPlan.name} Proxy Subscription`,
         }),
       });
       const invData = await invRes.json();
@@ -212,8 +265,13 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
   };
 
   const handlePayWithCrypto = async () => {
+    const curPlan = activePlan || plan;
     if (!selProxy) {
       toast.error('Please select an online proxy/SIM first.');
+      return;
+    }
+    if (!curPlan) {
+      toast.error('Please select an active plan.');
       return;
     }
     setLoading(true);
@@ -221,12 +279,12 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
     setPartialPayment(null);
 
     try {
-      const { data: order, error } = await createOrder(plan.id, selProxy.id, 'crypto');
+      const { data: order, error } = await createOrder(curPlan.id, selProxy.id, 'crypto');
       if (error) throw error;
 
       setPendingCryptoData({
         orderId: order.id,
-        planId:  plan.id,
+        planId:  curPlan.id,
         proxyId: selProxy.id,
       });
 
@@ -537,15 +595,53 @@ export default function PurchaseModal({ plan, proxy, proxies, onClose, onSuccess
 
 
           <>
-            {/* Plan summary */}
+            {/* Dynamic Plan summary & selector */}
             <div className="card card-accent" style={{ marginBottom: '20px' }}>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center" style={{ marginBottom: availablePlans.length > 1 ? '12px' : '0' }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{plan.name} Plan</div>
-                  <div className="text-muted text-sm">{plan.description}</div>
+                  <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--clr-text)' }}>
+                    {(activePlan || plan)?.name} Plan
+                  </div>
+                  <div className="text-muted text-sm">
+                    {(activePlan || plan)?.description || `${(activePlan || plan)?.duration_days || 30} Days Access`}
+                  </div>
                 </div>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>${parseFloat(plan.price_usd).toFixed(0)}</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--clr-accent)' }}>
+                  ${parseFloat((activePlan || plan)?.price_usd || 0).toFixed(0)}
+                  <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--clr-text-2)' }}>
+                    / {(activePlan || plan)?.duration_days ? `${(activePlan || plan).duration_days}d` : 'term'}
+                  </span>
+                </div>
               </div>
+
+              {/* Plan Switcher Pills if multiple admin plans exist */}
+              {availablePlans.length > 1 && (
+                <div className="scrollable-tabs" style={{ display: 'flex', gap: '6px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  {availablePlans.map(p => {
+                    const isSelected = (activePlan?.id || plan?.id) === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          playClickSound();
+                          setActivePlan(p);
+                        }}
+                        className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '4px 10px',
+                          flexShrink: 0,
+                          borderRadius: '8px',
+                          border: isSelected ? '1px solid var(--clr-accent)' : '1px solid var(--clr-border)',
+                        }}
+                      >
+                        {p.name} (${parseFloat(p.price_usd).toFixed(0)})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Proxy selector */}

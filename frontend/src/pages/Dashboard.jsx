@@ -443,108 +443,105 @@ export default function Dashboard({ session }) {
 
   return (
     <SidebarLayout session={session} adminMode={false}>
-    <main style={{ padding: '40px 0', minHeight: '80vh' }}>
-      <div className="container">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <h1 style={{ fontSize: '2rem', margin: 0 }}>
-                {categoryFilter === 'datacenter' ? '🏛️ Datacenter Proxies Dashboard' : 
-                 categoryFilter === 'residential' ? '📶 USA Residential Proxies Dashboard' : 
-                 'My Active Proxies'}
-              </h1>
-              <div title="Live traffic data — updates in real-time" style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                padding: '3px 10px', borderRadius: '20px',
-                background: liveUpdate ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.08)',
-                border: `1px solid ${liveUpdate ? 'rgba(16, 185, 129, 0.6)' : 'rgba(16, 185, 129, 0.2)'}`,
-                transition: 'all 0.3s ease',
-              }}>
-                <Activity size={11} color={liveUpdate ? '#10b981' : '#6ee7b7'} style={{ transition: 'color 0.3s' }} />
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: liveUpdate ? '#10b981' : '#6ee7b7', transition: 'color 0.3s' }}>
-                  {liveUpdate ? 'LIVE' : 'REALTIME'}
-                </span>
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: '#10b981',
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                }} />
+      <div style={{ padding: '24px 0', minHeight: '80vh' }}>
+        <div className="container">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-xl" style={{ flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', margin: 0 }}>
+                  {categoryFilter === 'datacenter' ? '🏛️ Datacenter Dashboard' : 
+                   categoryFilter === 'residential' ? '📶 Residential Dashboard' : 
+                   'My Active Proxies'}
+                </h1>
+                <div title="Live traffic data — updates in real-time" style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  padding: '3px 10px', borderRadius: '20px',
+                  background: liveUpdate ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.08)',
+                  border: `1px solid ${liveUpdate ? 'rgba(16, 185, 129, 0.6)' : 'rgba(16, 185, 129, 0.2)'}`,
+                  transition: 'all 0.3s ease',
+                }}>
+                  <Activity size={11} color={liveUpdate ? '#10b981' : '#6ee7b7'} style={{ transition: 'color 0.3s' }} />
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: liveUpdate ? '#10b981' : '#6ee7b7', transition: 'color 0.3s' }}>
+                    {liveUpdate ? 'LIVE' : 'REALTIME'}
+                  </span>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: '#10b981',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
+                </div>
               </div>
+              <p className="text-muted text-sm">{session?.user?.email}</p>
             </div>
-            <p className="text-muted">{session?.user?.email}</p>
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <a href="/datacenter-proxies" className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Server size={15} /> + Datacenter ($10/mo)
-            </a>
-            <a href="/proxies" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Wifi size={15} /> + Residential Proxy
-            </a>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="stats-grid mb-xl">
-          {[
-            { label: 'Total Active',     value: active.length, sub: 'currently online' },
-            { label: 'Datacenter Slots', value: dcCount,       sub: '10 Gbps unmetered ($10/mo)' },
-            { label: 'USA Residential',  value: resCount,      sub: 'routed via USA Wi-Fi' },
-            { label: 'Mobile Proxies',   value: mobileCount,   sub: 'dedicated SIM' },
-          ].map(s => (
-            <div key={s.label} className="stat-card">
-              <div className="stat-label">{s.label}</div>
-              <div className="stat-value">{s.value}</div>
-              <div className="stat-sub">{s.sub}</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', maxWidth: '380px' }}>
+              <a href="/datacenter-proxies" className="btn btn-secondary btn-sm" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.8rem', padding: '8px 12px' }}>
+                <Server size={14} /> + Datacenter
+              </a>
+              <a href="/proxies" className="btn btn-primary btn-sm" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.8rem', padding: '8px 12px' }}>
+                <Wifi size={14} /> + Residential
+              </a>
             </div>
-          ))}
-        </div>
-
-        {/* Subcategories Filter Bar */}
-        {subs.length > 0 && (
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            marginBottom: '28px',
-            background: 'var(--clr-surface)',
-            padding: '6px',
-            borderRadius: '12px',
-            border: '1px solid var(--clr-border)',
-            width: 'fit-content',
-            flexWrap: 'wrap',
-          }}>
-            <button
-              onClick={() => { playClickSound(); setCategoryFilter('all'); }}
-              className={`btn btn-sm ${categoryFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px' }}
-            >
-              All Proxies ({subs.length})
-            </button>
-            <button
-              onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
-              className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Wifi size={14} color="#06b6d4" /> 📶 USA Residential ({resCount})
-            </button>
-            <button
-              onClick={() => { playClickSound(); setCategoryFilter('datacenter'); }}
-              className={`btn btn-sm ${categoryFilter === 'datacenter' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Server size={14} color="#3b82f6" /> 🏛️ Datacenter ($10/mo) ({dcCount})
-            </button>
-            <button
-              onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
-              className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Smartphone size={14} color="#8b5cf6" /> 📱 Mobile Modems ({mobileCount})
-            </button>
           </div>
-        )}
 
-        {/* Active subs */}
+          {/* Stats */}
+          <div className="stats-grid mb-xl">
+            {[
+              { label: 'Total Active',     value: active.length, sub: 'currently online' },
+              { label: 'Datacenter Slots', value: dcCount,       sub: '10 Gbps unmetered' },
+              { label: 'USA Residential',  value: resCount,      sub: 'routed via USA Wi-Fi' },
+              { label: 'Mobile Proxies',   value: mobileCount,   sub: 'dedicated SIM' },
+            ].map(s => (
+              <div key={s.label} className="stat-card">
+                <div className="stat-label">{s.label}</div>
+                <div className="stat-value">{s.value}</div>
+                <div className="stat-sub">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Subcategories Filter Bar */}
+          {subs.length > 0 && (
+            <div className="scrollable-tabs" style={{
+              marginBottom: '24px',
+              background: 'var(--clr-surface)',
+              padding: '6px',
+              borderRadius: '12px',
+              border: '1px solid var(--clr-border)',
+              width: '100%',
+            }}>
+              <button
+                onClick={() => { playClickSound(); setCategoryFilter('all'); }}
+                className={`btn btn-sm ${categoryFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', padding: '6px 12px', flexShrink: 0 }}
+              >
+                All ({subs.length})
+              </button>
+              <button
+                onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
+                className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
+              >
+                <Wifi size={13} color="#06b6d4" /> USA Residential ({resCount})
+              </button>
+              <button
+                onClick={() => { playClickSound(); setCategoryFilter('datacenter'); }}
+                className={`btn btn-sm ${categoryFilter === 'datacenter' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
+              >
+                <Server size={13} color="#3b82f6" /> Datacenter ({dcCount})
+              </button>
+              <button
+                onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
+                className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
+              >
+                <Smartphone size={13} color="#8b5cf6" /> Mobile ({mobileCount})
+              </button>
+            </div>
+          )}
+
+          {/* Active subs */}
         {filteredActive.length > 0 && (
           <div className="mb-xl">
             <h2 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>
@@ -606,7 +603,7 @@ export default function Dashboard({ session }) {
           </div>
         )}
       </div>
-    </main>
+    </div>
     </SidebarLayout>
   );
 }

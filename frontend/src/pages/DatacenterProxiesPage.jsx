@@ -47,13 +47,17 @@ export default function DatacenterProxiesPage({ session }) {
     }
   }
 
-  // Get the dedicated $10 USD/mo Datacenter Plan
-  const datacenterPlan = plans.find(p => p.name === 'Datacenter Monthly' || (p.price_usd === 10 && p.duration_days === 30)) || {
+  // Dynamically resolve the active Datacenter Plan configured in Admin Settings
+  const datacenterPlan = plans.find(p => 
+    p.name.toLowerCase().includes('datacenter') ||
+    p.description?.toLowerCase().includes('datacenter') ||
+    p.category === 'datacenter'
+  ) || plans.find(p => p.duration_days === 30 || p.name.toLowerCase().includes('monthly')) || plans[0] || {
     name: 'Datacenter Monthly',
     price_usd: 10.00,
     duration_days: 30,
     gb_limit: null,
-    description: 'Dedicated High-Speed DigitalOcean Datacenter Proxy (10 USD / Month, 99.99% SLA, 10 Gbps Port, Unlimited Bandwidth)'
+    description: 'Dedicated High-Speed DigitalOcean Datacenter Proxy (10 Gbps Port, Unlimited Bandwidth)'
   };
 
   const handleRentClick = (proxy) => {
@@ -137,13 +141,13 @@ export default function DatacenterProxiesPage({ session }) {
                 boxShadow: '0 8px 30px rgba(139,92,246,0.15)',
               }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--clr-accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Flat Monthly Rate
+                  {datacenterPlan.name || 'Datacenter Rate'}
                 </div>
                 <div style={{ fontSize: '2.4rem', fontWeight: 900, color: 'var(--clr-text)', margin: '8px 0' }}>
-                  $10 <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--clr-text-2)' }}>/ month</span>
+                  ${parseFloat(datacenterPlan.price_usd || 10).toFixed(0)} <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--clr-text-2)' }}>/ {datacenterPlan.duration_days ? `${datacenterPlan.duration_days}d` : 'month'}</span>
                 </div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--clr-text-2)', marginBottom: '16px' }}>
-                  Unlimited GB Data · 30 Days Access
+                  {datacenterPlan.gb_limit ? `${datacenterPlan.gb_limit} GB High-Speed Data` : 'Unlimited GB Data'} · {datacenterPlan.duration_days || 30} Days Access
                 </div>
                 <button
                   className="btn btn-primary"
@@ -381,7 +385,7 @@ export default function DatacenterProxiesPage({ session }) {
                         }}
                         disabled={!isOnline}
                       >
-                        Rent $10/mo <ChevronRight size={15} />
+                        Rent ${parseFloat(datacenterPlan.price_usd || 10).toFixed(0)}/{datacenterPlan.duration_days ? `${datacenterPlan.duration_days}d` : 'mo'} <ChevronRight size={15} />
                       </button>
                     </div>
                   </div>
@@ -410,6 +414,8 @@ export default function DatacenterProxiesPage({ session }) {
         <PurchaseModal
           plan={selectedPlan}
           proxy={selectedProxy}
+          proxies={proxies}
+          plans={plans}
           onClose={() => { setSelectedPlan(null); setSelectedProxy(null); }}
           onSuccess={() => {
             setSelectedPlan(null);

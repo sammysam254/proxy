@@ -447,12 +447,44 @@ select option:hover {
 }
 
 /* ─── Table ──────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; }
+.table-wrap, .table-responsive { 
+  overflow-x: auto !important; 
+  -webkit-overflow-scrolling: touch; 
+  width: 100%; 
+  max-width: 100%; 
+}
 
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  min-width: 500px;
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: var(--clr-red);
+}
+.btn-danger:hover {
+  background: var(--clr-red);
+  color: white;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--clr-bg-2);
+  border: 1px solid var(--clr-border-2);
+  border-radius: var(--radius-xl);
+  padding: 40px 36px;
+  position: relative;
+}
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 24px 18px !important;
+    border-radius: 18px !important;
+  }
 }
 
 th {

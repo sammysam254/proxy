@@ -63,14 +63,7 @@ export default function AuthPage() {
         pointerEvents: 'none',
       }} />
 
-      <div style={{
-        width: '100%', maxWidth: '420px',
-        background: 'var(--clr-bg-2)',
-        border: '1px solid var(--clr-border-2)',
-        borderRadius: 'var(--radius-xl)',
-        padding: '40px 36px',
-        position: 'relative',
-      }}>
+      <div className="auth-card">
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
