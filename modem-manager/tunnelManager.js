@@ -56,8 +56,9 @@ function syncSshKeys() {
             fs.writeFileSync(path.join(dir, 'proxicell_tunnel.pub'), pubContent, 'utf8');
           }
           if (process.platform === 'win32') {
+            const user = process.env.USERNAME || 'Administrator';
             try {
-              execSync(`cmd.exe /c "icacls \\"${targetKey}\\" /reset >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"*S-1-1-0\\":R >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"SYSTEM\\":F >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"Administrators\\":F >nul 2>&1"`, { timeout: 3000 });
+              execSync(`cmd.exe /c "icacls \\"${targetKey}\\" /reset >nul 2>&1 & icacls \\"${targetKey}\\" /inheritance:r >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"${user}\\":F >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"SYSTEM\\":F >nul 2>&1 & icacls \\"${targetKey}\\" /grant:r \\"Administrators\\":F >nul 2>&1"`, { timeout: 3000 });
             } catch (_) {}
           } else {
             try { fs.chmodSync(targetKey, 0o600); } catch (_) {}
@@ -66,8 +67,9 @@ function syncSshKeys() {
       }
 
       if (process.platform === 'win32') {
+        const user = process.env.USERNAME || 'Administrator';
         try {
-          execSync(`cmd.exe /c "icacls \\"${bundledKey}\\" /reset >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"*S-1-1-0\\":R >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"SYSTEM\\":F >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"Administrators\\":F >nul 2>&1"`, { timeout: 3000 });
+          execSync(`cmd.exe /c "icacls \\"${bundledKey}\\" /reset >nul 2>&1 & icacls \\"${bundledKey}\\" /inheritance:r >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"${user}\\":F >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"SYSTEM\\":F >nul 2>&1 & icacls \\"${bundledKey}\\" /grant:r \\"Administrators\\":F >nul 2>&1"`, { timeout: 3000 });
         } catch (_) {}
       }
     }

@@ -56,6 +56,21 @@ LOG_LEVEL=info
 Set-Content -Path $envFile -Value $envContent -Force
 Write-Host "[OK] Environment configured: VPS_HOST = 104.131.118.5" -ForegroundColor Green
 
+# 1c. Fix SSH Private Key Permissions for Windows OpenSSH
+Write-Host "[*] Normalizing OpenSSH private key permissions..." -ForegroundColor Cyan
+$keyCandidates = @(
+    (Join-Path $projDir "modem-manager\keys\proxicell_tunnel"),
+    (Join-Path (Join-Path $env:USERPROFILE ".ssh") "proxicell_tunnel"),
+    "C:\Windows\System32\config\systemprofile\.ssh\proxicell_tunnel",
+    "C:\ProgramData\ssh\proxicell_tunnel"
+)
+foreach ($k in $keyCandidates) {
+    if (Test-Path $k) {
+        cmd.exe /c "icacls `"$k`" /reset >nul 2>&1 & icacls `"$k`" /inheritance:r >nul 2>&1 & icacls `"$k`" /grant:r `"$($env:USERNAME):F`" >nul 2>&1 & icacls `"$k`" /grant:r `"SYSTEM:F`" >nul 2>&1 & icacls `"$k`" /grant:r `"Administrators:F`" >nul 2>&1"
+    }
+}
+Write-Host "[OK] OpenSSH private key permissions secured." -ForegroundColor Green
+
 # 2. Verify Node.js
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodeCmd) {
