@@ -134,56 +134,54 @@ export default function ProxiesPage({ session }) {
             </button>
           </div>
 
-          {/* Subcategories Selector */}
-          <div style={{
-            display: 'flex',
-            gap: '8px',
+          {/* Category Tabs */}
+          <div className="scrollable-tabs" style={{
             marginBottom: '20px',
             background: 'var(--clr-surface)',
             padding: '6px',
             borderRadius: '12px',
             border: '1px solid var(--clr-border)',
-            width: 'fit-content',
-            flexWrap: 'wrap',
+            width: '100%',
+            maxWidth: '100%',
           }}>
             <button
               onClick={() => { playClickSound(); setCategoryFilter('all'); }}
               className={`btn btn-sm ${categoryFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', flexShrink: 0 }}
             >
               All Proxies ({onlineProxies.length})
             </button>
             <button
               onClick={() => { playClickSound(); setCategoryFilter('residential'); }}
               className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
             >
-              <Wifi size={14} /> Residential Proxies ({resCount})
+              <Wifi size={14} /> Residential ({resCount})
             </button>
             <button
               onClick={() => { playClickSound(); setCategoryFilter('datacenter'); }}
               className={`btn btn-sm ${categoryFilter === 'datacenter' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
             >
-              <Server size={14} /> Datacenter Proxies ($10/mo) ({dcCount})
+              <Server size={14} /> Datacenter $10/mo ({dcCount})
             </button>
             <button
               onClick={() => { playClickSound(); setCategoryFilter('mobile'); }}
               className={`btn btn-sm ${categoryFilter === 'mobile' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
             >
-              <Smartphone size={14} /> Mobile Proxies ({mobileCount})
+              <Smartphone size={14} /> Mobile ({mobileCount})
             </button>
           </div>
 
           {/* Search & Filter bar */}
-          <div className="card mb-xl" style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+          <div className="card mb-xl" style={{ padding: '14px 16px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--clr-text-3)' }} />
                 <input
                   type="text"
-                  placeholder="Search by carrier, network, or serial..."
+                  placeholder="Search by carrier, network, or port..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="input"
@@ -191,13 +189,13 @@ export default function ProxiesPage({ session }) {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div className="scrollable-tabs" style={{ display: 'flex', gap: '6px', padding: 0 }}>
                 {['all', 'http', 'socks4', 'socks5'].map(t => (
                   <button
                     key={t}
                     onClick={() => { playClickSound(); setFilterType(t); }}
                     className={`btn btn-sm ${filterType === t ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 700 }}
+                    style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 700, padding: '6px 12px', flexShrink: 0 }}
                   >
                     {t}
                   </button>
@@ -226,7 +224,7 @@ export default function ProxiesPage({ session }) {
               </button>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '16px' }}>
               {filteredProxies.map(p => {
                 const modem = p.modems;
                 const isOnline = modem?.status === 'online';

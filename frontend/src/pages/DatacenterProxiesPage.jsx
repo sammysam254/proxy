@@ -169,25 +169,25 @@ export default function DatacenterProxiesPage({ session }) {
             justifyContent: 'space-between',
             alignItems: 'center',
             flexWrap: 'wrap',
-            gap: '16px',
-            marginBottom: '24px',
+            gap: '12px',
+            marginBottom: '20px',
           }}>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="scrollable-tabs" style={{ display: 'flex', gap: '6px' }}>
               {['all', 'http', 'socks4', 'socks5'].map(t => (
                 <button
                   key={t}
                   onClick={() => { playClickSound(); setFilterType(t); }}
                   className={`btn btn-sm ${filterType === t ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ fontSize: '0.85rem', textTransform: 'uppercase' }}
+                  style={{ fontSize: '0.8rem', textTransform: 'uppercase', flexShrink: 0, padding: '6px 12px' }}
                 >
                   {t === 'all' ? 'All Protocols' : t}
                 </button>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <div style={{ position: 'relative', width: '220px' }}>
-                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--clr-text-3)' }} />
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '380px' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
+                <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--clr-text-3)' }} />
                 <input
                   type="text"
                   placeholder="Search port / node..."
@@ -195,7 +195,7 @@ export default function DatacenterProxiesPage({ session }) {
                   onChange={e => setSearchQuery(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '8px 12px 8px 36px',
+                    padding: '8px 12px 8px 34px',
                     borderRadius: '10px',
                     background: 'var(--clr-surface)',
                     border: '1px solid var(--clr-border)',
@@ -209,6 +209,7 @@ export default function DatacenterProxiesPage({ session }) {
                 className="btn btn-secondary btn-sm"
                 onClick={() => { playClickSound(); loadData(); }}
                 disabled={loading}
+                style={{ flexShrink: 0, padding: '8px 12px' }}
               >
                 <RefreshCw size={14} className={loading ? 'spin-icon' : ''} /> Refresh
               </button>
@@ -222,7 +223,7 @@ export default function DatacenterProxiesPage({ session }) {
               Loading DigitalOcean Datacenter Proxies...
             </div>
           ) : filteredProxies.length === 0 ? (
-            <div className="card" style={{ padding: '60px 20px', textAlign: 'center' }}>
+            <div className="card" style={{ padding: '50px 20px', textAlign: 'center' }}>
               <Server size={48} style={{ margin: '0 auto 16px', color: 'var(--clr-text-3)', opacity: 0.6 }} />
               <h3>No Datacenter Proxies Found</h3>
               <p style={{ color: 'var(--clr-text-2)', maxWidth: '450px', margin: '8px auto 20px', fontSize: '0.9rem' }}>
@@ -235,8 +236,8 @@ export default function DatacenterProxiesPage({ session }) {
           ) : (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-              gap: '20px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+              gap: '16px',
             }}>
               {filteredProxies.map((p) => {
                 const isOnline = p.active !== false;

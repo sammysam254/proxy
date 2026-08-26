@@ -386,28 +386,73 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
         <SidebarContent isMobileDrawer={true} />
       </aside>
 
-      {/* ── Mobile menu toggle button ───────────────── */}
-      <button
-        onClick={() => setMobileOpen(o => !o)}
-        aria-label="Toggle navigation menu"
+      {/* ── Mobile top header bar ───────────────────── */}
+      <header
+        id="mobile-top-bar"
         style={{
-          position: 'fixed',
-          top: '16px', left: '16px',
-          width: 40, height: 40,
-          borderRadius: '10px',
-          background: 'var(--clr-bg-2)',
-          border: '1px solid var(--clr-border)',
-          cursor: 'pointer',
           display: 'none',
-          alignItems: 'center', justifyContent: 'center',
-          color: 'var(--clr-text)',
-          zIndex: 52,
-          boxShadow: 'var(--shadow-md)',
+          position: 'fixed',
+          top: 0, left: 0, right: 0,
+          height: '56px',
+          background: 'rgba(13, 18, 32, 0.92)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--clr-border)',
+          zIndex: 47,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
         }}
-        id="mobile-menu-btn"
       >
-        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
+        <button
+          onClick={() => setMobileOpen(o => !o)}
+          aria-label="Toggle navigation menu"
+          style={{
+            width: 38, height: 38,
+            borderRadius: '10px',
+            background: 'var(--clr-surface)',
+            border: '1px solid var(--clr-border)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            color: 'var(--clr-text)',
+          }}
+        >
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+
+        <Link to="/" onClick={() => setMobileOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+          <div className="logo-icon" style={{ width: 28, height: 28 }}><img src="/logo.jpg" alt="Logo" className="logo-img" /></div>
+          <span className="text-gradient" style={{ fontWeight: 800, fontSize: '1.05rem' }}>Vertext Proxies</span>
+        </Link>
+
+        {session ? (
+          <Link to="/dashboard" style={{
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            color: 'var(--clr-accent)',
+            textDecoration: 'none',
+            background: 'rgba(59,130,246,0.12)',
+            border: '1px solid rgba(59,130,246,0.25)',
+            padding: '5px 12px',
+            borderRadius: '8px',
+          }}>
+            Dashboard
+          </Link>
+        ) : (
+          <Link to="/auth" style={{
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            color: 'var(--clr-text)',
+            textDecoration: 'none',
+            background: 'var(--clr-surface)',
+            border: '1px solid var(--clr-border)',
+            padding: '5px 12px',
+            borderRadius: '8px',
+          }}>
+            Sign In
+          </Link>
+        )}
+      </header>
 
       {/* ── Main content ────────────────────────────── */}
       <main style={{
@@ -424,10 +469,15 @@ export default function SidebarLayout({ session, children, adminMode = false }) 
       <style>{`
         @media (max-width: 768px) {
           #mobile-sidebar       { display: flex !important; }
-          #mobile-menu-btn      { display: flex !important; }
+          #mobile-top-bar       { display: flex !important; }
           #desktop-collapse-btn { display: none !important; }
           aside:first-of-type   { display: none !important; }
-          main { margin-left: 0 !important; }
+          main { 
+            margin-left: 0 !important; 
+            padding-top: 56px !important;
+            min-width: 100% !important;
+            overflow-x: hidden !important;
+          }
         }
       `}</style>
     </div>

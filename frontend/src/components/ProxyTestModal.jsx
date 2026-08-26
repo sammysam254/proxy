@@ -155,14 +155,14 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px',
-        background: 'rgba(5, 8, 18, 0.82)',
+        padding: '12px',
+        background: 'rgba(5, 8, 18, 0.85)',
         backdropFilter: 'blur(10px)',
       }}
       onClick={onClose}
     >
       <div
-        className="card"
+        className="card proxy-test-modal"
         style={{
           width: '100%',
           maxWidth: '560px',
@@ -170,7 +170,7 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
           overflowY: 'auto',
           background: 'var(--clr-bg-2, #0d1326)',
           border: '1px solid rgba(59, 130, 246, 0.35)',
-          borderRadius: '24px',
+          borderRadius: '20px',
           boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(59,130,246,0.15)',
           padding: '0',
           position: 'relative',
@@ -179,7 +179,7 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
       >
         {/* Header */}
         <div style={{
-          padding: '20px 24px',
+          padding: '16px 18px',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
           display: 'flex',
           justifyContent: 'space-between',
@@ -188,21 +188,22 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: 40, height: 40, borderRadius: '12px',
+              width: 36, height: 36, borderRadius: '10px',
               background: isDc ? 'rgba(59,130,246,0.15)' : 'rgba(16,185,129,0.15)',
               color: isDc ? '#3b82f6' : '#10b981',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
             }}>
-              {isDc ? <Server size={20} /> : <Wifi size={20} />}
+              {isDc ? <Server size={18} /> : <Wifi size={18} />}
             </div>
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 Live Connection Test
-                <span style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)', fontWeight: 500 }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)', fontWeight: 500 }}>
                   ({proxy.proxy_type.toUpperCase()} :{proxy.public_port})
                 </span>
               </h3>
-              <div style={{ fontSize: '0.78rem', color: 'var(--clr-text-3)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
                 {modem?.label || `Proxy Node #${proxy.public_port}`}
               </div>
             </div>
@@ -210,6 +211,7 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
 
           <button
             onClick={onClose}
+            aria-label="Close modal"
             style={{
               background: 'rgba(255,255,255,0.06)',
               border: 'none',
@@ -221,6 +223,7 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
             <X size={18} />
@@ -228,11 +231,11 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: '18px 16px' }}>
           {testing ? (
             /* Testing State */
-            <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-              <div style={{ position: 'relative', width: 70, height: 70, margin: '0 auto 20px' }}>
+            <div style={{ textAlign: 'center', padding: '24px 8px' }}>
+              <div style={{ position: 'relative', width: 64, height: 64, margin: '0 auto 16px' }}>
                 <div style={{
                   position: 'absolute', inset: 0, borderRadius: '50%',
                   border: '3px solid rgba(59,130,246,0.2)',
@@ -245,14 +248,14 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: 'var(--clr-accent, #3b82f6)',
                 }}>
-                  <Radio size={24} className="pulse-icon" />
+                  <Radio size={22} className="pulse-icon" />
                 </div>
               </div>
 
-              <h4 style={{ fontSize: '1.15rem', marginBottom: '8px' }}>
+              <h4 style={{ fontSize: '1.05rem', marginBottom: '8px' }}>
                 Probing Live Proxy Connection...
               </h4>
-              <p style={{ color: 'var(--clr-text-2)', fontSize: '0.85rem', maxWidth: '360px', margin: '0 auto 20px' }}>
+              <p style={{ color: 'var(--clr-text-2)', fontSize: '0.82rem', maxWidth: '340px', margin: '0 auto 18px', lineHeight: 1.4 }}>
                 Establishing tunnel handshake with VPS gateway & testing real residential ISP IP routing.
               </p>
 
@@ -262,7 +265,7 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
                 background: 'rgba(255,255,255,0.08)',
                 borderRadius: 99,
                 overflow: 'hidden',
-                maxWidth: '300px',
+                maxWidth: '260px',
                 margin: '0 auto',
               }}>
                 <div style={{
@@ -281,41 +284,42 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
               <div style={{
                 background: 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(6,182,212,0.08) 100%)',
                 border: '1px solid rgba(16,185,129,0.35)',
-                borderRadius: '16px',
-                padding: '16px 20px',
+                borderRadius: '14px',
+                padding: '14px 16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '20px',
+                marginBottom: '16px',
                 flexWrap: 'wrap',
-                gap: '12px',
+                gap: '10px',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{
-                    width: 42, height: 42, borderRadius: '50%',
+                    width: 36, height: 36, borderRadius: '50%',
                     background: '#10b981',
                     color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 0 20px rgba(16,185,129,0.5)',
+                    boxShadow: '0 0 16px rgba(16,185,129,0.5)',
+                    flexShrink: 0,
                   }}>
-                    <CheckCircle2 size={24} />
+                    <CheckCircle2 size={20} />
                   </div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       TEST PASSED — 100% OPERATIONAL
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
-                      Verified live connection with zero packet loss
+                    <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)' }}>
+                      Zero packet loss verified
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  background: 'rgba(0,0,0,0.3)', padding: '6px 12px', borderRadius: '10px',
-                  fontSize: '0.82rem', fontWeight: 700, color: '#10b981',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  background: 'rgba(0,0,0,0.3)', padding: '5px 10px', borderRadius: '8px',
+                  fontSize: '0.78rem', fontWeight: 700, color: '#10b981',
                 }}>
-                  <Zap size={14} /> Latency: {latency} ms
+                  <Zap size={13} /> Latency: {latency} ms
                 </div>
               </div>
 
@@ -323,64 +327,64 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
               <div style={{
                 background: 'rgba(0,0,0,0.25)',
                 border: '1px solid rgba(255,255,255,0.06)',
-                borderRadius: '16px',
-                padding: '18px',
-                marginBottom: '20px',
+                borderRadius: '14px',
+                padding: '14px',
+                marginBottom: '16px',
               }}>
                 <div style={{
-                  fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
-                  color: 'var(--clr-text-3)', letterSpacing: '0.06em', marginBottom: '14px',
+                  fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                  color: 'var(--clr-text-3)', letterSpacing: '0.06em', marginBottom: '12px',
                   display: 'flex', alignItems: 'center', gap: '6px'
                 }}>
                   <Globe size={13} /> Real Outbound Network & ISP Details
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
                   {/* IP Address */}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-3)' }}>Public Exit IP</div>
-                    <div className="mono" style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--clr-text)' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>Public Exit IP</div>
+                    <div className="mono" style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--clr-text)' }}>
                       {testResult.ip}
                     </div>
                   </div>
 
                   {/* ISP Provider */}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-3)' }}>Internet Service Provider (ISP)</div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#38bdf8' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>ISP Provider</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#38bdf8' }}>
                       {testResult.isp}
                     </div>
                   </div>
 
                   {/* Location */}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-3)' }}>Location & Geotargeting</div>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MapPin size={13} color="#f43f5e" />
-                      {testResult.city}, {testResult.region}, {testResult.country} {testResult.flag}
+                    <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>Location</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <MapPin size={12} color="#f43f5e" />
+                      {testResult.city}, {testResult.region} {testResult.flag}
                     </div>
                   </div>
 
                   {/* ASN & Org */}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-3)' }}>Autonomous System (ASN)</div>
-                    <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--clr-text-2)' }}>
-                      {testResult.asn} ({testResult.timezone})
+                    <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>ASN Network</div>
+                    <div className="mono" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--clr-text-2)' }}>
+                      {testResult.asn}
                     </div>
                   </div>
 
                   {/* Anonymity Level */}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-3)' }}>Anonymity Rating</div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Shield size={13} /> {testResult.anonymity}
+                    <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>Anonymity Rating</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Shield size={12} /> {testResult.anonymity}
                     </div>
                   </div>
 
                   {/* Fraud / Spam Score */}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-3)' }}>IP Reputation / Cleanliness</div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#10b981' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--clr-text-3)' }}>IP Reputation</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#10b981' }}>
                       {testResult.blacklistStatus}
                     </div>
                   </div>
@@ -389,34 +393,34 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
 
               {/* Supported Protocols Row */}
               <div style={{
-                display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '24px',
+                display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px',
                 alignItems: 'center'
               }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--clr-text-3)' }}>Supported Protocols:</span>
-                {['HTTP', 'HTTPS CONNECT', 'SOCKS4', 'SOCKS5 UDP/TCP'].map(proto => (
+                <span style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)', marginRight: '4px' }}>Protocols:</span>
+                {['HTTP', 'HTTPS', 'SOCKS4', 'SOCKS5'].map(proto => (
                   <span key={proto} style={{
                     background: 'rgba(16,185,129,0.1)',
                     border: '1px solid rgba(16,185,129,0.25)',
                     color: '#10b981',
-                    padding: '4px 10px',
-                    borderRadius: '8px',
-                    fontSize: '0.72rem',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.7rem',
                     fontWeight: 700,
-                    display: 'flex', alignItems: 'center', gap: '4px'
+                    display: 'flex', alignItems: 'center', gap: '3px'
                   }}>
-                    <Check size={11} /> {proto}
+                    <Check size={10} /> {proto}
                   </span>
                 ))}
               </div>
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-secondary"
                   onClick={() => { playClickSound(); runProxyTest(); }}
-                  style={{ flex: '1', minWidth: '130px', padding: '12px' }}
+                  style={{ flex: '1', minWidth: '100px', padding: '10px', fontSize: '0.85rem' }}
                 >
-                  <RefreshCw size={14} /> Retest
+                  <RefreshCw size={13} /> Retest
                 </button>
                 <button
                   className="btn btn-primary"
@@ -425,9 +429,9 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
                     onClose();
                     if (onRent) onRent(proxy);
                   }}
-                  style={{ flex: '2', minWidth: '200px', padding: '12px', fontSize: '0.98rem', fontWeight: 700 }}
+                  style={{ flex: '2', minWidth: '160px', padding: '10px 14px', fontSize: '0.9rem', fontWeight: 700 }}
                 >
-                  Rent This Proxy Now <ArrowRight size={16} />
+                  Rent This Proxy Now <ArrowRight size={15} />
                 </button>
               </div>
             </div>
