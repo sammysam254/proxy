@@ -12,6 +12,18 @@ Write-Host "    VERTEX PROXIES -- AUTONOMOUS 24/7 SERVICE INSTALLER        " -Fo
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
+# 0. Kill ALL existing background proxy workers and SSH tunnels FIRST
+Write-Host "[*] Terminating all old background proxy processes & SSH tunnels..." -ForegroundColor Yellow
+try {
+    Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
+        $_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*" -or $_.CommandLine -like "*modem-manager*"
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+    Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 
+        $_.CommandLine -like "*proxicell*" -or $_.CommandLine -like "*104.131.118.5*" -or $_.CommandLine -like "*64.227.3.211*" -or ($_.CommandLine -like "*-R*")
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+} catch {}
+
 # 1. Ensure project directory and latest code
 if (-not (Test-Path $projDir)) {
     New-Item -ItemType Directory -Path $projDir -Force | Out-Null
@@ -27,6 +39,22 @@ if (Test-Path (Join-Path $projDir ".git")) {
         Write-Host "[OK] Local repository synced to latest main branch." -ForegroundColor Green
     } catch {}
 }
+
+# 1b. Force .env file to point to 104.131.118.5
+$envFile = Join-Path $projDir ".env"
+$envContent = @"
+VPS_HOST=104.131.118.5
+VPS_USER=root
+VPS_SSH_PORT=22
+VPS_SSH_KEY=C:/Users/sammy/.ssh/proxicell_tunnel
+SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzZmlqemp6aW9hcmFnbmxvcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjMwNDksImV4cCI6MjEwMjY5OTA0OX0.Z-VBaoutWmZUW6S_G3SECl5ylWUfECs5iR7E4aMNASI
+APP_DIR=C:/proxy/
+NODE_ENV=production
+LOG_LEVEL=info
+"@
+Set-Content -Path $envFile -Value $envContent -Force
+Write-Host "[OK] Environment configured: VPS_HOST = 104.131.118.5" -ForegroundColor Green
 
 # 2. Verify Node.js
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
