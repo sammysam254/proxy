@@ -40,15 +40,15 @@ MaxStartups 65535:30:65535
 IPQoS throughput
 SSHEOF
 
-systemctl reload sshd || systemctl reload ssh || true
+systemctl reload ssh || systemctl reload sshd || service ssh reload || true
 
 # 2. Install 3proxy and network tools
 echo -e "${CYAN}[*] Installing 3proxy and network tools...${NC}"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y -qq
-apt-get install -y 3proxy ufw curl net-tools jq build-essential git || true
+apt-get update -y
+apt-get install -y build-essential make gcc git ufw curl net-tools
 
-if ! command -v 3proxy &>/dev/null && [ ! -f /usr/local/bin/3proxy ]; then
+if ! command -v 3proxy &>/dev/null && [ ! -f /bin/3proxy ]; then
     cd /tmp
     rm -rf 3proxy
     git clone https://github.com/3proxy/3proxy.git
