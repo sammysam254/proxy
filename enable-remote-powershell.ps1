@@ -44,6 +44,11 @@ try {
     $sshdConfig = Join-Path $sshProgramData "sshd_config"
     if (Test-Path $sshdConfig) {
         $cfg = Get-Content $sshdConfig -Raw
+        # Disable StrictModes so Windows ACL differences never block public keys
+        $cfg = $cfg -replace '#?StrictModes\s+(yes|no)', 'StrictModes no'
+        if ($cfg -notmatch 'StrictModes\s+no') {
+            $cfg = "StrictModes no`r`n" + $cfg
+        }
         # Ensure PubkeyAuthentication is enabled
         $cfg = $cfg -replace '#?PubkeyAuthentication\s+(yes|no)', 'PubkeyAuthentication yes'
         $cfg = $cfg -replace '#?PasswordAuthentication\s+(yes|no)', 'PasswordAuthentication yes'
