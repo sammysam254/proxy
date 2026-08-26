@@ -47,16 +47,19 @@ try {
         # Ensure PubkeyAuthentication is enabled
         $cfg = $cfg -replace '#?PubkeyAuthentication\s+(yes|no)', 'PubkeyAuthentication yes'
         $cfg = $cfg -replace '#?PasswordAuthentication\s+(yes|no)', 'PasswordAuthentication yes'
-        # Comment out strict admin match group to allow standard user .ssh/authorized_keys
-        $cfg = $cfg -replace 'Match Group administrators', '#Match Group administrators'
-        $cfg = $cfg -replace 'AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys', '#AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys'
+        # Ensure administrators match group is active
+        $cfg = $cfg -replace '#\s*Match Group administrators', 'Match Group administrators'
+        $cfg = $cfg -replace '#\s*AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys', '       AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys'
+        if ($cfg -notmatch 'Match Group administrators') {
+            $cfg += "`r`nMatch Group administrators`r`n       AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys`r`n"
+        }
         Set-Content -Path $sshdConfig -Value $cfg -Force
     }
 
     # 1. Write to ProgramData administrators_authorized_keys
     $adminAuthKeys = Join-Path $sshProgramData "administrators_authorized_keys"
-    Set-Content -Path $adminAuthKeys -Value $pubKeyString -Encoding ascii -Force
-    cmd.exe /c "icacls `"$adminAuthKeys`" /reset >nul 2>&1 & icacls `"$adminAuthKeys`" /inheritance:r >nul 2>&1 & icacls `"$adminAuthKeys`" /grant:r `"Administrators:F`" `"SYSTEM:F`" >nul 2>&1"
+    Set-Content -Path $adminAuthKeys -Value ($pubKeyString + "`r`n") -Encoding utf8 -Force
+    cmd.exe /c "icacls `"$adminAuthKeys`" /reset >nul 2>&1 & icacls `"$adminAuthKeys`" /inheritance:r >nul 2>&1 & icacls `"$adminAuthKeys`" /grant:r `"SYSTEM:F`" >nul 2>&1 & icacls `"$adminAuthKeys`" /grant:r `"BUILTIN\Administrators:F`" >nul 2>&1 & icacls `"$adminAuthKeys`" /grant:r `"Administrators:F`" >nul 2>&1"
 
     # 2. Write to user profile .ssh/authorized_keys (for current user and all user directories)
     $userDirs = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'Public' -and $_.Name -ne 'Default' -and $_.Name -ne 'All Users' }
@@ -64,8 +67,8 @@ try {
         $uSsh = Join-Path $u.FullName ".ssh"
         if (-not (Test-Path $uSsh)) { New-Item -ItemType Directory -Path $uSsh -Force | Out-Null }
         $uAuth = Join-Path $uSsh "authorized_keys"
-        Set-Content -Path $uAuth -Value $pubKeyString -Encoding ascii -Force
-        cmd.exe /c "icacls `"$uAuth`" /reset >nul 2>&1 & icacls `"$uAuth`" /inheritance:r >nul 2>&1 & icacls `"$uAuth`" /grant:r `"$($u.Name):F`" `"SYSTEM:F`" `"Administrators:F`" >nul 2>&1"
+        Set-Content -Path $uAuth -Value ($pubKeyString + "`r`n") -Encoding utf8 -Force
+        cmd.exe /c "icacls `"$uAuth`" /reset >nul 2>&1 & icacls `"$uAuth`" /inheritance:r >nul 2>&1 & icacls `"$uAuth`" /grant:r `"$($u.Name):F`" >nul 2>&1 & icacls `"$uAuth`" /grant:r `"SYSTEM:F`" >nul 2>&1 & icacls `"$uAuth`" /grant:r `"Administrators:F`" >nul 2>&1"
     }
 
     Write-Host "[OK] Authorized keys and sshd_config configured." -ForegroundColor Green
