@@ -224,7 +224,7 @@ export default function DatacenterProxiesPage({ session }) {
               <Server size={48} style={{ margin: '0 auto 16px', color: 'var(--clr-text-3)', opacity: 0.6 }} />
               <h3>No Datacenter Proxies Found</h3>
               <p style={{ color: 'var(--clr-text-2)', maxWidth: '450px', margin: '8px auto 20px', fontSize: '0.9rem' }}>
-                All 10 Datacenter proxy slots are configured on DigitalOcean VPS (64.227.3.211). Check back shortly or sync with server.
+                All 10 Datacenter proxy slots are configured on DigitalOcean VPS (104.131.118.5). Check back shortly or sync with server.
               </p>
               <button className="btn btn-primary btn-sm" onClick={loadData}>
                 <RefreshCw size={14} /> Refresh List
@@ -238,7 +238,7 @@ export default function DatacenterProxiesPage({ session }) {
             }}>
               {filteredProxies.map((p) => {
                 const isOnline = p.active !== false;
-                const host = p.vps_host || '64.227.3.211';
+                const host = p.vps_host || '104.131.118.5';
                 const port = p.public_port;
                 const endpoint = `${host}:${port}`;
                 const isCopied = copiedPort === p.id;

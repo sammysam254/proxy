@@ -166,7 +166,8 @@ function ProxyCredCard({ sub }) {
     }
   };
 
-  const vpsHost = proxy?.vps_host || 'N/A';
+  const isDc = isDatacenter || (proxy?.public_port >= 51000);
+  const vpsHost = isDc ? '104.131.118.5' : (proxy?.vps_host || '104.131.118.5');
   const port    = proxy?.public_port || 'N/A';
 
   return (

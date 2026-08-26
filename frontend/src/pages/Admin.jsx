@@ -396,7 +396,7 @@ function DatacenterPanel({ modems = [], onRefresh }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <h1 style={{ fontSize: '1.8rem', margin: 0 }}>USA Datacenter Proxies</h1>
             <span className="badge badge-blue" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-              DigitalOcean VPS (64.227.3.211)
+              DigitalOcean VPS (104.131.118.5)
             </span>
           </div>
           <p className="text-muted">Dedicated 10 Gbps Tier-1 Datacenter proxy nodes on separate dedicated ports (51001 - 53010) at $10 / month</p>
@@ -451,7 +451,7 @@ function DatacenterPanel({ modems = [], onRefresh }) {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{d.label}</div>
                   <div className="mono" style={{ fontSize: '0.78rem', color: 'var(--clr-text-2)' }}>
-                    Host: {d.ip_address || '64.227.3.211'}
+                    Host: {d.ip_address || '104.131.118.5'}
                   </div>
                 </div>
               </div>
