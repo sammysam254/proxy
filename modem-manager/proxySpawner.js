@@ -607,6 +607,11 @@ async function setAllActiveCredentials(subsList) {
   console.log(`[ProxyEngine] Synchronized ${globalUserMap.size} active proxy credentials.`);
 }
 
+// Returns the list of usernames currently active in the in-memory credential store
+function getActiveUsernames() {
+  return Array.from(globalUserMap.keys());
+}
+
 module.exports = {
   startProxy,
   stopProxy,
@@ -615,6 +620,7 @@ module.exports = {
   removeCredential,
   setExactCredentials,
   setAllActiveCredentials,
+  getActiveUsernames,
   getModemBandwidth,
   getDeltaUserBandwidth,
   recordUserBandwidth,

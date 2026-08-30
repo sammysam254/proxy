@@ -287,9 +287,22 @@ async function syncActiveCredentials() {
       .select('id, proxy_username, proxy_password, proxy_id, status, proxies(modem_id)')
       .eq('status', 'active');
 
-    if (subs && subs.length > 0) {
-      await spawner.setAllActiveCredentials(subs);
+    // Build set of currently-valid usernames from DB
+    const activeUsernames = new Set((subs || []).map(s => s.proxy_username).filter(Boolean));
+
+    // ── Reconciliation: revoke any in-memory credential not in the active DB set ──
+    // This catches subscriptions that were revoked/expired in the DB while the
+    // manager was running, but whose credentials were never purged from memory.
+    const inMemoryUsernames = spawner.getActiveUsernames ? spawner.getActiveUsernames() : [];
+    for (const username of inMemoryUsernames) {
+      if (!activeUsernames.has(username)) {
+        await spawner.removeCredential(username, null).catch(() => {});
+        console.log(`[SupabaseSync] 🔒 Purged stale in-memory credential for '${username}' (no longer active in DB)`);
+      }
     }
+
+    // ── Load the full active set into memory ──
+    await spawner.setAllActiveCredentials(subs || []);
   } catch (e) {
     // ignore
   }
@@ -299,31 +312,55 @@ async function syncActiveCredentials() {
 async function expireOldSubscriptions() {
   try {
     const now = new Date();
-    // 1. Fetch active subscriptions to evaluate both expiry date and GB limits
-    const { data: subs, error } = await supabase
+
+    // 1. Expire/revoke based on time or GB limit (active subs only)
+    const { data: activeSubs, error: activeErr } = await supabase
       .from('subscriptions')
       .select('id, proxy_username, expires_at, gb_used, gb_limit, proxies(modem_id)')
       .eq('status', 'active');
 
-    if (error || !subs || subs.length === 0) return;
+    if (!activeErr && activeSubs && activeSubs.length > 0) {
+      for (const sub of activeSubs) {
+        const isTimeExpired = sub.expires_at && new Date(sub.expires_at) <= now;
+        const isGbExpired   = sub.gb_limit && parseFloat(sub.gb_used || 0) >= parseFloat(sub.gb_limit);
 
-    for (const sub of subs) {
-      const isTimeExpired = sub.expires_at && new Date(sub.expires_at) <= now;
-      const isGbExpired   = sub.gb_limit && parseFloat(sub.gb_used || 0) >= parseFloat(sub.gb_limit);
+        if (isTimeExpired || isGbExpired) {
+          // Revoke credentials immediately from in-memory store
+          if (sub.proxy_username) {
+            const modemId = sub.proxies?.modem_id;
+            await spawner.removeCredential(sub.proxy_username, modemId).catch(() => {});
+            console.log(`[SupabaseSync] 🔒 Revoked & invalidated credentials for subscription '${sub.proxy_username}' (TimeExpired: ${isTimeExpired}, GbExpired: ${isGbExpired})`);
+          }
 
-      if (isTimeExpired || isGbExpired) {
-        // Revoke credentials immediately
-        if (sub.proxy_username) {
+          // Mark expired in DB
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'expired' })
+            .eq('id', sub.id);
+        }
+      }
+    }
+
+    // 2. Also purge credentials for any already-revoked or suspended subscriptions
+    //    that may still be lingering in the in-memory credential store (e.g. admin
+    //    revoked them from the dashboard while the manager was running).
+    const { data: nonActiveSubs } = await supabase
+      .from('subscriptions')
+      .select('id, proxy_username, proxies(modem_id)')
+      .in('status', ['revoked', 'suspended', 'expired']);
+
+    if (nonActiveSubs && nonActiveSubs.length > 0) {
+      for (const sub of nonActiveSubs) {
+        if (!sub.proxy_username) continue;
+        // Only bother if this username is actually still in memory
+        const inMemory = spawner.getActiveUsernames
+          ? spawner.getActiveUsernames().includes(sub.proxy_username)
+          : false;
+        if (inMemory) {
           const modemId = sub.proxies?.modem_id;
           await spawner.removeCredential(sub.proxy_username, modemId).catch(() => {});
-          console.log(`[SupabaseSync] 🔒 Revoked & invalidated credentials for subscription '${sub.proxy_username}' (TimeExpired: ${isTimeExpired}, GbExpired: ${isGbExpired})`);
+          console.log(`[SupabaseSync] 🔒 Purged lingering credential for '${sub.proxy_username}' (status: ${sub.status})`);
         }
-
-        // Invalidate and mark expired in DB
-        await supabase
-          .from('subscriptions')
-          .update({ status: 'expired' })
-          .eq('id', sub.id);
       }
     }
   } catch (e) {
