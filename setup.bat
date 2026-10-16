@@ -86,7 +86,7 @@ echo [OK] VPS Reverse Tunnel authorization keys configured.
 :: 3. Configure .env
 set "CLEAN_SSH_KEY=%LOCAL_SSH_KEY:\=/%"
 set "CLEAN_APP_DIR=%PROJ_DIR:\=/%"
-> "%PROJ_DIR%.env" echo VPS_HOST=64.227.3.211
+> "%PROJ_DIR%.env" echo VPS_HOST=104.131.118.5
 >> "%PROJ_DIR%.env" echo VPS_USER=root
 >> "%PROJ_DIR%.env" echo VPS_SSH_PORT=22
 >> "%PROJ_DIR%.env" echo VPS_SSH_KEY=%CLEAN_SSH_KEY%

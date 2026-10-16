@@ -151,7 +151,7 @@ Write-Host "[OK] VPS Reverse Tunnel keys configured." -ForegroundColor Green
 
 # 6. Setup .env
 $envLines = @(
-    "VPS_HOST=64.227.3.211",
+    "VPS_HOST=104.131.118.5",
     "VPS_USER=root",
     "VPS_SSH_PORT=22",
     "VPS_SSH_KEY=" + $localKeyPath.Replace('\', '/'),
