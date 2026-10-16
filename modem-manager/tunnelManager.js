@@ -121,7 +121,13 @@ const REMOTE_SSH_PORT = parseInt(process.env.REMOTE_SSH_PORT || '2222', 10);
 
 // ─── Clean remote VPS ports & ensure GatewayPorts is active ──────────────────
 async function cleanRemoteVpsPorts() {
-  // OpenSSH handles port cleanup natively with StreamLocalBindUnlink=yes
+  if (portMappings.length === 0) return true;
+  try {
+    const keyPath = getSshKeyPath();
+    const ports = portMappings.map(p => `${p.publicPort}/tcp`).join(' ');
+    const cmd = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i "${keyPath}" -p ${VPS_SSH_PORT} ${VPS_USER}@${VPS_HOST} "fuser -k ${ports} 2>/dev/null || true"`;
+    await execAsync(cmd, { timeout: 6000 }).catch(() => {});
+  } catch (_) {}
   return true;
 }
 
@@ -232,7 +238,9 @@ async function startTunnel(force = false) {
         const str = data.toString().trim();
         if (str) {
           lastSshError = str;
-          if (!str.includes('Warning: Permanently added') && !str.includes('Warning: remote port forwarding failed')) {
+          if (str.includes('Warning: remote port forwarding failed')) {
+            console.error(`[TunnelManager] [ALERT] Remote port forward failed on VPS (port busy): ${str}`);
+          } else if (!str.includes('Warning: Permanently added')) {
             console.warn(`[TunnelManager] SSH stderr: ${str}`);
           }
         }
