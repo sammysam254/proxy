@@ -166,6 +166,7 @@ function spawnWorker(key) {
 
   child.stdout.on('data', (data) => {
     const text = data.toString();
+    try { process.stdout.write(text); } catch (_) {}
     rotateLogIfNeeded(SERVICE_LOG);
     try {
       fs.appendFileSync(SERVICE_LOG, text, 'utf8');
@@ -174,6 +175,7 @@ function spawnWorker(key) {
 
   child.stderr.on('data', (data) => {
     const text = data.toString();
+    try { process.stderr.write(text); } catch (_) {}
     // Filter out benign noise from stderr
     if (!text.includes('Debugger attached') && !text.includes('ExperimentalWarning')) {
       rotateLogIfNeeded(ERROR_LOG);

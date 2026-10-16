@@ -1,3 +1,7 @@
+param(
+    [switch]$NoLaunch
+)
+
 # Vertex Proxies — Autonomous 24/7 Background Service & Watchdog Installer
 $ErrorActionPreference = 'Continue'
 $daemonTaskName = "VertexProxiesBackgroundService"
@@ -252,9 +256,12 @@ try {
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 } catch {}
 
-Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbsPath`"" -WorkingDirectory $projDir
-
-Start-Sleep -Seconds 3
+if (-not $NoLaunch) {
+    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbsPath`"" -WorkingDirectory $projDir
+    Start-Sleep -Seconds 3
+} else {
+    Write-Host "[*] Background tasks configured. Foreground runner will host process." -ForegroundColor Cyan
+}
 
 # Check if running
 $running = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
