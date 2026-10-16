@@ -2,17 +2,16 @@
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# ─── 0. Check & Request Administrator Privileges ──────────────────────────────
+# ─── 0. Check Administrator Privileges (Informational, non-blocking) ───────────
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "[!] Not running as Administrator. Requesting elevated privileges..." -ForegroundColor Yellow
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
+if ($isAdmin) {
+    Write-Host "[OK] Running with Administrator privileges." -ForegroundColor Green
+} else {
+    Write-Host "[INFO] Running with Standard User privileges." -ForegroundColor Cyan
 }
 
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "       VERTEX PROXIES -- ALL-IN-ONE SETUP & LIVE RUNNER         " -ForegroundColor Green
-Write-Host "                  (Elevated Administrator Mode)                 " -ForegroundColor Yellow
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
