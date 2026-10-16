@@ -5,6 +5,10 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  VITE_SUPABASE_URL = "https://lpqrffvbcbousmhqpdpm.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTg1OTcsImV4cCI6MjEwNzczNDU5N30.bDdADRwSGAlr1NsJjYtge30WiQMiwTUpTWqlzJbFhpw"
+  VITE_VPS_HOST = "104.131.118.5"
+  VITE_APP_NAME = "ProxiCell"
 
 [[redirects]]
   from = "/*"
