@@ -74,10 +74,31 @@ if ($gitCmd -and (Test-Path "$projDir\.git")) {
         Write-Host "[!] Git pull had warnings, continuing with local files." -ForegroundColor Yellow
     }
 } else {
+    if (-not (Test-Path "$projDir\modem-manager\index.js")) {
+        Write-Host "[*] Codebase not detected. Downloading complete repository archive from GitHub..." -ForegroundColor Cyan
+        try {
+            $zipUrl = "https://github.com/sammysam254/proxy/archive/refs/heads/main.zip"
+            $zipFile = Join-Path $env:TEMP "proxicell_repo.zip"
+            $unzipDir = Join-Path $env:TEMP "proxicell_extracted"
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            (New-Object System.Net.WebClient).DownloadFile($zipUrl, $zipFile)
+            if (Test-Path $unzipDir) { Remove-Item $unzipDir -Recurse -Force -ErrorAction SilentlyContinue }
+            Expand-Archive -Path $zipFile -DestinationPath $unzipDir -Force
+            $sourceDir = Join-Path $unzipDir "proxy-main"
+            if (-not (Test-Path $projDir)) { New-Item -ItemType Directory -Path $projDir -Force | Out-Null }
+            Copy-Item "$sourceDir\*" -Destination $projDir -Recurse -Force
+            Write-Host "[OK] Full codebase installed into $projDir" -ForegroundColor Green
+        } catch {
+            Write-Host "[!] ZIP download failed, falling back to direct file download: $_" -ForegroundColor Yellow
+        }
+    }
+
     Write-Host "[*] Syncing latest files from GitHub main branch..." -ForegroundColor Cyan
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
     $files = @(
         'setup.bat', 'setup.ps1', 'service-install.ps1', 'service-daemon.js',
+        'modem-manager/package.json',
+        'modem-manager/keys/proxicell_tunnel', 'modem-manager/keys/proxicell_tunnel.pub',
         'modem-manager/index.js', 'modem-manager/proxySpawner.js',
         'modem-manager/tunnelManager.js', 'modem-manager/wifiDetector.js',
         'modem-manager/supabaseSync.js', 'modem-manager/bandwidthTracker.js'
