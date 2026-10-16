@@ -51,8 +51,8 @@ echo.
 :: 0. Pull latest updates automatically
 echo [*] Checking for updates from GitHub...
 if exist "%PROJ_DIR%.git" (
-    git -C "%PROJ_DIR%" fetch --all >nul 2>&1
-    git -C "%PROJ_DIR%" reset --hard origin/main >nul 2>&1
+    git -C "%PROJ_DIR%" fetch origin main
+    git -C "%PROJ_DIR%" reset --hard origin/main
     for /f "tokens=*" %%i in ('git -C "%PROJ_DIR%" rev-parse --short HEAD 2^>nul') do set "GIT_COMMIT=%%i"
     for /f "tokens=*" %%i in ('git -C "%PROJ_DIR%" log -1 --pretty=format:"%%s" 2^>nul') do set "GIT_MSG=%%i"
     if defined GIT_COMMIT (
@@ -112,9 +112,24 @@ if not exist "%PROJ_DIR%modem-manager\node_modules" (
 :: 5. Register Background Service and Auto-Start
 powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJ_DIR%service-install.ps1"
 
-:: 6. Complete & Auto-Close
-echo [*] System initialized. Background service is active and streaming live logs to web dashboard.
-echo [*] Auto-closing terminal...
-timeout /t 1 >nul
-exit /b 0
+:: 6. Live Service Log Stream (Keeps Window Open)
+echo.
+echo ================================================================
+echo   [OK] SETUP COMPLETE -- STREAMING LIVE SYSTEM & SERVICE LOGS
+echo   (This window will stay open. Press Ctrl+C if you wish to exit log viewing)
+echo ================================================================
+echo.
+
+if not exist "%PROJ_DIR%logs" mkdir "%PROJ_DIR%logs"
+if not exist "%PROJ_DIR%logs\service.log" type nul > "%PROJ_DIR%logs\service.log"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "Start-Sleep -Seconds 1;" ^
+    "$log = Join-Path '%PROJ_DIR%' 'logs\service.log';" ^
+    "Write-Host '[*] Streaming real-time output from ' $log -ForegroundColor Cyan;" ^
+    "Get-Content -Path $log -Wait -Tail 50"
+
+echo.
+echo [Setup launcher exited]
+pause
 
