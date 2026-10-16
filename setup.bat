@@ -14,7 +14,7 @@ if not exist "%PROJ_DIR%" (
 cd /d "%PROJ_DIR%"
 
 echo [*] Downloading latest setup engine from GitHub...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/sammysam254/proxy/main/setup.ps1?v=' + $ts, '%PROJ_DIR%\setup.ps1')"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/sammysam254/proxy/main/setup.ps1?v=' + (Get-Date).Ticks, '%PROJ_DIR%\setup.ps1')"
 
 if not exist "%PROJ_DIR%\setup.ps1" (
     if exist "%~dp0setup.ps1" (
