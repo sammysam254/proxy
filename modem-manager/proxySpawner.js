@@ -94,24 +94,74 @@ const globalUserMap = new Map();
 // Active server instances: devicePath → { httpServers: [], socksServers: [], bandwidth: { in: 0, out: 0 } }
 const activeServers = new Map();
 
+// Direct Supabase fallback client for real-time authentication
+let directSupabase = null;
+function getDirectSupabase() {
+  if (directSupabase) return directSupabase;
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const path = require('path');
+    require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+    const url = process.env.SUPABASE_URL || 'https://lpqrffvbcbousmhqpdpm.supabase.co';
+    const key = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE1ODU5NywiZXhwIjoyMTA3NzM0NTk3fQ.WJnz5BBCuKtJB0cwIn_eGVCkXIca3TX6A2ri2sXwW18';
+    directSupabase = createClient(url, key, { auth: { persistSession: false } });
+  } catch (e) {
+    console.warn('[ProxyEngine] Warning initializing direct Supabase client:', e.message);
+  }
+  return directSupabase;
+}
+
 // ─── Authentication Helper ───────────────────────────────────────────────────
 function isAuthorized(modemId, username, password) {
   if (!username || !password) return false;
-  // 1. Direct match in globalUserMap (fastest & most reliable)
-  if (globalUserMap.has(username) && globalUserMap.get(username) === password) {
-    return true;
-  }
-  // 2. Direct match for this specific modemId
+  const u = String(username).trim();
+  const p = String(password).trim();
+  if (globalUserMap.has(u) && globalUserMap.get(u) === p) return true;
+  if (globalUserMap.has(username) && globalUserMap.get(username) === password) return true;
   const creds = credStore.get(modemId);
-  if (creds && creds.some(c => c.username === username && c.password === password)) {
+  if (creds && creds.some(c => (c.username === u || c.username === username) && (c.password === p || c.password === password))) {
     return true;
   }
-  // 3. Fallback across all registered modems in credStore
   for (const [, list] of credStore) {
-    if (list && list.some(c => c.username === username && c.password === password)) {
+    if (list && list.some(c => (c.username === u || c.username === username) && (c.password === p || c.password === password))) {
       return true;
     }
   }
+  return false;
+}
+
+async function verifyAuth(modemId, username, password) {
+  if (!username || !password) return false;
+  // 1. Fast in-memory check
+  if (isAuthorized(modemId, username, password)) return true;
+
+  // 2. Real-time DB lookup fallback (handles instant activation & sync lag)
+  const u = String(username).trim();
+  const p = String(password).trim();
+  try {
+    const sb = getDirectSupabase();
+    if (sb) {
+      const { data, error } = await sb
+        .from('subscriptions')
+        .select('id, proxy_username, proxy_password, status')
+        .eq('proxy_username', u)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (!error && data && String(data.proxy_password).trim() === p) {
+        globalUserMap.set(u, p);
+        if (modemId) {
+          if (!credStore.has(modemId)) credStore.set(modemId, []);
+          credStore.get(modemId).push({ username: u, password: p });
+        }
+        console.log(`[ProxyEngine] 🔑 Realtime DB verified & cached credentials for '${u}'`);
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn(`[ProxyEngine] DB auth lookup error for '${u}':`, err.message);
+  }
+
   return false;
 }
 
@@ -219,7 +269,7 @@ function createHttpProxy(modem, port) {
     keepAlive: true,
     keepAliveInitialDelay: 1000,
     keepAliveTimeout: 0,
-  }, (req, res) => {
+  }, async (req, res) => {
     let authUser = null;
     // 1. Check Auth for standard HTTP
     const authHeader = req.headers['proxy-authorization'];
@@ -228,14 +278,15 @@ function createHttpProxy(modem, port) {
       const colonIdx = decoded.indexOf(':');
       const u = colonIdx !== -1 ? decoded.slice(0, colonIdx) : decoded;
       const p = colonIdx !== -1 ? decoded.slice(colonIdx + 1) : '';
-      if (!isAuthorized(modemId, u, p)) {
+      const ok = await verifyAuth(modemId, u, p);
+      if (!ok) {
         res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
         return res.end('Proxy Authentication Required');
       }
-      authUser = u;
+      authUser = u.trim();
     } else {
       const creds = credStore.get(modemId);
-      if ((creds && creds.length > 0) || credStore.size > 0) {
+      if ((creds && creds.length > 0) || globalUserMap.size > 0) {
         res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="ProxiCell Proxy"' });
         return res.end('Proxy Authentication Required');
       }
@@ -285,7 +336,7 @@ function createHttpProxy(modem, port) {
   });
 
   // 3. Handle HTTPS CONNECT Tunnels
-  server.on('connect', (req, clientSocket, head) => {
+  server.on('connect', async (req, clientSocket, head) => {
     try {
       clientSocket.setNoDelay(true);
       clientSocket.setKeepAlive(true, 1000);
@@ -298,14 +349,15 @@ function createHttpProxy(modem, port) {
       const colonIdx = decoded.indexOf(':');
       const u = colonIdx !== -1 ? decoded.slice(0, colonIdx) : decoded;
       const p = colonIdx !== -1 ? decoded.slice(colonIdx + 1) : '';
-      if (!isAuthorized(modemId, u, p)) {
+      const ok = await verifyAuth(modemId, u, p);
+      if (!ok) {
         clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
         return clientSocket.end();
       }
-      authUser = u;
+      authUser = u.trim();
     } else {
       const creds = credStore.get(modemId);
-      if ((creds && creds.length > 0) || credStore.size > 0) {
+      if ((creds && creds.length > 0) || globalUserMap.size > 0) {
         clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="ProxiCell"\r\n\r\n');
         return clientSocket.end();
       }
@@ -377,16 +429,17 @@ function createSocksProxy(modem, port, isSocks4 = false) {
         if (reqAuth) {
           // Tell client to use Username/Password auth (0x02)
           socket.write(Buffer.from([0x05, 0x02]));
-          socket.once('data', (authChunk) => {
+          socket.once('data', async (authChunk) => {
             if (authChunk[0] !== 0x01) return socket.destroy();
             const ulen = authChunk[1];
             const u = authChunk.slice(2, 2 + ulen).toString('utf8');
             const plen = authChunk[2 + ulen];
             const p = authChunk.slice(3 + ulen, 3 + ulen + plen).toString('utf8');
 
-            if (isAuthorized(modemId, u, p)) {
+            const ok = await verifyAuth(modemId, u, p);
+            if (ok) {
               socket.write(Buffer.from([0x01, 0x00])); // Auth success
-              handleSocks5Request(socket, modem, boundAddress, trackKey, u);
+              handleSocks5Request(socket, modem, boundAddress, trackKey, u.trim());
             } else {
               socket.write(Buffer.from([0x01, 0x01])); // Auth failed
               socket.destroy();
@@ -596,11 +649,13 @@ async function setAllActiveCredentials(subsList) {
   credStore.clear();
   for (const sub of subsList || []) {
     if (sub.proxy_username && sub.proxy_password) {
-      globalUserMap.set(sub.proxy_username, sub.proxy_password);
+      const u = String(sub.proxy_username).trim();
+      const p = String(sub.proxy_password).trim();
+      globalUserMap.set(u, p);
       const mId = sub.proxies?.modem_id || sub.modem_id;
       if (mId) {
         if (!credStore.has(mId)) credStore.set(mId, []);
-        credStore.get(mId).push({ username: sub.proxy_username, password: sub.proxy_password });
+        credStore.get(mId).push({ username: u, password: p });
       }
     }
   }

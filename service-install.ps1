@@ -19,12 +19,19 @@ Write-Host ""
 # 0. Kill ALL existing background proxy workers and SSH tunnels FIRST
 Write-Host "[*] Terminating all old background proxy processes & SSH tunnels..." -ForegroundColor Yellow
 try {
+    Stop-ScheduledTask -TaskName $daemonTaskName -ErrorAction SilentlyContinue
+    Stop-ScheduledTask -TaskName $watchdogTaskName -ErrorAction SilentlyContinue
+
     Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
-        $_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*" -or $_.CommandLine -like "*modem-manager*"
+        $_.CommandLine -like "*modem-manager*" -or 
+        $_.CommandLine -like "*service-daemon*" -or 
+        $_.CommandLine -like "*bandwidthTracker*" -or 
+        $_.CommandLine -like "*index.js*" -or 
+        ($_.CommandLine -like "*proxy*" -and $_.CommandLine -notlike "*antigravity*")
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
     Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 
-        $_.CommandLine -like "*proxicell*" -or $_.CommandLine -like "*104.131.118.5*" -or $_.CommandLine -like "*64.227.3.211*" -or ($_.CommandLine -like "*-R*")
+        $_.CommandLine -like "*proxicell*" -or $_.CommandLine -like "*104.131.118.5*" -or ($_.CommandLine -like "*-R*")
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 } catch {}
 

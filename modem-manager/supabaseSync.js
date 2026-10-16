@@ -282,17 +282,20 @@ async function syncBandwidth(modems) {
 // ─── Sync active credentials from DB into proxySpawner memory ────────────────
 async function syncActiveCredentials() {
   try {
-    const { data: subs } = await supabase
+    const { data: subs, error } = await supabase
       .from('subscriptions')
       .select('id, proxy_username, proxy_password, proxy_id, status, proxies(modem_id)')
       .eq('status', 'active');
 
+    if (error) {
+      console.warn('[SupabaseSync] ⚠️ Error querying active credentials:', error.message);
+      return;
+    }
+
     // Build set of currently-valid usernames from DB
-    const activeUsernames = new Set((subs || []).map(s => s.proxy_username).filter(Boolean));
+    const activeUsernames = new Set((subs || []).map(s => s.proxy_username ? String(s.proxy_username).trim() : '').filter(Boolean));
 
     // ── Reconciliation: revoke any in-memory credential not in the active DB set ──
-    // This catches subscriptions that were revoked/expired in the DB while the
-    // manager was running, but whose credentials were never purged from memory.
     const inMemoryUsernames = spawner.getActiveUsernames ? spawner.getActiveUsernames() : [];
     for (const username of inMemoryUsernames) {
       if (!activeUsernames.has(username)) {
@@ -304,7 +307,7 @@ async function syncActiveCredentials() {
     // ── Load the full active set into memory ──
     await spawner.setAllActiveCredentials(subs || []);
   } catch (e) {
-    // ignore
+    console.warn('[SupabaseSync] syncActiveCredentials error:', e.message);
   }
 }
 

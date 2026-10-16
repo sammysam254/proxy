@@ -1,14 +1,40 @@
-<# :
 @echo off
 setlocal EnableExtensions
 title Vertex Proxies Setup ^& Live Monitor
-cd /d "%~dp0"
+color 0A
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$f = [System.IO.File]::ReadAllText('%~f0'); Invoke-Expression $f"
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [ERROR] Setup script exited with error code %ERRORLEVEL%.
+echo ================================================================
+echo        VERTEX PROXIES -- AUTONOMOUS LAUNCHER & INSTALLER
+echo ================================================================
+echo.
+
+set "PROJ_DIR=C:\proxy"
+if not exist "%PROJ_DIR%" (
+    mkdir "%PROJ_DIR%"
 )
+
+echo [*] Downloading latest setup engine from GitHub...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/sammysam254/proxy/main/setup.ps1', '%PROJ_DIR%\setup.ps1')"
+
+if not exist "%PROJ_DIR%\setup.ps1" (
+    echo [!] Could not download setup.ps1 directly. Checking local directory...
+    if exist "%~dp0setup.ps1" (
+        copy /y "%~dp0setup.ps1" "%PROJ_DIR%\setup.ps1" >nul
+    )
+)
+
+if not exist "%PROJ_DIR%\setup.ps1" (
+    echo.
+    echo [ERROR] setup.ps1 not found and could not be downloaded.
+    echo Please verify your internet connection.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo [*] Launching setup engine in console...
+echo.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJ_DIR%\setup.ps1"
 
 echo.
 echo ================================================================
@@ -16,212 +42,3 @@ echo Setup launcher finished.
 echo Press any key to close this window...
 echo ================================================================
 pause >nul
-exit /b %ERRORLEVEL%
-#>
-
-# Vertex Proxies — Autonomous All-In-One Setup & Live Engine
-$ErrorActionPreference = 'Continue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "       VERTEX PROXIES -- ALL-IN-ONE SETUP & LIVE RUNNER         " -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host ""
-
-$projDir = "C:\proxy"
-if (-not (Test-Path $projDir)) {
-    New-Item -ItemType Directory -Path $projDir -Force | Out-Null
-}
-
-Write-Host "[*] Project Directory: $projDir" -ForegroundColor Cyan
-
-# ─── 1. Check & Auto-Install Node.js ──────────────────────────────────────────
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) {
-    $defaultPaths = @("C:\Program Files\nodejs\node.exe", "C:\Program Files (x86)\nodejs\node.exe", "$env:LOCALAPPDATA\Programs\node\node.exe")
-    foreach ($p in $defaultPaths) {
-        if (Test-Path $p) {
-            $env:PATH = (Split-Path $p -Parent) + ";$env:PATH"
-            $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-            break
-        }
-    }
-}
-
-if (-not $nodeCmd) {
-    Write-Host ""
-    Write-Host "[!] Node.js is NOT installed on this computer." -ForegroundColor Yellow
-    Write-Host "[*] Automatically downloading and installing Node.js LTS (please wait)..." -ForegroundColor Cyan
-    
-    $msiUrl = "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi"
-    $msiTarget = Join-Path $env:TEMP "nodejs_lts_installer.msi"
-
-    try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-        Invoke-WebRequest -Uri $msiUrl -OutFile $msiTarget -UseBasicParsing
-        Write-Host "[*] Running silent Node.js installation..." -ForegroundColor Cyan
-        $p = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$msiTarget`" /qn /norestart" -Wait -PassThru
-        if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
-            Write-Host "[OK] Node.js successfully installed!" -ForegroundColor Green
-        }
-    } catch {
-        Write-Host "[!] Direct download failed. Trying winget..." -ForegroundColor Yellow
-        Start-Process -FilePath "winget" -ArgumentList "install OpenJS.NodeJS.LTS -h --accept-package-agreements --accept-source-agreements" -Wait
-    }
-
-    $env:PATH = "C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;$env:PATH"
-    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-}
-
-if ($nodeCmd) {
-    Write-Host "[OK] Node.js verified: $((& node -v).Trim())" -ForegroundColor Green
-} else {
-    Write-Host "[ERROR] Could not automatically install Node.js. Please install from https://nodejs.org" -ForegroundColor Red
-    pause
-    exit 1
-}
-
-# ─── 2. Ensure Codebase & Sync with GitHub ─────────────────────────────────────
-Write-Host "[*] Verifying proxy system codebase..." -ForegroundColor Cyan
-
-# If codebase is missing or incomplete, download entire repo archive from GitHub
-if (-not (Test-Path "$projDir\modem-manager\index.js") -or -not (Test-Path "$projDir\modem-manager\keys\proxicell_tunnel")) {
-    Write-Host "[*] Downloading complete repository from GitHub..." -ForegroundColor Cyan
-    try {
-        $zipUrl = "https://github.com/sammysam254/proxy/archive/refs/heads/main.zip"
-        $zipFile = Join-Path $env:TEMP "proxicell_repo.zip"
-        $unzipDir = Join-Path $env:TEMP "proxicell_extracted"
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-        (New-Object System.Net.WebClient).DownloadFile($zipUrl, $zipFile)
-        if (Test-Path $unzipDir) { Remove-Item $unzipDir -Recurse -Force -ErrorAction SilentlyContinue }
-        Expand-Archive -Path $zipFile -DestinationPath $unzipDir -Force
-        $sourceDir = Join-Path $unzipDir "proxy-main"
-        Copy-Item "$sourceDir\*" -Destination $projDir -Recurse -Force
-        Write-Host "[OK] Full codebase installed into $projDir" -ForegroundColor Green
-    } catch {
-        Write-Host "[!] Archive download had warnings: $_" -ForegroundColor Yellow
-    }
-}
-
-# Pull latest commits if git is installed
-$gitCmd = Get-Command git -ErrorAction SilentlyContinue
-if ($gitCmd -and (Test-Path "$projDir\.git")) {
-    try {
-        & git -C $projDir fetch origin main 2>$null
-        & git -C $projDir reset --hard origin/main 2>$null
-        $commit = (& git -C $projDir rev-parse --short HEAD 2>$null)
-        Write-Host "[OK] Synced latest code from GitHub (commit: $commit)" -ForegroundColor Green
-    } catch {}
-} else {
-    # Direct file refresh
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-    $files = @(
-        'service-install.ps1', 'service-daemon.js',
-        'modem-manager/package.json',
-        'modem-manager/keys/proxicell_tunnel', 'modem-manager/keys/proxicell_tunnel.pub',
-        'modem-manager/index.js', 'modem-manager/proxySpawner.js',
-        'modem-manager/tunnelManager.js', 'modem-manager/wifiDetector.js',
-        'modem-manager/supabaseSync.js', 'modem-manager/bandwidthTracker.js'
-    )
-    foreach ($f in $files) {
-        try {
-            $dest = Join-Path $projDir $f
-            $destDir = Split-Path $dest -Parent
-            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            (New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/sammysam254/proxy/main/$f", $dest)
-        } catch {}
-    }
-    Write-Host "[OK] Core scripts synced." -ForegroundColor Green
-}
-
-# ─── 3. Clean Stale Processes ──────────────────────────────────────────────────
-Write-Host "[*] Cleaning stale background processes & tunnels..." -ForegroundColor Cyan
-try {
-    Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
-        ($_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*") -and
-        ($_.CommandLine -like "*modem-manager*" -or $_.CommandLine -like "*service-daemon*" -or $_.CommandLine -like "*bandwidthTracker*")
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-
-    Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 
-        $_.CommandLine -like "*proxicell*" -or $_.CommandLine -like "*104.131.118.5*" -or ($_.CommandLine -like "*-R*")
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Write-Host "[OK] Old instances cleaned." -ForegroundColor Green
-} catch {}
-
-# ─── 4. Configure SSH Key ──────────────────────────────────────────────────────
-$sshDir = Join-Path $env:USERPROFILE ".ssh"
-if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
-$localKey = Join-Path $sshDir "proxicell_tunnel"
-
-$bundledKey = Join-Path $projDir "modem-manager\keys\proxicell_tunnel"
-if (Test-Path $bundledKey) {
-    Copy-Item $bundledKey -Destination $localKey -Force
-    if (Test-Path "$bundledKey.pub") {
-        Copy-Item "$bundledKey.pub" -Destination "$localKey.pub" -Force
-    }
-    & icacls "$localKey" /inheritance:r /grant:r "$($env:USERNAME):(R)" 2>$null | Out-Null
-    Write-Host "[OK] OpenSSH tunnel key configured." -ForegroundColor Green
-}
-
-# ─── 5. Write Environment (.env) ───────────────────────────────────────────────
-$cleanKey = $localKey.Replace('\', '/')
-$cleanApp = ($projDir.Replace('\', '/')) + "/"
-$envContent = @"
-VPS_HOST=104.131.118.5
-VPS_USER=root
-VPS_SSH_PORT=22
-VPS_SSH_KEY=$cleanKey
-SUPABASE_URL=https://lpqrffvbcbousmhqpdpm.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE1ODU5NywiZXhwIjoyMTA3NzM0NTk3fQ.WJnz5BBCuKtJB0cwIn_eGVCkXIca3TX6A2ri2sXwW18
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTg1OTcsImV4cCI6MjEwNzczNDU5N30.bDdADRwSGAlr1NsJjYtge30WiQMiwTUpTWqlzJbFhpw
-APP_DIR=$cleanApp
-NODE_ENV=production
-LOG_LEVEL=info
-"@
-
-Set-Content -Path (Join-Path $projDir ".env") -Value $envContent -Force
-Write-Host "[OK] Verified .env settings (VPS: 104.131.118.5 | Supabase: lpqrffvbcbousmhqpdpm)" -ForegroundColor Green
-
-# ─── 6. Verify & Install Node Dependencies ─────────────────────────────────────
-$modemDir = Join-Path $projDir "modem-manager"
-$nodeModules = Join-Path $modemDir "node_modules"
-if (-not (Test-Path "$nodeModules\@supabase\supabase-js") -or -not (Test-Path "$nodeModules\chalk")) {
-    Write-Host "[*] Installing modem-manager dependencies via npm..." -ForegroundColor Cyan
-    Push-Location $modemDir
-    & npm install --no-audit --no-fund
-    Pop-Location
-    Write-Host "[OK] Dependencies installed." -ForegroundColor Green
-} else {
-    Write-Host "[OK] Dependencies verified." -ForegroundColor Green
-}
-
-# ─── 7. Configure Windows Boot Auto-Start ──────────────────────────────────────
-$svcScript = Join-Path $projDir "service-install.ps1"
-if (Test-Path $svcScript) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $svcScript -NoLaunch
-}
-
-# ─── 8. Launch Live Engine in this window ──────────────────────────────────────
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host "   [LIVE] LAUNCHING PROXY & MODEM ENGINE IN THIS CONSOLE        " -ForegroundColor Green
-Write-Host "   (Keep this window OPEN. Live modems, IPs & tunnels show below)" -ForegroundColor Yellow
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host ""
-
-Push-Location $modemDir
-
-# Start bandwidth tracker concurrently in background
-Start-Process -FilePath "node" -ArgumentList "bandwidthTracker.js" -WorkingDirectory $modemDir -WindowStyle Hidden
-
-# Run main index.js in foreground
-& node index.js
-
-Pop-Location
-
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host "  [!] Proxy Engine stopped. Window paused so you can inspect.   " -ForegroundColor Yellow
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host "Press any key to exit..." -ForegroundColor Gray
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

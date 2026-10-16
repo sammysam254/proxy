@@ -114,17 +114,29 @@ if ($gitCmd -and (Test-Path "$projDir\.git")) {
     Write-Host "[OK] Core files synced." -ForegroundColor Green
 }
 
-# ─── 3. Clean Stale Processes ──────────────────────────────────────────────────
-Write-Host "[*] Cleaning stale background processes & tunnels..." -ForegroundColor Cyan
+# ─── 3. Clean Stale Processes & Tasks ──────────────────────────────────────────
+Write-Host "[*] Cleaning stale background processes, tasks & tunnels..." -ForegroundColor Cyan
 try {
+    Stop-ScheduledTask -TaskName "VertexProxiesBackgroundService" -ErrorAction SilentlyContinue
+    Stop-ScheduledTask -TaskName "VertexProxiesWatchdog" -ErrorAction SilentlyContinue
+
     Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { 
-        ($_.CommandLine -like "*proxy*" -or $_.CommandLine -like "*\proxy\*") -and
-        ($_.CommandLine -like "*modem-manager*" -or $_.CommandLine -like "*service-daemon*" -or $_.CommandLine -like "*bandwidthTracker*")
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        $_.CommandLine -like "*modem-manager*" -or 
+        $_.CommandLine -like "*service-daemon*" -or 
+        $_.CommandLine -like "*bandwidthTracker*" -or 
+        $_.CommandLine -like "*index.js*" -or 
+        ($_.CommandLine -like "*proxy*" -and $_.CommandLine -notlike "*antigravity*")
+    } | ForEach-Object { 
+        Write-Host "[*] Stopped old proxy process PID $($_.ProcessId)" -ForegroundColor Gray
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue 
+    }
 
     Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 
         $_.CommandLine -like "*proxicell*" -or $_.CommandLine -like "*104.131.118.5*" -or ($_.CommandLine -like "*-R*")
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    } | ForEach-Object { 
+        Write-Host "[*] Stopped old SSH tunnel PID $($_.ProcessId)" -ForegroundColor Gray
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue 
+    }
     Write-Host "[OK] Old instances cleaned." -ForegroundColor Green
 } catch {}
 
