@@ -90,8 +90,9 @@ set "CLEAN_APP_DIR=%PROJ_DIR:\=/%"
 >> "%PROJ_DIR%.env" echo VPS_USER=root
 >> "%PROJ_DIR%.env" echo VPS_SSH_PORT=22
 >> "%PROJ_DIR%.env" echo VPS_SSH_KEY=%CLEAN_SSH_KEY%
->> "%PROJ_DIR%.env" echo SUPABASE_URL=https://zsfijzjzioaragnlopgn.supabase.co
->> "%PROJ_DIR%.env" echo SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzZmlqemp6aW9hcmFnbmxvcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjMwNDksImV4cCI6MjEwMjY5OTA0OX0.Z-VBaoutWmZUW6S_G3SECl5ylWUfECs5iR7E4aMNASI
+>> "%PROJ_DIR%.env" echo SUPABASE_URL=https://lpqrffvbcbousmhqpdpm.supabase.co
+>> "%PROJ_DIR%.env" echo SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE1ODU5NywiZXhwIjoyMTA3NzM0NTk3fQ.WJnz5BBCuKtJB0cwIn_eGVCkXIca3TX6A2ri2sXwW18
+>> "%PROJ_DIR%.env" echo SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTg1OTcsImV4cCI6MjEwNzczNDU5N30.bDdADRwSGAlr1NsJjYtge30WiQMiwTUpTWqlzJbFhpw
 >> "%PROJ_DIR%.env" echo APP_DIR=%CLEAN_APP_DIR%
 >> "%PROJ_DIR%.env" echo NODE_ENV=production
 >> "%PROJ_DIR%.env" echo LOG_LEVEL=info

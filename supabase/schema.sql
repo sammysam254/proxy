@@ -100,6 +100,25 @@ SELECT 'Cloud Phone + 4G Proxy Combo', 89.00, 30, NULL, 'Virtual Cloud Phone + U
 WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Cloud Phone + 4G Proxy Combo');
 
 -- ============================================
+-- CUSTOMERS TABLE (extends Supabase auth.users)
+-- ============================================
+CREATE TABLE IF NOT EXISTS customers (
+  id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email         TEXT NOT NULL,
+  full_name     TEXT,
+  is_admin      BOOLEAN DEFAULT false,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Sync all existing auth.users into customers table
+INSERT INTO customers (id, email, is_admin)
+SELECT id, email, (LOWER(email) = 'sammyseth260@gmail.com')
+FROM auth.users
+ON CONFLICT (id) DO UPDATE SET
+  email = EXCLUDED.email,
+  is_admin = CASE WHEN LOWER(EXCLUDED.email) = 'sammyseth260@gmail.com' THEN true ELSE customers.is_admin END;
+
+-- ============================================
 -- CLOUD PHONES TABLE (Virtual Android Instances)
 -- ============================================
 CREATE TABLE IF NOT EXISTS cloud_phones (
@@ -122,25 +141,6 @@ CREATE TABLE IF NOT EXISTS cloud_phones (
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   last_active_at   TIMESTAMPTZ DEFAULT NOW()
 );
-
--- ============================================
--- CUSTOMERS TABLE (extends Supabase auth.users)
--- ============================================
-CREATE TABLE IF NOT EXISTS customers (
-  id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email         TEXT NOT NULL,
-  full_name     TEXT,
-  is_admin      BOOLEAN DEFAULT false,
-  created_at    TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Sync all existing auth.users into customers table
-INSERT INTO customers (id, email, is_admin)
-SELECT id, email, (LOWER(email) = 'sammyseth260@gmail.com')
-FROM auth.users
-ON CONFLICT (id) DO UPDATE SET
-  email = EXCLUDED.email,
-  is_admin = CASE WHEN LOWER(EXCLUDED.email) = 'sammyseth260@gmail.com' THEN true ELSE customers.is_admin END;
 
 -- ============================================
 -- SUBSCRIPTIONS TABLE
@@ -226,6 +226,7 @@ ALTER TABLE modems          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proxies         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plans           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cloud_phones    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_logs      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders          ENABLE ROW LEVEL SECURITY;
@@ -260,6 +261,10 @@ DROP POLICY IF EXISTS "customers_self" ON customers;
 CREATE POLICY "customers_self" ON customers USING (id = auth.uid());
 DROP POLICY IF EXISTS "customers_admin" ON customers;
 CREATE POLICY "customers_admin" ON customers USING (is_admin_user());
+
+-- Cloud Phones
+DROP POLICY IF EXISTS "cloud_phones_all" ON cloud_phones;
+CREATE POLICY "cloud_phones_all" ON cloud_phones FOR ALL USING (true) WITH CHECK (true);
 
 -- Subscriptions
 DROP POLICY IF EXISTS "subscriptions_self" ON subscriptions;
@@ -360,6 +365,27 @@ CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at 
 -- ============================================
 -- Enables real-time push to the frontend whenever gb_used, status,
 -- ip_address, or system logs change — no polling required.
-ALTER PUBLICATION supabase_realtime ADD TABLE subscriptions;
-ALTER PUBLICATION supabase_realtime ADD TABLE modems;
-ALTER PUBLICATION supabase_realtime ADD TABLE system_logs;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'subscriptions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE subscriptions;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'modems'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE modems;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'system_logs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE system_logs;
+  END IF;
+END $$;
+

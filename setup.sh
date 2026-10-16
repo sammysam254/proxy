@@ -102,8 +102,8 @@ APP_DIR="${APP_DIR:-/opt/proxicell}"
 VPS_HOST="${VPS_HOST:-}"
 VPS_USER="${VPS_USER:-ubuntu}"
 VPS_SSH_PORT="${VPS_SSH_PORT:-22}"
-SUPABASE_URL="${SUPABASE_URL:-}"
-SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-}"
+SUPABASE_URL="${SUPABASE_URL:-https://lpqrffvbcbousmhqpdpm.supabase.co}"
+SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwcXJmZnZiY2JvdXNtaHFwZHBtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjE1ODU5NywiZXhwIjoyMTA3NzM0NTk3fQ.WJnz5BBCuKtJB0cwIn_eGVCkXIca3TX6A2ri2sXwW18}"
 
 # ─── Interactive config if not set ────────────────────────
 step "Configuration"

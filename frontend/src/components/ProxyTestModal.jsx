@@ -169,7 +169,7 @@ export default function ProxyTestModal({ proxy, onClose, onRent }) {
           maxHeight: '90vh',
           overflowY: 'auto',
           background: 'var(--clr-bg-2, #0d1326)',
-          border: '1px solid rgba(59, 130, 246, 0.35)',
+          border: '1px solid rgba(59, 131, 246, 0.36)',
           borderRadius: '20px',
           boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(59,130,246,0.15)',
           padding: '0',
