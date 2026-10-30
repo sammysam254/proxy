@@ -21,26 +21,119 @@ const os   = require('os');
 const dns  = require('dns');
 const { execSync } = require('child_process');
 
-function freePort(port) {
-  if (!port) return;
-  try {
-    const cmd = process.platform === 'win32'
-      ? `netstat -ano | findstr :${port}`
-      : `fuser -k ${port}/tcp 2>/dev/null || true`;
-    const stdout = execSync(cmd, { encoding: 'utf8', timeout: 2000 });
-    if (process.platform === 'win32' && stdout) {
-      const lines = stdout.split(/\r?\n/);
-      for (const line of lines) {
-        if (!line.includes('LISTENING') && !line.includes(`:${port}`)) continue;
-        const parts = line.trim().split(/\s+/);
-        const pid = parseInt(parts[parts.length - 1], 10);
-        if (pid && pid !== process.pid && !isNaN(pid)) {
-          try { process.kill(pid, 'SIGKILL'); } catch {}
-          try { execSync(`taskkill /F /PID ${pid} >nul 2>&1`, { timeout: 1500 }); } catch {}
-        }
-      }
+// ─── Dynamic Unused Port Allocator ───────────────────────────────────────────
+const _allocatedPorts = new Set();
+
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    if (!port || port < 1024 || port > 65535) return resolve(false);
+    const tester = net.createServer({ pauseOnConnect: true });
+    tester.once('error', () => resolve(false));
+    tester.once('listening', () => {
+      tester.close(() => resolve(true));
+    });
+    try {
+      tester.listen(port, '0.0.0.0');
+    } catch {
+      resolve(false);
     }
-  } catch {}
+  });
+}
+
+async function findUnusedPort(preferredPort, rangeStart = 31000, rangeEnd = 39999) {
+  // 1. Try preferred port if free and not in our allocated set
+  if (preferredPort && !_allocatedPorts.has(preferredPort)) {
+    if (await isPortAvailable(preferredPort)) {
+      _allocatedPorts.add(preferredPort);
+      return preferredPort;
+    }
+  }
+
+  // 2. Scan forward from preferredPort up to rangeEnd
+  const start = preferredPort ? preferredPort + 1 : rangeStart;
+  for (let p = start; p <= rangeEnd; p++) {
+    if (_allocatedPorts.has(p)) continue;
+    if (await isPortAvailable(p)) {
+      _allocatedPorts.add(p);
+      return p;
+    }
+  }
+
+  // 3. Scan from rangeStart up to start
+  for (let p = rangeStart; p < start; p++) {
+    if (_allocatedPorts.has(p)) continue;
+    if (await isPortAvailable(p)) {
+      _allocatedPorts.add(p);
+      return p;
+    }
+  }
+
+  // 4. Scan high dynamic range 44000..60000
+  for (let p = 44000; p <= 60000; p++) {
+    if (_allocatedPorts.has(p)) continue;
+    if (await isPortAvailable(p)) {
+      _allocatedPorts.add(p);
+      return p;
+    }
+  }
+
+  // 5. Ultimate OS ephemeral port fallback
+  return new Promise((resolve) => {
+    const s = net.createServer().listen(0, '0.0.0.0', () => {
+      const p = s.address().port;
+      s.close(() => {
+        _allocatedPorts.add(p);
+        resolve(p);
+      });
+    });
+  });
+}
+
+async function listenOnUnusedPort(server, preferredPort, rangeStart, rangeEnd, typeName, modemLabel, exitIp) {
+  let portToTry = await findUnusedPort(preferredPort, rangeStart, rangeEnd);
+
+  for (let attempt = 1; attempt <= 15; attempt++) {
+    const success = await new Promise((resolve) => {
+      const onError = async (err) => {
+        server.removeListener('error', onError);
+        server.removeListener('listening', onListening);
+        try { server.close(); } catch {}
+        _allocatedPorts.add(portToTry); // mark as busy on this system
+        console.warn(`[ProxyEngine] Port ${portToTry} is busy on this computer. Scanning for next unused port...`);
+        resolve(false);
+      };
+
+      const onListening = () => {
+        server.removeListener('error', onError);
+        server.removeListener('listening', onListening);
+        _allocatedPorts.add(portToTry);
+        resolve(true);
+      };
+
+      server.once('error', onError);
+      server.once('listening', onListening);
+
+      try {
+        server.listen(portToTry, '0.0.0.0');
+      } catch {
+        resolve(false);
+      }
+    });
+
+    if (success) {
+      if (portToTry !== preferredPort) {
+        console.log(`[ProxyEngine] 🔄 Automatically selected unused port ${portToTry} for ${typeName} (${modemLabel})`);
+      } else {
+        console.log(`[ProxyEngine] ${typeName} proxy listening on 0.0.0.0:${portToTry} (Exit: ${exitIp || '0.0.0.0'})`);
+      }
+      return portToTry;
+    }
+
+    // Try next unused port
+    portToTry = await findUnusedPort(portToTry + 1, rangeStart, rangeEnd);
+  }
+
+  throw new Error(`Failed to bind ${typeName} on an unused port after 15 attempts`);
 }
 
 // ─── Fast In-Memory DNS Cache (0ms repeat lookup latency) ─────────────────────
@@ -419,23 +512,6 @@ function createHttpProxy(modem, port) {
     doConnect();
   });
 
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.warn(`[ProxyEngine] ⚠️ HTTP port ${port} busy. Freeing and retrying...`);
-      freePort(port);
-      setTimeout(() => {
-        try { server.listen(port, '0.0.0.0'); } catch {}
-      }, 500);
-    } else {
-      console.error(`[ProxyEngine] HTTP server error on port ${port}:`, err.message);
-    }
-  });
-
-  freePort(port);
-  server.listen(port, '0.0.0.0', () => {
-    console.log(`[ProxyEngine] HTTP/HTTPS proxy listening on 0.0.0.0:${port} (Exit: ${exitIp || '0.0.0.0'})`);
-  });
-
   return server;
 }
 
@@ -514,23 +590,6 @@ function createSocksProxy(modem, port, isSocks4 = false) {
     });
 
     socket.on('error', () => {});
-  });
-
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.warn(`[ProxyEngine] ⚠️ SOCKS${isSocks4 ? '4' : '5'} port ${port} busy. Freeing and retrying...`);
-      freePort(port);
-      setTimeout(() => {
-        try { server.listen(port, '0.0.0.0'); } catch {}
-      }, 500);
-    } else {
-      console.error(`[ProxyEngine] SOCKS server error on port ${port}:`, err.message);
-    }
-  });
-
-  freePort(port);
-  server.listen(port, '0.0.0.0', () => {
-    console.log(`[ProxyEngine] SOCKS${isSocks4 ? '4' : '5'} proxy listening on 0.0.0.0:${port} (Exit: ${exitIp || '0.0.0.0'})`);
   });
 
   return server;
@@ -629,11 +688,19 @@ async function startProxy(modem) {
   if (!modem.ipAddress || !modem.portSet) return;
   await stopProxy(modem);
 
-  const { http: httpPort, socks4: socks4Port, socks5: socks5Port } = modem.portSet;
+  const { http: prefHttp, socks4: prefSocks4, socks5: prefSocks5 } = modem.portSet;
 
-  const httpSrv   = createHttpProxy(modem, httpPort);
-  const socks4Srv = createSocksProxy(modem, socks4Port, true);
-  const socks5Srv = createSocksProxy(modem, socks5Port, false);
+  const httpSrv    = createHttpProxy(modem);
+  const actualHttp = await listenOnUnusedPort(httpSrv, prefHttp, 31000, 31999, 'HTTP', modem.label, modem.ipAddress);
+  modem.portSet.http = actualHttp;
+
+  const socks4Srv    = createSocksProxy(modem, true);
+  const actualSocks4 = await listenOnUnusedPort(socks4Srv, prefSocks4, 32000, 32999, 'SOCKS4', modem.label, modem.ipAddress);
+  modem.portSet.socks4 = actualSocks4;
+
+  const socks5Srv    = createSocksProxy(modem, false);
+  const actualSocks5 = await listenOnUnusedPort(socks5Srv, prefSocks5, 33000, 33999, 'SOCKS5', modem.label, modem.ipAddress);
+  modem.portSet.socks5 = actualSocks5;
 
   // Key by modem.id — always consistent regardless of device type
   const key = modem.id || modem.devicePath;
@@ -642,7 +709,7 @@ async function startProxy(modem) {
     bandwidth: { in: 0, out: 0 },
   });
 
-  console.log(`[ProxyEngine] ✅ Started HTTP(:${httpPort}), SOCKS4(:${socks4Port}), SOCKS5(:${socks5Port}) for ${modem.label}`);
+  console.log(`[ProxyEngine] ✅ Started HTTP(:${actualHttp}), SOCKS4(:${actualSocks4}), SOCKS5(:${actualSocks5}) for ${modem.label}`);
 }
 
 function closeServerAsync(srv) {
@@ -668,6 +735,11 @@ async function stopProxy(modem) {
       await closeServerAsync(srv);
     }
     activeServers.delete(key);
+  }
+  if (modem.portSet) {
+    _allocatedPorts.delete(modem.portSet.http);
+    _allocatedPorts.delete(modem.portSet.socks4);
+    _allocatedPorts.delete(modem.portSet.socks5);
   }
 }
 

@@ -192,8 +192,26 @@ async function updateModemStatus(modemId, modem) {
 
   await supabase.from('modems').update(updatePayload).eq('id', modemId);
 
-  // Keep proxies table in sync with modem status
-  await supabase.from('proxies').update({ active: isOnline }).eq('modem_id', modemId);
+  // Keep proxies table in sync with modem status and live ports
+  if (modem.portSet) {
+    const proxies = [
+      { type: 'http',   localPort: modem.portSet.http,   publicPort: modem.portSet.publicHttp },
+      { type: 'socks4', localPort: modem.portSet.socks4, publicPort: modem.portSet.publicSocks4 },
+      { type: 'socks5', localPort: modem.portSet.socks5, publicPort: modem.portSet.publicSocks5 },
+    ];
+    for (const p of proxies) {
+      await supabase.from('proxies').upsert({
+        modem_id:    modemId,
+        proxy_type:  p.type,
+        local_port:  p.localPort,
+        public_port: p.publicPort,
+        vps_host:    VPS_HOST,
+        active:      isOnline,
+      }, { onConflict: 'modem_id,proxy_type' });
+    }
+  } else {
+    await supabase.from('proxies').update({ active: isOnline }).eq('modem_id', modemId);
+  }
 }
 
 // ─── Mark modem offline ───────────────────────────────────────────────────────
