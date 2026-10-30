@@ -77,9 +77,11 @@ $keyCandidates = @(
     "C:\ProgramData\ssh\proxicell_tunnel"
 )
 foreach ($k in $keyCandidates) {
-    if (Test-Path $k) {
-        cmd.exe /c "icacls `"$k`" /reset >nul 2>&1 & icacls `"$k`" /inheritance:r >nul 2>&1 & icacls `"$k`" /grant:r `"$($env:USERNAME):F`" >nul 2>&1 & icacls `"$k`" /grant:r `"SYSTEM:F`" >nul 2>&1 & icacls `"$k`" /grant:r `"Administrators:F`" >nul 2>&1"
-    }
+    try {
+        if (Test-Path -LiteralPath $k -ErrorAction SilentlyContinue) {
+            cmd.exe /c "icacls `"$k`" /reset >nul 2>&1 & icacls `"$k`" /inheritance:r >nul 2>&1 & icacls `"$k`" /grant:r `"$($env:USERNAME):F`" >nul 2>&1 & icacls `"$k`" /grant:r `"SYSTEM:F`" >nul 2>&1 & icacls `"$k`" /grant:r `"Administrators:F`" >nul 2>&1"
+        }
+    } catch {}
 }
 Write-Host "[OK] OpenSSH private key permissions secured." -ForegroundColor Green
 
@@ -259,6 +261,10 @@ try {
          $_.CommandLine -like "*modem-manager*index.js*" -or 
          $_.CommandLine -like "*bandwidthTracker.js*" -or
          $_.CommandLine -like "*watchdog.js*")
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+    Get-CimInstance Win32_Process -Filter "Name = 'wscript.exe'" -ErrorAction SilentlyContinue | Where-Object { 
+        $_.CommandLine -like "*start-hidden*" -or $_.CommandLine -like "*proxy*"
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
     Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 

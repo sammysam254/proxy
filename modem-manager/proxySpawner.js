@@ -19,6 +19,29 @@ const net  = require('net');
 const url  = require('url');
 const os   = require('os');
 const dns  = require('dns');
+const { execSync } = require('child_process');
+
+function freePort(port) {
+  if (!port) return;
+  try {
+    const cmd = process.platform === 'win32'
+      ? `netstat -ano | findstr :${port}`
+      : `fuser -k ${port}/tcp 2>/dev/null || true`;
+    const stdout = execSync(cmd, { encoding: 'utf8', timeout: 2000 });
+    if (process.platform === 'win32' && stdout) {
+      const lines = stdout.split(/\r?\n/);
+      for (const line of lines) {
+        if (!line.includes('LISTENING') && !line.includes(`:${port}`)) continue;
+        const parts = line.trim().split(/\s+/);
+        const pid = parseInt(parts[parts.length - 1], 10);
+        if (pid && pid !== process.pid && !isNaN(pid)) {
+          try { process.kill(pid, 'SIGKILL'); } catch {}
+          try { execSync(`taskkill /F /PID ${pid} >nul 2>&1`, { timeout: 1500 }); } catch {}
+        }
+      }
+    }
+  } catch {}
+}
 
 // ─── Fast In-Memory DNS Cache (0ms repeat lookup latency) ─────────────────────
 const _dnsCache = new Map();
@@ -396,6 +419,19 @@ function createHttpProxy(modem, port) {
     doConnect();
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[ProxyEngine] ⚠️ HTTP port ${port} busy. Freeing and retrying...`);
+      freePort(port);
+      setTimeout(() => {
+        try { server.listen(port, '0.0.0.0'); } catch {}
+      }, 500);
+    } else {
+      console.error(`[ProxyEngine] HTTP server error on port ${port}:`, err.message);
+    }
+  });
+
+  freePort(port);
   server.listen(port, '0.0.0.0', () => {
     console.log(`[ProxyEngine] HTTP/HTTPS proxy listening on 0.0.0.0:${port} (Exit: ${exitIp || '0.0.0.0'})`);
   });
@@ -480,6 +516,19 @@ function createSocksProxy(modem, port, isSocks4 = false) {
     socket.on('error', () => {});
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[ProxyEngine] ⚠️ SOCKS${isSocks4 ? '4' : '5'} port ${port} busy. Freeing and retrying...`);
+      freePort(port);
+      setTimeout(() => {
+        try { server.listen(port, '0.0.0.0'); } catch {}
+      }, 500);
+    } else {
+      console.error(`[ProxyEngine] SOCKS server error on port ${port}:`, err.message);
+    }
+  });
+
+  freePort(port);
   server.listen(port, '0.0.0.0', () => {
     console.log(`[ProxyEngine] SOCKS${isSocks4 ? '4' : '5'} proxy listening on 0.0.0.0:${port} (Exit: ${exitIp || '0.0.0.0'})`);
   });
@@ -596,12 +645,27 @@ async function startProxy(modem) {
   console.log(`[ProxyEngine] ✅ Started HTTP(:${httpPort}), SOCKS4(:${socks4Port}), SOCKS5(:${socks5Port}) for ${modem.label}`);
 }
 
+function closeServerAsync(srv) {
+  return new Promise((resolve) => {
+    if (!srv) return resolve();
+    try {
+      if (typeof srv.closeAllConnections === 'function') {
+        try { srv.closeAllConnections(); } catch {}
+      }
+      srv.close(() => resolve());
+      setTimeout(resolve, 400);
+    } catch {
+      resolve();
+    }
+  });
+}
+
 async function stopProxy(modem) {
   const key = modem.id || modem.devicePath;
   const s = activeServers.get(key);
   if (s && s.servers) {
     for (const srv of s.servers) {
-      try { srv.close(); } catch {}
+      await closeServerAsync(srv);
     }
     activeServers.delete(key);
   }

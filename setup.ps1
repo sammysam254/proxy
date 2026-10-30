@@ -156,6 +156,12 @@ try {
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue 
     }
 
+    Get-CimInstance Win32_Process -Filter "Name = 'wscript.exe'" -ErrorAction SilentlyContinue | Where-Object { 
+        $_.CommandLine -like "*start-hidden*" -or $_.CommandLine -like "*proxy*"
+    } | ForEach-Object { 
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue 
+    }
+
     Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { 
         $_.CommandLine -like "*proxicell*" -or $_.CommandLine -like "*104.131.118.5*" -or ($_.CommandLine -like "*-R*")
     } | ForEach-Object { 
