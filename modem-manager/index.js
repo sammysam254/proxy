@@ -24,6 +24,7 @@ const wifi     = require('./wifiDetector');
 const spawner  = require('./proxySpawner');
 const tunnel   = require('./tunnelManager');
 const sync     = require('./supabaseSync');
+const nodeIdentifier = require('./nodeIdentifier');
 
 // ─── Device Type Helper ───────────────────────────────────────────────────────
 function getDeviceTag(device) {
@@ -47,17 +48,10 @@ const log = {
 //  state: 'pending' | 'proxying'
 //
 const registry = new Map();
+let activeNodeInfo = nodeIdentifier.initNodeIdentifier();
 
 function getPortSetForSlot(slot) {
-  const idx = Math.max(0, (slot || 1) - 1);
-  return {
-    http:        31000 + idx,
-    socks4:      32000 + idx,
-    socks5:      33000 + idx,
-    publicHttp:  41000 + idx,
-    publicSocks4:42000 + idx,
-    publicSocks5:43000 + idx,
-  };
+  return nodeIdentifier.getPortSetForSlot(slot, activeNodeInfo?.portOffset || 0);
 }
 
 // ─── Assign a deterministic port set to a device ───────────────────────────
@@ -297,7 +291,8 @@ async function runCycle() {
 
     // ── 6. Reconcile DB (deactivate any stale/ghost online modems) ────────
     const activeIds = proxying.map(d => d.id).filter(Boolean);
-    await sync.reconcileOnlineModems(activeIds).catch(() => {});
+    const myNodePrefix = `residential_node_${activeNodeInfo?.nodeIndex ?? 0}_`;
+    await sync.reconcileOnlineModems(activeIds, myNodePrefix).catch(() => {});
 
     // ── 7. Expire overdue subscriptions & sync credentials ───────────────
     await sync.expireOldSubscriptions().catch(() => {});
@@ -411,6 +406,15 @@ async function main() {
     log.info(`SSH PubKey:  ${pubKey}`);
   }
   log.info('High-Speed Wi-Fi Tunneling Engine active');
+
+  // ── Auto-resolve multi-computer node identity and distinct port block ─────
+  log.info('Resolving machine node identity & port block...');
+  try {
+    activeNodeInfo = await nodeIdentifier.autoResolveNodeIndex(sync.supabase);
+    log.ok(`Machine registered as Node #${activeNodeInfo.nodeIndex} (${activeNodeInfo.nodeName}) | Public Ports: 41${activeNodeInfo.portOffset.toString().padStart(3,'0')}+`);
+  } catch (e) {
+    log.warn('Could not auto-resolve node, using defaults:', e.message);
+  }
 
   // ── Boot-time adapter stabilization ────────────────────────────────────────
   await waitForDevices(15_000, 2_000);

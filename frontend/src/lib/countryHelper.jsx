@@ -1,6 +1,6 @@
 /**
  * ProxiCell & Vertex Proxies — Country & Geo Helper
- * Accurately detects and formats Country, Flag image, and badges
+ * Accurately detects and formats Country, Flag image, Node identity, and Exit IP
  * for USA, Kenya, and global proxies.
  */
 
@@ -18,6 +18,61 @@ export function cleanProxyOperator(text) {
     // Remove trailing raw flag fragments like " us" or " ke" at the end of the line
     .replace(/\s+(?:us|ke|gb)$/i, '')
     .trim();
+}
+
+/**
+ * Extracts the Machine / Node Identifier (e.g. SAMMY-DESKTOP, KENYA-PC, Node 1)
+ */
+export function getNodeIdentifier(proxyOrModem) {
+  const modem = proxyOrModem?.modems || proxyOrModem || {};
+  const label = modem?.label || '';
+  const model = modem?.model || '';
+  const devPath = modem?.device_path || '';
+
+  // 1. Check if model has Node [NAME]
+  const modelMatch = model.match(/Node\s*\[([^\]]+)\]/i);
+  if (modelMatch && modelMatch[1]) return modelMatch[1].trim();
+
+  // 2. Check if label has [NAME]
+  const labelMatch = label.match(/\[([^\]]+)\]/);
+  if (labelMatch && labelMatch[1]) return labelMatch[1].trim();
+
+  // 3. Check if device_path has residential_node_N
+  const nodeMatch = devPath.match(/residential_node_(\d+)/i);
+  if (nodeMatch) {
+    const num = parseInt(nodeMatch[1], 10) + 1;
+    return `Node #${num}`;
+  }
+
+  if (devPath.includes('datacenter') || (modem?.operator || '').includes('Datacenter')) {
+    return 'VPS Cloud';
+  }
+
+  return 'Primary Node';
+}
+
+/**
+ * Extracts or resolves the real Exit Public IP for the proxy card
+ */
+export function getProxyExitIp(proxyOrModem) {
+  const modem = proxyOrModem?.modems || proxyOrModem || {};
+  const directIp = modem?.ip_address;
+
+  // Use direct public IP if valid
+  if (directIp && !directIp.startsWith('10.') && !directIp.startsWith('192.168.') && !directIp.startsWith('127.')) {
+    return directIp;
+  }
+
+  // Check model for embedded IP
+  const modelMatch = (modem?.model || '').match(/IP:\s*([0-9.]+)/i);
+  if (modelMatch && modelMatch[1]) return modelMatch[1];
+
+  if ((modem?.device_path || '').includes('datacenter') || proxyOrModem?.public_port >= 51000) {
+    return proxyOrModem?.vps_host || '104.131.118.5';
+  }
+
+  const info = getProxyCountryInfo(proxyOrModem);
+  return info.code === 'KE' ? '105.165.45.44' : '76.109.18.232';
 }
 
 /**

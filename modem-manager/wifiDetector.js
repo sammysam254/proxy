@@ -466,26 +466,15 @@ async function detectWifiLinux() {
 // =============================================================================
 
 const { detectGeoLocation } = require('./geoDetector');
+const { getPortSetForSlot, initNodeIdentifier } = require('./nodeIdentifier');
 
 const DEFAULT_WIFI_SLOTS = parseInt(process.env.WIFI_PROXY_SLOTS || '12', 10);
 
-function getPortSetForSlot(slot) {
-  const idx = Math.max(0, (slot || 1) - 1);
-  return {
-    http:         31000 + idx,
-    socks4:       32000 + idx,
-    socks5:       33000 + idx,
-    publicHttp:   41000 + idx,
-    publicSocks4: 42000 + idx,
-    publicSocks5: 43000 + idx,
-  };
-}
-
 /**
  * Expands physical Wi-Fi connection into multiple distinct proxy slots (default 12 cards)
- * Configured dynamically for Residential Proxies based on detected location (Kenya, USA, etc.).
+ * Configured dynamically for Residential Proxies based on detected location and machine node index.
  */
-function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS, geoInfo = null) {
+function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS, geoInfo = null, customNode = null) {
   const g = geoInfo || {
     country:     'United States',
     countryCode: 'US',
@@ -496,24 +485,33 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS, geoInfo =
     publicIp:    null,
   };
 
+  const node = customNode || initNodeIdentifier();
+  const nodeIdx = node.nodeIndex || 0;
+  const portOffset = node.portOffset || 0;
+  const nodeName = node.nodeName || 'Node';
+
   const expanded = [];
   for (const base of rawWifiList) {
     for (let slot = 1; slot <= slotsCount; slot++) {
-      const locStr = g.city ? `${g.city}, ${g.displayName} ${g.flag}` : `${g.displayName} ${g.flag}`;
+      const globalSlot = (nodeIdx * slotsCount) + slot;
+      const locStr = g.city ? `${g.city}, ${g.displayName}` : g.displayName;
       expanded.push({
         ...base,
-        devicePath: `residential_slot_${slot}`,
-        label:      `${g.displayName} Residential Proxy #${slot}`,
+        devicePath: `residential_node_${nodeIdx}_slot_${slot}`,
+        label:      `${g.displayName} Residential Proxy #${globalSlot} [${nodeName}]`,
         operator:   `${g.displayName} Residential Wi-Fi (${g.isp})`,
-        model:      `${g.displayName} High-Speed Residential Node #${slot}`,
+        model:      `Node [${nodeName}] (IP: ${g.publicIp || 'Dynamic'})`,
         location:   locStr,
         country:    g.displayName,
         countryCode:g.countryCode,
         publicIp:   g.publicIp || null,
         signal:     99,
         slotNumber: slot,
+        globalSlotNumber: globalSlot,
+        nodeIndex:  nodeIdx,
+        nodeName:   nodeName,
         isWifi:     true,
-        portSet:    getPortSetForSlot(slot),
+        portSet:    getPortSetForSlot(slot, portOffset),
       });
     }
   }

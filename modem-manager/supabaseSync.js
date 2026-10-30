@@ -400,24 +400,26 @@ async function expireOldSubscriptions() {
 //  in the database. Any ghost records from past runs or changed network adapter
 //  names are automatically marked 'offline' and their proxies set to active: false.
 //
-async function reconcileOnlineModems(activeModemIds = []) {
+async function reconcileOnlineModems(activeModemIds = [], myNodePrefix = null) {
   if (!activeModemIds || activeModemIds.length === 0) {
     return;
   }
   try {
     const activeSet = new Set(activeModemIds.filter(Boolean));
 
-    // Ensure all currently active modems in memory are online and their proxies active
+    // Ensure all currently active modems on this machine have active proxies
     for (const modemId of activeSet) {
       await supabase.from('proxies').update({ active: true }).eq('modem_id', modemId);
     }
 
     const { data: dbModems, error } = await supabase
       .from('modems')
-      .select('id, label, status')
+      .select('id, label, status, device_path, operator, last_seen')
       .eq('status', 'online');
 
     if (error || !dbModems) return;
+
+    const fifteenMinutesAgo = Date.now() - (15 * 60 * 1000);
 
     for (const m of dbModems) {
       // Never mark Datacenter modems offline (they run permanently on DigitalOcean VPS)
@@ -425,14 +427,25 @@ async function reconcileOnlineModems(activeModemIds = []) {
       const op = (m.operator || '').toLowerCase();
       const lbl = (m.label || '').toLowerCase();
       if (dp.includes('datacenter') || op.includes('datacenter') || lbl.includes('datacenter')) {
-        // Ensure datacenter proxies are always active
         await supabase.from('proxies').update({ active: true }).eq('modem_id', m.id);
         continue;
       }
 
-      if (!activeSet.has(m.id)) {
-        console.log(`[SupabaseSync] Deactivating stale online modem: ${m.label} (${m.id})`);
-        await markModemOffline(m.id);
+      // If myNodePrefix is set (e.g. 'residential_node_0_'), only reconcile our own machine's slots!
+      const isMyNodeModem = myNodePrefix ? dp.startsWith(myNodePrefix.toLowerCase()) : true;
+
+      if (isMyNodeModem) {
+        if (!activeSet.has(m.id)) {
+          console.log(`[SupabaseSync] Deactivating stale online modem on this node: ${m.label} (${m.id})`);
+          await markModemOffline(m.id);
+        }
+      } else {
+        // Modems from OTHER computers: only mark offline if they haven't sent a heartbeat in 15 minutes
+        const lastSeenMs = m.last_seen ? new Date(m.last_seen).getTime() : 0;
+        if (lastSeenMs > 0 && lastSeenMs < fifteenMinutesAgo) {
+          console.log(`[SupabaseSync] Deactivating expired external node modem (no heartbeat > 15m): ${m.label} (${m.id})`);
+          await markModemOffline(m.id);
+        }
       }
     }
   } catch (e) {

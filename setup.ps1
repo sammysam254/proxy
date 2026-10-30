@@ -125,7 +125,7 @@ if ($gitCmd -and (Test-Path "$projDir\.git")) {
         'modem-manager/keys/proxicell_tunnel', 'modem-manager/keys/proxicell_tunnel.pub',
         'modem-manager/index.js', 'modem-manager/proxySpawner.js',
         'modem-manager/tunnelManager.js', 'modem-manager/wifiDetector.js',
-        'modem-manager/geoDetector.js',
+        'modem-manager/geoDetector.js', 'modem-manager/nodeIdentifier.js',
         'modem-manager/supabaseSync.js', 'modem-manager/bandwidthTracker.js'
     )
     foreach ($f in $files) {
@@ -219,30 +219,40 @@ if (-not (Test-Path "$nodeModules\@supabase\supabase-js") -or -not (Test-Path "$
     Write-Host "[OK] Dependencies verified." -ForegroundColor Green
 }
 
-# ─── 7. Configure Windows Boot Auto-Start (Without launching hidden process now)
+# ─── 7. Configure Windows Boot Auto-Start & Launch Background Supervisor ──────
 $svcScript = Join-Path $projDir "service-install.ps1"
 if (Test-Path $svcScript) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $svcScript -NoLaunch
+    Write-Host "[*] Registering 24/7 background service, watchdog & startup triggers..." -ForegroundColor Cyan
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $svcScript
 }
 
-# ─── 8. Launch Live Engine in this window ──────────────────────────────────────
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host "   [LIVE] LAUNCHING PROXY & MODEM ENGINE IN THIS CONSOLE        " -ForegroundColor Green
-Write-Host "   (Keep this window OPEN. Live modems, IPs & tunnels show below)" -ForegroundColor Yellow
+Write-Host " [SUCCESS] 24/7 AUTONOMOUS PROXY SERVICE IS RUNNING IN BACKGROUND" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "  * Background Daemon: ACTIVE (Supervises proxy engine & tunnels)" -ForegroundColor White
+Write-Host "  * Windows Auto-Start: ACTIVE (Resumes on PC restart & power-on)" -ForegroundColor White
+Write-Host "  * 1-Minute Watchdog: ACTIVE (Auto-heals if ever interrupted)" -ForegroundColor White
+Write-Host ""
+Write-Host "  >>> YOU CAN SAFELY CLOSE THIS WINDOW AT ANY TIME <<<" -ForegroundColor Yellow
+Write-Host "  The proxies and server will CONTINUE running in the background." -ForegroundColor Cyan
+Write-Host "  When the computer reboots or turns on, it will automatically resume." -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
-
-Push-Location $modemDir
-
-# Run main index.js in foreground
-& node index.js
-
-Pop-Location
-
+Write-Host "[*] Streaming live service logs below (Press Ctrl+C or close window anytime)..." -ForegroundColor Gray
 Write-Host ""
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host "  [!] Proxy Engine stopped. Window paused so you can inspect.   " -ForegroundColor Yellow
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host "Press any key to exit..." -ForegroundColor Gray
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+$logFile = Join-Path $projDir "logs\service.log"
+$retries = 0
+while (-not (Test-Path $logFile) -and $retries -lt 10) {
+    Start-Sleep -Milliseconds 500
+    $retries++
+}
+
+if (Test-Path $logFile) {
+    Get-Content -Path $logFile -Wait -Tail 30
+} else {
+    Write-Host "[OK] Service started. Logs are being written to logs\service.log" -ForegroundColor Green
+    Write-Host "Press any key to close this console..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}

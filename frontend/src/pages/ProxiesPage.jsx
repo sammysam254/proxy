@@ -9,7 +9,7 @@ import SidebarLayout from '../components/SidebarLayout';
 import PurchaseModal from '../components/PurchaseModal';
 import ProxyTestModal from '../components/ProxyTestModal';
 import { playClickSound } from '../lib/sound';
-import { getProxyCountryInfo, CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
+import { getProxyCountryInfo, CountryBadge, cleanProxyOperator, getNodeIdentifier, getProxyExitIp } from '../lib/countryHelper';
 
 export default function ProxiesPage({ session }) {
   const [proxies, setProxies]     = useState([]);
@@ -232,6 +232,8 @@ export default function ProxiesPage({ session }) {
                 const isDc = isProxyDatacenter(p);
                 const isWifi = isProxyWifi(p);
                 const countryInfo = getProxyCountryInfo(p);
+                const nodeName = getNodeIdentifier(p);
+                const exitIp = getProxyExitIp(p);
 
                 const rawOp = modem?.operator || (isDc ? 'DigitalOcean Datacenter' : (isWifi ? `${countryInfo.shortName} Residential Wi-Fi` : 'Mobile 4G/5G LTE'));
                 const carrier = cleanProxyOperator(rawOp) || (isWifi ? `${countryInfo.shortName} Residential Wi-Fi` : 'Mobile Network');
@@ -262,6 +264,7 @@ export default function ProxiesPage({ session }) {
                           background: `${accentColor}18`,
                           color: accentColor,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
                         }}>
                           <CardIcon size={18} />
                         </div>
@@ -269,8 +272,20 @@ export default function ProxiesPage({ session }) {
                           <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             {modem?.label || carrier}
                           </div>
-                          <div className="mono" style={{ fontSize: '0.75rem', color: accentColor }}>
-                            {cleanProxyOperator(modem?.operator) || (isDc ? 'DigitalOcean Datacenter' : (isWifi ? `${countryInfo.shortName} Residential Wi-Fi` : `Serial: #${serial}`))}
+                          <div style={{ fontSize: '0.74rem', color: accentColor, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                            <span style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              fontSize: '0.68rem',
+                              fontWeight: 600,
+                              color: 'var(--clr-text-2)',
+                            }}>
+                              Node: {nodeName}
+                            </span>
+                            <span className="mono" style={{ color: countryInfo.color, fontSize: '0.72rem', fontWeight: 600 }}>
+                              IP: {exitIp}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -327,8 +342,10 @@ export default function ProxiesPage({ session }) {
                       </div>
 
                       <div>
-                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Speed</div>
-                        <div style={{ fontWeight: 700, color: 'var(--clr-green)' }}>{isDc ? '10 Gbps (Port)' : '1 Gbps (Max Speed) ⚡'}</div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Exit IP</div>
+                        <div className="mono" style={{ fontWeight: 700, color: 'var(--clr-text)', fontSize: '0.78rem' }}>
+                          {exitIp}
+                        </div>
                       </div>
 
                       <div>

@@ -5,7 +5,7 @@ import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, 
 import { getMySubscriptions, requestIpRotation, supabase } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
-import { getProxyCountryInfo, CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
+import { getProxyCountryInfo, CountryBadge, cleanProxyOperator, getNodeIdentifier, getProxyExitIp } from '../lib/countryHelper';
 
 function CopyBtn({ value, label }) {
   const [copied, setCopied] = useState(false);
@@ -191,9 +191,19 @@ function ProxyCredCard({ sub }) {
             <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
               {modem?.label || (isResidential ? `${countryInfo.shortName} Residential Proxy` : cleanProxyOperator(modem?.operator || 'Mobile 4G/5G LTE'))}
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
-              <span className="mono" style={{ color: categoryAccent, fontWeight: 600 }}>
-                {cleanProxyOperator(modem?.operator) || (isResidential ? `${countryInfo.shortName} Residential Wi-Fi` : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}`)}
+            <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+              <span style={{
+                background: 'rgba(255,255,255,0.06)',
+                padding: '1px 5px',
+                borderRadius: '4px',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                color: 'var(--clr-text-2)',
+              }}>
+                Node: {getNodeIdentifier(proxy || sub)}
+              </span>
+              <span className="mono" style={{ color: countryInfo.color, fontSize: '0.72rem', fontWeight: 600 }}>
+                IP: {getProxyExitIp(proxy || sub)}
               </span>
             </div>
           </div>
@@ -284,12 +294,15 @@ function ProxyCredCard({ sub }) {
             </div>
 
             {[
-              { label: 'Category',      value: isResidential ? 'Residential Proxy (Wi-Fi)' : 'Mobile Proxy (Dedicated 4G/5G SIM)' },
-              { label: 'Host / IP',     value: vpsHost },
-              { label: 'Port',          value: String(port) },
-              { label: 'Username',      value: sub.proxy_username },
-              { label: 'Password',      value: sub.proxy_password },
-              { label: 'Proxy Type',    value: proxy?.proxy_type?.toUpperCase() || 'SOCKS5' },
+              { label: 'Category',          value: isResidential ? `${countryInfo.shortName} Residential Proxy (Wi-Fi)` : (isDatacenter ? 'Datacenter Proxy' : 'Mobile Proxy') },
+              { label: 'Location',          value: `${countryInfo.country} (${countryInfo.code})` },
+              { label: 'Serving Node',      value: getNodeIdentifier(proxy || sub) },
+              { label: 'Exit IP Address',   value: getProxyExitIp(proxy || sub) },
+              { label: 'Host / Gateway',    value: vpsHost },
+              { label: 'Port',              value: String(port) },
+              { label: 'Username',          value: sub.proxy_username },
+              { label: 'Password',          value: sub.proxy_password },
+              { label: 'Proxy Type',        value: proxy?.proxy_type?.toUpperCase() || 'SOCKS5' },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between items-center" style={{ gap: '12px' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)', flexShrink: 0 }}>{label}</span>

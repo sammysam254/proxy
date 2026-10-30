@@ -10,7 +10,7 @@ import PurchaseModal from '../components/PurchaseModal';
 import ProxyTestModal from '../components/ProxyTestModal';
 import SidebarLayout from '../components/SidebarLayout';
 import { playClickSound } from '../lib/sound';
-import { getProxyCountryInfo, CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
+import { getProxyCountryInfo, CountryBadge, cleanProxyOperator, getNodeIdentifier, getProxyExitIp } from '../lib/countryHelper';
 
 export default function Storefront({ session }) {
   const [plans, setPlans] = useState([]);
@@ -255,6 +255,8 @@ export default function Storefront({ session }) {
                 const isDc = (p.public_port >= 51000) || (modem?.operator || '').includes('Datacenter');
                 const isRes = !isDc;
                 const countryInfo = getProxyCountryInfo(p);
+                const nodeName = getNodeIdentifier(p);
+                const exitIp = getProxyExitIp(p);
 
                 return (
                   <div
@@ -277,6 +279,7 @@ export default function Storefront({ session }) {
                           background: countryInfo.bg,
                           color: countryInfo.color,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
                         }}>
                           {isRes ? <Wifi size={18} /> : <Server size={18} />}
                         </div>
@@ -284,13 +287,25 @@ export default function Storefront({ session }) {
                           <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
                             {modem?.label || (isRes ? `${countryInfo.shortName} Residential Proxy #${p.public_port}` : `Datacenter Proxy #${p.public_port}`)}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
-                            {cleanProxyOperator(modem?.operator) || (isRes ? `${countryInfo.shortName} Residential Wi-Fi` : 'DigitalOcean Datacenter')}
+                          <div style={{ fontSize: '0.74rem', color: 'var(--clr-text-3)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                            <span style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              fontSize: '0.68rem',
+                              fontWeight: 600,
+                              color: 'var(--clr-text-2)',
+                            }}>
+                              Node: {nodeName}
+                            </span>
+                            <span className="mono" style={{ color: countryInfo.color, fontSize: '0.72rem', fontWeight: 600 }}>
+                              IP: {exitIp}
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                         <CountryBadge proxyOrModem={p} size="sm" />
                         <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
                           <span className="dot" /> {isOnline ? 'Online' : 'Standby'}
@@ -326,9 +341,9 @@ export default function Storefront({ session }) {
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Speed</div>
-                        <div style={{ fontWeight: 700, color: '#10b981' }}>
-                          {isRes ? '1 Gbps Max' : '10 Gbps Port'}
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Exit IP</div>
+                        <div className="mono" style={{ fontWeight: 700, color: 'var(--clr-text)', fontSize: '0.75rem' }}>
+                          {exitIp}
                         </div>
                       </div>
                       <div>
