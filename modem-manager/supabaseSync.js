@@ -428,10 +428,10 @@ async function cleanupDuplicateModems() {
 
     if (error || !modems) return;
 
-    // Group by base label (e.g. "Android Phone") or IP
+    // Group by exact device_path (e.g. residential_usa_slot_1)
     const byKey = new Map();
     for (const m of modems) {
-      const baseKey = (m.label || '').replace(/\s*\([^)]*\)/g, '').trim() || m.id;
+      const baseKey = m.device_path || m.label || m.id;
       if (!byKey.has(baseKey)) byKey.set(baseKey, []);
       byKey.get(baseKey).push(m);
     }

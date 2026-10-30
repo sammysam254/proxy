@@ -467,6 +467,18 @@ async function detectWifiLinux() {
 
 const DEFAULT_WIFI_SLOTS = parseInt(process.env.WIFI_PROXY_SLOTS || '12', 10);
 
+function getPortSetForSlot(slot) {
+  const idx = Math.max(0, (slot || 1) - 1);
+  return {
+    http:         31000 + idx,
+    socks4:       32000 + idx,
+    socks5:       33000 + idx,
+    publicHttp:   41000 + idx,
+    publicSocks4: 42000 + idx,
+    publicSocks5: 43000 + idx,
+  };
+}
+
 /**
  * Expands physical Wi-Fi connection into multiple distinct proxy slots (default 12 cards)
  * Configured specifically for High-Speed USA Residential Proxies.
@@ -487,6 +499,7 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
         signal:     99,
         slotNumber: slot,
         isWifi:     true,
+        portSet:    getPortSetForSlot(slot),
       });
     }
   }

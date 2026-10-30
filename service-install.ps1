@@ -102,6 +102,9 @@ $watchdogPsPath = Join-Path $projDir "watchdog.ps1"
 # 2. Configure Windows Power Settings (Keep PC awake on AC power & enable wake timers)
 Write-Host "[*] Configuring Power Management (24/7 Always-On on Power)..." -ForegroundColor Cyan
 try {
+    # Set Lid Close Action to DO NOTHING (0) on both AC and Battery
+    cmd.exe /c "powercfg /setacvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 5ca83367-6e45-459f-a27b-476b1d01c936 0" >$null 2>&1
+    cmd.exe /c "powercfg /setdcvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 5ca83367-6e45-459f-a27b-476b1d01c936 0" >$null 2>&1
     # Never sleep on AC power
     cmd.exe /c "powercfg /change standby-timeout-ac 0" >$null 2>&1
     cmd.exe /c "powercfg /change hibernate-timeout-ac 0" >$null 2>&1
@@ -110,7 +113,7 @@ try {
     # Disable USB selective suspend on AC so USB modems/adapters never power down
     cmd.exe /c "powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0" >$null 2>&1
     cmd.exe /c "powercfg /setactive SCHEME_CURRENT" >$null 2>&1
-    Write-Host "[OK] Power management configured (Sleep disabled on AC, Wake timers enabled)." -ForegroundColor Green
+    Write-Host "[OK] Power management configured (Lid close sleep disabled, sleep disabled on AC, Wake timers enabled)." -ForegroundColor Green
 } catch {
     Write-Host "[WARN] Power configuration skipped: $($_.Exception.Message)" -ForegroundColor Gray
 }

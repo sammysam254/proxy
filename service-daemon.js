@@ -50,23 +50,20 @@ function isProcessAlive(pid) {
 }
 
 // ─── Single-Instance Enforcement ─────────────────────────────────────────────
+const LOCK_FILE = path.join(LOGS_DIR, 'daemon.lock');
+let lockFd = null;
+
+try {
+  lockFd = fs.openSync(LOCK_FILE, 'w');
+} catch (_) {
+  process.exit(0);
+}
+
 if (fs.existsSync(PID_FILE)) {
   try {
     const existingPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
     if (existingPid && existingPid !== process.pid && isProcessAlive(existingPid)) {
-      // Check if that PID is actually a node process running service-daemon
-      try {
-        const ps = `Get-CimInstance Win32_Process -Filter "ProcessId = ${existingPid}" -ErrorAction SilentlyContinue | Select-Object CommandLine | ConvertTo-Json`;
-        const raw = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`, {
-          timeout: 4000,
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'ignore']
-        }).toString().trim();
-        if (raw && raw.includes('service-daemon.js')) {
-          // Another daemon is already running! Exit silently.
-          process.exit(0);
-        }
-      } catch (_) {}
+      process.exit(0);
     }
   } catch (_) {}
 }
@@ -115,13 +112,6 @@ const processes = {
     restartCount: 0,
     isShuttingDown: false,
     startTime: 0
-  },
-  bandwidth: {
-    file: 'bandwidthTracker.js',
-    child: null,
-    restartCount: 0,
-    isShuttingDown: false,
-    startTime: 0
   }
 };
 
@@ -130,7 +120,6 @@ function updateWorkersPidFile() {
     const data = {
       daemon: process.pid,
       main: processes.main.child ? processes.main.child.pid : null,
-      bandwidth: processes.bandwidth.child ? processes.bandwidth.child.pid : null,
       updatedAt: new Date().toISOString()
     };
     fs.writeFileSync(WORKERS_PID_FILE, JSON.stringify(data, null, 2), 'utf8');
@@ -221,94 +210,29 @@ try {
   });
 } catch (_) {}
 
-// Start all workers
+// Start main worker
 spawnWorker('main');
-spawnWorker('bandwidth');
 updateWorkersPidFile();
 
-const net = require('net');
-
-// ─── Active Autonomous Health Check Loop (every 20 seconds) ─────────────────
-let consecutiveFailures = 0;
-
-async function checkLocalProxyPort(port = 31000) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    socket.setTimeout(2500);
-    socket.on('connect', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.on('error', () => {
-      resolve(false);
-    });
-    socket.connect(port, '127.0.0.1');
-  });
-}
-
-function checkSshProcessAlive() {
-  try {
-    const ps = `Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*-R*" -or $_.CommandLine -like "*104.131.118.5*" } | Select-Object -ExpandProperty ProcessId`;
-    const out = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${ps}"`, {
-      timeout: 3000,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore']
-    }).toString().trim();
-    return !!out;
-  } catch {
-    return true; // Don't false-positive on shell timeout
-  }
-}
-
-setInterval(async () => {
+// ─── Active Autonomous Health Check Loop (every 30 seconds) ─────────────────
+setInterval(() => {
   if (processes.main.isShuttingDown) return;
 
   const mainDead = !processes.main.child || !isProcessAlive(processes.main.child.pid);
-  const bwDead = !processes.bandwidth.child || !isProcessAlive(processes.bandwidth.child.pid);
 
   if (mainDead) {
     logMessage('WARN', '[HealthCheck] Main proxy engine was not running — autonomously restarting...');
     spawnWorker('main');
   }
 
-  if (bwDead) {
-    logMessage('WARN', '[HealthCheck] Bandwidth tracker was not running — autonomously restarting...');
-    spawnWorker('bandwidth');
-  }
-
-  // If workers are running, verify end-to-end proxy connectivity & SSH tunnel
-  if (!mainDead) {
-    const portOpen = await checkLocalProxyPort(31000);
-    const sshAlive = checkSshProcessAlive();
-
-    if (!portOpen && !sshAlive) {
-      consecutiveFailures++;
-      if (consecutiveFailures >= 2) {
-        logMessage('WARN', '[HealthCheck] Proxy port and SSH tunnel unresponsive for 2 cycles — restarting main worker to restore routing...');
-        if (processes.main.child) {
-          try { processes.main.child.kill('SIGKILL'); } catch (_) {}
-          processes.main.child = null;
-        }
-        consecutiveFailures = 0;
-        spawnWorker('main');
-      }
-    } else {
-      consecutiveFailures = 0;
-    }
-  }
-
   updateWorkersPidFile();
-}, 20 * 1000);
+}, 30 * 1000);
 
 // Heartbeat log every 5 minutes
 setInterval(() => {
   const mainAlive = processes.main.child && isProcessAlive(processes.main.child.pid);
-  const bwAlive = processes.bandwidth.child && isProcessAlive(processes.bandwidth.child.pid);
-  logMessage('INFO', `[Heartbeat] Service running normally (Main: ${mainAlive ? 'OK' : 'DOWN'}, Bandwidth: ${bwAlive ? 'OK' : 'DOWN'})`);
+  logMessage('INFO', `[Heartbeat] Service running normally (Main: ${mainAlive ? 'OK' : 'DOWN'})`);
+}, 5 * 60 * 1000);
 }, 5 * 60 * 1000);
 
 // Handle termination signals

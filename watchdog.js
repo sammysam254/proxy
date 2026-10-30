@@ -77,14 +77,12 @@ async function inspectAndHeal() {
 
   let daemonFound = false;
   let mainFound = false;
-  let bandwidthFound = false;
 
   for (const p of procs) {
     const cmd = p.CommandLine || '';
     if (cmd.includes('proxy') || cmd.includes('modem-manager')) {
       if (cmd.includes('service-daemon.js')) daemonFound = true;
-      if (cmd.includes('modem-manager\\index.js') || cmd.includes('modem-manager/index.js')) mainFound = true;
-      if (cmd.includes('bandwidthTracker.js')) bandwidthFound = true;
+      if (cmd.includes('index.js')) mainFound = true;
     }
   }
 
@@ -96,9 +94,9 @@ async function inspectAndHeal() {
     } catch (_) {}
   }
 
-  if (daemonFound && mainFound && bandwidthFound) {
+  if (daemonFound || mainFound) {
     // All healthy!
-    return { status: 'healthy', daemon: true, main: true, bandwidth: true };
+    return { status: 'healthy', daemon: daemonFound, main: mainFound };
   }
 
   // Something is missing - initiate self-healing

@@ -48,13 +48,8 @@ const log = {
 //
 const registry = new Map();
 
-// Global port counter — strictly incrementing, never reuses a slot
-// This prevents port collisions even if devices come/go
-let portCounter = 0;
-
-// ─── Assign a port set to a device ───────────────────────────────────────────
-function assignPorts() {
-  const idx = portCounter++;
+function getPortSetForSlot(slot) {
+  const idx = Math.max(0, (slot || 1) - 1);
   return {
     http:        31000 + idx,
     socks4:      32000 + idx,
@@ -63,6 +58,13 @@ function assignPorts() {
     publicSocks4:42000 + idx,
     publicSocks5:43000 + idx,
   };
+}
+
+// ─── Assign a deterministic port set to a device ───────────────────────────
+function assignPorts(device) {
+  if (device && device.portSet) return device.portSet;
+  const slot = device?.slotNumber || 1;
+  return getPortSetForSlot(slot);
 }
 
 const https = require('https');
@@ -129,8 +131,8 @@ async function bringOnline(device) {
   // 2. Start proxy server bound to computer's Wi-Fi interface
   await spawner.startProxy(device);
 
-  // 3. Open reverse-tunnel ports on VPS to tunnel traffic down to computer
-  await tunnel.addTunnelPorts(device);
+  // 3. Register reverse-tunnel ports without restarting SSH mid-cycle
+  await tunnel.addTunnelPorts(device, false);
 
   // 4. Update state & sync real residential public IP with Supabase
   device.state = 'proxying';
@@ -202,9 +204,9 @@ async function runCycle() {
         const deviceType = getDeviceTag(freshDevice);
         log.device(`New ${deviceType} detected: ${freshDevice.label}`);
 
-        freshDevice.portSet   = assignPorts();
+        freshDevice.portSet   = assignPorts(freshDevice);
         freshDevice.state     = 'pending';
-        freshDevice.portIndex = portCounter - 1;
+        freshDevice.portIndex = (freshDevice.slotNumber || 1) - 1;
 
         // Register in Supabase (even if offline — so admin can see it)
         try {
@@ -280,9 +282,9 @@ async function runCycle() {
       await spawner.reloadConfig().catch(e => {
         log.error('Proxy reload error:', e.message);
       });
-      // Always ensure VPS reverse SSH tunnel is connected on every single run
-      await tunnel.ensureTunnelConnected().catch(e => {
-        log.warn('VPS tunnel check error:', e.message);
+      // Synchronize all active tunnel ports in a single clean batch
+      await tunnel.syncAllTunnelPorts(proxying).catch(e => {
+        log.warn('VPS tunnel sync error:', e.message);
       });
     }
 
@@ -356,7 +358,7 @@ function printStatusTable() {
 }
 
 // ─── Wait for Wi-Fi connection to initialize (instant boot) ───────────────────
-async function waitForDevices(maxWaitMs = 15_000, intervalMs = 2_000) {
+async function waitForDevices(maxWaitMs = 25_000, intervalMs = 2_000) {
   const deadline = Date.now() + maxWaitMs;
   let attempt = 0;
 

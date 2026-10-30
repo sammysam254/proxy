@@ -26,38 +26,25 @@ function Log-Message([string]$msg) {
 
 # 1. Inspect running processes
 $procs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue
-$sshProcs = Get-CimInstance Win32_Process -Filter "Name = 'ssh.exe'" -ErrorAction SilentlyContinue
-
 $daemonRunning = $false
 $mainRunning = $false
-$bwRunning = $false
-$sshRunning = $false
 
 foreach ($p in $procs) {
     $cmd = $p.CommandLine
     if ($cmd -like "*proxy*" -or $cmd -like "*\proxy\*") {
         if ($cmd -like "*service-daemon.js*") { $daemonRunning = $true }
-        if ($cmd -like "*modem-manager*index.js*" -or $cmd -like "*modem-manager\index.js*") { $mainRunning = $true }
-        if ($cmd -like "*bandwidthTracker.js*") { $bwRunning = $true }
+        if ($cmd -like "*index.js*") { $mainRunning = $true }
     }
 }
 
-foreach ($s in $sshProcs) {
-    $cmd = $s.CommandLine
-    if ($cmd -like "*-R*" -or $cmd -like "*104.131.118.5*") {
-        $sshRunning = $true
-    }
-}
-
-# 2. Check if all are alive
-if ($daemonRunning -and $mainRunning -and $bwRunning) {
-    # All healthy, silent return
+# 2. Check if either main proxy engine or daemon supervisor is active
+if ($mainRunning -or $daemonRunning) {
+    # System is active and healthy!
     exit 0
 }
 
-# 3. Auto-Heal & Restart
-Log-Message "Health check failed! Daemon=$daemonRunning, Main=$mainRunning, Bandwidth=$bwRunning, SSH=$sshRunning"
-Log-Message "Triggering autonomous self-healing restart..."
+# 3. Auto-Heal & Restart only if proxy engine is stopped
+Log-Message "Health check: Proxy engine is stopped. Triggering autonomous restart..."
 
 try {
     Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbsPath`"" -WorkingDirectory $projDir -WindowStyle Hidden

@@ -22,6 +22,22 @@ if (-not $projDir -or -not (Test-Path "$projDir\modem-manager\index.js")) {
 
 Write-Host "[*] Project Directory: $projDir" -ForegroundColor Cyan
 
+# ─── 0b. Configure Power & Lid Settings (Keep PC active with Lid Closed & On Power) ───
+try {
+    # Set Lid Close Action to DO NOTHING (0) on both AC and Battery
+    cmd.exe /c "powercfg /setacvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 5ca83367-6e45-459f-a27b-476b1d01c936 0" >$null 2>&1
+    cmd.exe /c "powercfg /setdcvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 5ca83367-6e45-459f-a27b-476b1d01c936 0" >$null 2>&1
+    # Never sleep or hibernate on AC power
+    cmd.exe /c "powercfg /change standby-timeout-ac 0" >$null 2>&1
+    cmd.exe /c "powercfg /change hibernate-timeout-ac 0" >$null 2>&1
+    # Allow RTC wake timers
+    cmd.exe /c "powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP RTCWAKE 1" >$null 2>&1
+    # Disable USB selective suspend on AC
+    cmd.exe /c "powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0" >$null 2>&1
+    cmd.exe /c "powercfg /setactive SCHEME_CURRENT" >$null 2>&1
+    Write-Host "[OK] Power configured: PC & Proxies stay running even when Lid is closed." -ForegroundColor Green
+} catch {}
+
 # ─── 1. Check & Auto-Install Node.js ──────────────────────────────────────────
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodeCmd) {
@@ -211,9 +227,6 @@ Write-Host "================================================================" -F
 Write-Host ""
 
 Push-Location $modemDir
-
-# Start bandwidth tracker concurrently
-Start-Process -FilePath "node" -ArgumentList "bandwidthTracker.js" -WorkingDirectory $modemDir -WindowStyle Hidden
 
 # Run main index.js in foreground
 & node index.js

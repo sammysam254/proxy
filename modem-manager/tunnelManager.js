@@ -121,11 +121,9 @@ const REMOTE_SSH_PORT = parseInt(process.env.REMOTE_SSH_PORT || '2222', 10);
 
 // ─── Clean remote VPS ports & ensure GatewayPorts is active ──────────────────
 async function cleanRemoteVpsPorts() {
-  if (portMappings.length === 0) return true;
   try {
     const keyPath = getSshKeyPath();
-    const ports = portMappings.map(p => `${p.publicPort}/tcp`).join(' ');
-    const cmd = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i "${keyPath}" -p ${VPS_SSH_PORT} ${VPS_USER}@${VPS_HOST} "fuser -k ${ports} 2>/dev/null || true"`;
+    const cmd = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i "${keyPath}" -p ${VPS_SSH_PORT} ${VPS_USER}@${VPS_HOST} "fuser -k -9 41000:43050/tcp 2>/dev/null || true"`;
     await execAsync(cmd, { timeout: 6000 }).catch(() => {});
   } catch (_) {}
   return true;
@@ -303,7 +301,7 @@ async function stopTunnel() {
 }
 
 // ─── Add tunnel ports for a new modem ─────────────────────────────────────────
-async function addTunnelPorts(modem) {
+async function addTunnelPorts(modem, autoStart = true) {
   if (!modem.portSet) return;
 
   const { http, socks4, socks5, publicHttp, publicSocks4, publicSocks5 } = modem.portSet;
@@ -325,8 +323,29 @@ async function addTunnelPorts(modem) {
   if (added) {
     console.log(`[TunnelManager] Added ports for ${modem.label}:`,
       newMappings.map(m => `${m.localPort}→${m.publicPort}`).join(', '));
-    // Batch/debounce tunnel startup across all discovered devices
-    scheduleTunnelStart(600);
+    if (autoStart) {
+      scheduleTunnelStart(1200);
+    }
+  }
+}
+
+async function syncAllTunnelPorts(modems) {
+  const newMappings = [];
+  for (const modem of modems) {
+    if (!modem.portSet) continue;
+    const { http, socks4, socks5, publicHttp, publicSocks4, publicSocks5 } = modem.portSet;
+    newMappings.push({ localPort: http,   publicPort: publicHttp });
+    newMappings.push({ localPort: socks4, publicPort: publicSocks4 });
+    newMappings.push({ localPort: socks5, publicPort: publicSocks5 });
+  }
+
+  const currentSig = newMappings.map(m => `${m.localPort}:${m.publicPort}`).sort().join(',');
+  const oldSig = getPortsSignature();
+
+  portMappings.splice(0, portMappings.length, ...newMappings);
+
+  if (currentSig !== oldSig || !(await isTunnelRunning())) {
+    await startTunnel(true);
   }
 }
 
@@ -399,6 +418,7 @@ module.exports = {
   startTunnel,
   stopTunnel,
   addTunnelPorts,
+  syncAllTunnelPorts,
   removeTunnelPorts,
   ensureTunnelConnected,
   checkTunnelHealth,
