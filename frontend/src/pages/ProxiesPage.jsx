@@ -9,6 +9,7 @@ import SidebarLayout from '../components/SidebarLayout';
 import PurchaseModal from '../components/PurchaseModal';
 import ProxyTestModal from '../components/ProxyTestModal';
 import { playClickSound } from '../lib/sound';
+import { getProxyCountryInfo, CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
 
 export default function ProxiesPage({ session }) {
   const [proxies, setProxies]     = useState([]);
@@ -230,13 +231,14 @@ export default function ProxiesPage({ session }) {
                 const isOnline = modem?.status === 'online';
                 const isDc = isProxyDatacenter(p);
                 const isWifi = isProxyWifi(p);
+                const countryInfo = getProxyCountryInfo(p);
 
-                const rawOp = modem?.operator || (isDc ? 'DigitalOcean Datacenter 🇺🇸' : (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE'));
-                const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE');
+                const rawOp = modem?.operator || (isDc ? 'DigitalOcean Datacenter' : (isWifi ? `${countryInfo.shortName} Residential Wi-Fi` : 'Mobile 4G/5G LTE'));
+                const carrier = cleanProxyOperator(rawOp) || (isWifi ? `${countryInfo.shortName} Residential Wi-Fi` : 'Mobile Network');
                 const rawSerial = modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || p.id.slice(0, 8);
                 const serial = rawSerial.replace(/^android:|^wifi:/, '');
 
-                const accentColor = isDc ? '#3b82f6' : (isWifi ? '#06b6d4' : '#8b5cf6');
+                const accentColor = isDc ? '#3b82f6' : (isWifi ? countryInfo.color : '#8b5cf6');
                 const CardIcon    = isDc ? Server : (isWifi ? Wifi : Smartphone);
                 const subcategoryLabel = isDc ? 'Datacenter' : (isWifi ? 'Residential' : 'Mobile Dedicated');
 
@@ -268,12 +270,13 @@ export default function ProxiesPage({ session }) {
                             {modem?.label || carrier}
                           </div>
                           <div className="mono" style={{ fontSize: '0.75rem', color: accentColor }}>
-                            {modem?.operator || (isDc ? 'DigitalOcean Datacenter 🇺🇸' : (isWifi ? 'Residential Wi-Fi' : `Serial: #${serial}`))}
+                            {cleanProxyOperator(modem?.operator) || (isDc ? 'DigitalOcean Datacenter' : (isWifi ? `${countryInfo.shortName} Residential Wi-Fi` : `Serial: #${serial}`))}
                           </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <CountryBadge proxyOrModem={p} size="sm" />
                         <span className="badge" style={{
                           background: `${accentColor}18`,
                           color: accentColor,
@@ -312,9 +315,14 @@ export default function ProxiesPage({ session }) {
                       </div>
 
                       <div>
-                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Location / Network</div>
-                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {modem?.operator ? modem.operator.replace(/^.+?\((.+?)\).*$/, '$1') : (isDc ? 'USA 🇺🇸' : 'Residential')}
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Location / Country</div>
+                        <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', color: countryInfo.color }}>
+                          <img
+                            src={countryInfo.flagUrl}
+                            alt=""
+                            style={{ width: '15px', height: '11px', objectFit: 'cover', borderRadius: '2px', display: 'inline-block' }}
+                          />
+                          <span>{countryInfo.country}</span>
                         </div>
                       </div>
 

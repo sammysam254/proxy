@@ -9,6 +9,7 @@ import SidebarLayout from '../components/SidebarLayout';
 import PurchaseModal from '../components/PurchaseModal';
 import ProxyTestModal from '../components/ProxyTestModal';
 import { playClickSound, playSuccessSound } from '../lib/sound';
+import { CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
 
 export default function DatacenterProxiesPage({ session }) {
   const [proxies, setProxies]         = useState([]);
@@ -284,15 +285,18 @@ export default function DatacenterProxiesPage({ session }) {
                             {p.modems?.label || `Datacenter Slot (Port ${port})`}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-2)' }}>
-                            {p.modems?.operator || 'DigitalOcean Datacenter 🇺🇸'}
+                            {cleanProxyOperator(p.modems?.operator) || 'DigitalOcean Datacenter'}
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                        <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.75rem' }}>
-                          <span className="dot" /> {isOnline ? 'ONLINE' : 'OFFLINE'}
-                        </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <CountryBadge proxyOrModem={p} size="sm" />
+                          <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.75rem' }}>
+                            <span className="dot" /> {isOnline ? 'ONLINE' : 'OFFLINE'}
+                          </span>
+                        </div>
                         <span className="badge badge-purple" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
                           {p.proxy_type?.toUpperCase()}
                         </span>

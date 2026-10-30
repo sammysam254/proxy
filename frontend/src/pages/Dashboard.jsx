@@ -5,6 +5,7 @@ import { Copy, Check, RefreshCw, Wifi, Clock, Database, ChevronDown, ChevronUp, 
 import { getMySubscriptions, requestIpRotation, supabase } from '../lib/supabase';
 import SidebarLayout from '../components/SidebarLayout';
 import { playSuccessSound, playClickSound, playErrorSound } from '../lib/sound';
+import { getProxyCountryInfo, CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
 
 function CopyBtn({ value, label }) {
   const [copied, setCopied] = useState(false);
@@ -147,9 +148,10 @@ function ProxyCredCard({ sub }) {
   const category = getProxyCategory(sub);
   const isDatacenter = category === 'datacenter';
   const isResidential = category === 'residential';
+  const countryInfo = getProxyCountryInfo(proxy || sub);
   const CategoryIcon = isDatacenter ? Server : (isResidential ? Wifi : Smartphone);
-  const categoryAccent = isDatacenter ? '#3b82f6' : (isResidential ? '#06b6d4' : '#8b5cf6');
-  const categoryLabel = isDatacenter ? 'Datacenter (DigitalOcean)' : (isResidential ? 'Residential (Wi-Fi)' : 'Mobile (Dedicated 4G/5G)');
+  const categoryAccent = isDatacenter ? '#3b82f6' : (isResidential ? countryInfo.color : '#8b5cf6');
+  const categoryLabel = isDatacenter ? 'Datacenter (DigitalOcean)' : (isResidential ? `${countryInfo.shortName} Residential` : 'Mobile (Dedicated 4G/5G)');
 
   const handleRotate = async () => {
     setRotating(true);
@@ -187,17 +189,18 @@ function ProxyCredCard({ sub }) {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {modem?.label || (isResidential ? 'Residential Proxy' : ((modem?.operator || 'Mobile 4G/5G LTE').replace(/[, \t\r\n]+$/, '').trim()))}
+              {modem?.label || (isResidential ? `${countryInfo.shortName} Residential Proxy` : cleanProxyOperator(modem?.operator || 'Mobile 4G/5G LTE'))}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
               <span className="mono" style={{ color: categoryAccent, fontWeight: 600 }}>
-                {modem?.operator || (isResidential ? 'Residential Wi-Fi' : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}`)}
+                {cleanProxyOperator(modem?.operator) || (isResidential ? `${countryInfo.shortName} Residential Wi-Fi` : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}`)}
               </span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-sm" style={{ flexWrap: 'wrap' }}>
+          <CountryBadge proxyOrModem={proxy || sub} size="sm" />
           <span className="badge" style={{
             background: `${categoryAccent}18`,
             color: categoryAccent,

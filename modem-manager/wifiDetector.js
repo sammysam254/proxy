@@ -504,7 +504,7 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS, geoInfo =
         ...base,
         devicePath: `residential_slot_${slot}`,
         label:      `${g.displayName} Residential Proxy #${slot}`,
-        operator:   `${g.displayName} Residential Wi-Fi (${g.isp}) ${g.flag}`,
+        operator:   `${g.displayName} Residential Wi-Fi (${g.isp})`,
         model:      `${g.displayName} High-Speed Residential Node #${slot}`,
         location:   locStr,
         country:    g.displayName,

@@ -10,6 +10,7 @@ import PurchaseModal from '../components/PurchaseModal';
 import ProxyTestModal from '../components/ProxyTestModal';
 import SidebarLayout from '../components/SidebarLayout';
 import { playClickSound } from '../lib/sound';
+import { getProxyCountryInfo, CountryBadge, cleanProxyOperator } from '../lib/countryHelper';
 
 export default function Storefront({ session }) {
   const [plans, setPlans] = useState([]);
@@ -253,6 +254,7 @@ export default function Storefront({ session }) {
                 const isOnline = modem?.status === 'online';
                 const isDc = (p.public_port >= 51000) || (modem?.operator || '').includes('Datacenter');
                 const isRes = !isDc;
+                const countryInfo = getProxyCountryInfo(p);
 
                 return (
                   <div
@@ -262,7 +264,7 @@ export default function Storefront({ session }) {
                       display: 'flex',
                       flexDirection: 'column',
                       background: 'var(--clr-surface)',
-                      border: isOnline ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--clr-border)',
+                      border: isOnline ? `1px solid ${countryInfo.color}44` : '1px solid var(--clr-border)',
                       borderRadius: '16px',
                       padding: '18px',
                       position: 'relative',
@@ -272,25 +274,28 @@ export default function Storefront({ session }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{
                           width: 38, height: 38, borderRadius: '10px',
-                          background: isRes ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)',
-                          color: isRes ? '#10b981' : '#3b82f6',
+                          background: countryInfo.bg,
+                          color: countryInfo.color,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
                           {isRes ? <Wifi size={18} /> : <Server size={18} />}
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                            {modem?.label || (isRes ? `Residential Proxy #${p.public_port}` : `Datacenter Proxy #${p.public_port}`)}
+                            {modem?.label || (isRes ? `${countryInfo.shortName} Residential Proxy #${p.public_port}` : `Datacenter Proxy #${p.public_port}`)}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
-                            {modem?.operator || (isRes ? 'Residential Wi-Fi' : 'DigitalOcean Datacenter 🇺🇸')}
+                            {cleanProxyOperator(modem?.operator) || (isRes ? `${countryInfo.shortName} Residential Wi-Fi` : 'DigitalOcean Datacenter')}
                           </div>
                         </div>
                       </div>
 
-                      <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
-                        <span className="dot" /> {isOnline ? 'Online' : 'Standby'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CountryBadge proxyOrModem={p} size="sm" />
+                        <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
+                          <span className="dot" /> {isOnline ? 'Online' : 'Standby'}
+                        </span>
+                      </div>
                     </div>
 
                     <div style={{
@@ -301,11 +306,23 @@ export default function Storefront({ session }) {
                       justifyContent: 'space-between',
                       fontSize: '0.78rem',
                       marginBottom: '14px',
+                      alignItems: 'center',
                     }}>
                       <div>
                         <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Type</div>
                         <div style={{ fontWeight: 700, color: 'var(--clr-accent)', textTransform: 'uppercase' }}>
                           {p.proxy_type}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.68rem' }}>Location</div>
+                        <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', color: countryInfo.color }}>
+                          <img
+                            src={countryInfo.flagUrl}
+                            alt=""
+                            style={{ width: '15px', height: '11px', objectFit: 'cover', borderRadius: '2px', display: 'inline-block' }}
+                          />
+                          <span>{countryInfo.shortName}</span>
                         </div>
                       </div>
                       <div>
