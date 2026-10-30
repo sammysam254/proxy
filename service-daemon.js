@@ -233,7 +233,6 @@ setInterval(() => {
   const mainAlive = processes.main.child && isProcessAlive(processes.main.child.pid);
   logMessage('INFO', `[Heartbeat] Service running normally (Main: ${mainAlive ? 'OK' : 'DOWN'})`);
 }, 5 * 60 * 1000);
-}, 5 * 60 * 1000);
 
 // Handle termination signals
 function shutdown(signal) {
