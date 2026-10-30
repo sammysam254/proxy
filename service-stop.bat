@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Vertex Proxies — Stop Background Service
+title Vertex Proxies  Stop Background Service
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"

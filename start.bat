@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Vertex Proxies — Silent Launcher
+title Vertex Proxies  Silent Launcher
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 

@@ -25,3 +25,6 @@ logs/
 *.key
 *_tunnel
 *_tunnel.pub
+
+# Local Node State
+machine_node.json

@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Vertex Proxies — Install Background Service
+title Vertex Proxies  Install Background Service
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"

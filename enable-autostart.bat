@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Vertex Proxies — Enable Background Service Auto-Start
+title Vertex Proxies  Enable Background Service Auto-Start
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 

@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Vertex Proxies — Stop All Local Services
+title Vertex Proxies  Stop All Local Services
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"

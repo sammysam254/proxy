@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Vertex Proxies — Live Service Logs
+title Vertex Proxies  Live Service Logs
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"

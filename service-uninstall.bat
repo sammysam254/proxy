@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Vertex Proxies — Uninstall Background Service
+title Vertex Proxies  Uninstall Background Service
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
