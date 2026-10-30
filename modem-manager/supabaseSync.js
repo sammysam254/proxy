@@ -127,7 +127,7 @@ async function upsertModem(modem) {
         label:           modem.label,
         interface:       modem.interface,
         status:          modem.status,
-        ip_address:      modem.ipAddress,
+        ip_address:      modem.publicIp || modem.ipAddress,
         signal:          modem.signal,
         operator:        modem.operator,
         iccid:           modem.iccid,
@@ -180,12 +180,17 @@ async function updateModemStatus(modemId, modem) {
   if (!modemId) return;
 
   const isOnline = modem.status === 'online';
-  await supabase.from('modems').update({
+  const updatePayload = {
     status:     modem.status,
-    ip_address: modem.ipAddress,
+    ip_address: modem.publicIp || modem.ip_address || modem.ipAddress,
     signal:     modem.signal,
     last_seen:  new Date().toISOString(),
-  }).eq('id', modemId);
+  };
+  if (modem.label)    updatePayload.label    = modem.label;
+  if (modem.operator) updatePayload.operator = modem.operator;
+  if (modem.model)    updatePayload.model    = modem.model;
+
+  await supabase.from('modems').update(updatePayload).eq('id', modemId);
 
   // Keep proxies table in sync with modem status
   await supabase.from('proxies').update({ active: isOnline }).eq('modem_id', modemId);

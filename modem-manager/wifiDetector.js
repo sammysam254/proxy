@@ -465,6 +465,8 @@ async function detectWifiLinux() {
 // ─── PUBLIC API ──────────────────────────────────────────────────────────────
 // =============================================================================
 
+const { detectGeoLocation } = require('./geoDetector');
+
 const DEFAULT_WIFI_SLOTS = parseInt(process.env.WIFI_PROXY_SLOTS || '12', 10);
 
 function getPortSetForSlot(slot) {
@@ -481,21 +483,33 @@ function getPortSetForSlot(slot) {
 
 /**
  * Expands physical Wi-Fi connection into multiple distinct proxy slots (default 12 cards)
- * Configured specifically for High-Speed USA Residential Proxies.
+ * Configured dynamically for Residential Proxies based on detected location (Kenya, USA, etc.).
  */
-function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
+function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS, geoInfo = null) {
+  const g = geoInfo || {
+    country:     'United States',
+    countryCode: 'US',
+    city:        '',
+    isp:         'Residential',
+    flag:        '🇺🇸',
+    displayName: 'USA',
+    publicIp:    null,
+  };
+
   const expanded = [];
   for (const base of rawWifiList) {
     for (let slot = 1; slot <= slotsCount; slot++) {
+      const locStr = g.city ? `${g.city}, ${g.displayName} ${g.flag}` : `${g.displayName} ${g.flag}`;
       expanded.push({
         ...base,
-        devicePath: `residential_usa_slot_${slot}`,
-        label:      `USA Residential Proxy #${slot}`,
-        operator:   'United States (USA) Residential Wi-Fi 🇺🇸',
-        model:      `USA High-Speed Residential Node #${slot}`,
-        location:   'United States (USA)',
-        country:    'USA',
-        countryCode:'US',
+        devicePath: `residential_slot_${slot}`,
+        label:      `${g.displayName} Residential Proxy #${slot}`,
+        operator:   `${g.displayName} Residential Wi-Fi (${g.isp}) ${g.flag}`,
+        model:      `${g.displayName} High-Speed Residential Node #${slot}`,
+        location:   locStr,
+        country:    g.displayName,
+        countryCode:g.countryCode,
+        publicIp:   g.publicIp || null,
         signal:     99,
         slotNumber: slot,
         isWifi:     true,
@@ -507,11 +521,12 @@ function expandWifiSlots(rawWifiList, slotsCount = DEFAULT_WIFI_SLOTS) {
 }
 
 /**
- * Detects all active Wi-Fi connections on current OS and expands to 12 proxy cards.
+ * Detects all active Wi-Fi connections on current OS, detects public IP geo-location, and expands to 12 proxy cards.
  */
-async function detectWifiDevices() {
+async function detectWifiDevices(geoOverride = null) {
+  const geo = geoOverride || await detectGeoLocation().catch(() => null);
   const rawList = IS_WIN ? await detectWifiWindows() : await detectWifiLinux();
-  return expandWifiSlots(rawList);
+  return expandWifiSlots(rawList, DEFAULT_WIFI_SLOTS, geo);
 }
 
 /**

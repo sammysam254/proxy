@@ -125,6 +125,7 @@ if ($gitCmd -and (Test-Path "$projDir\.git")) {
         'modem-manager/keys/proxicell_tunnel', 'modem-manager/keys/proxicell_tunnel.pub',
         'modem-manager/index.js', 'modem-manager/proxySpawner.js',
         'modem-manager/tunnelManager.js', 'modem-manager/wifiDetector.js',
+        'modem-manager/geoDetector.js',
         'modem-manager/supabaseSync.js', 'modem-manager/bandwidthTracker.js'
     )
     foreach ($f in $files) {

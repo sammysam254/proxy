@@ -228,16 +228,17 @@ export default function ProxiesPage({ session }) {
               {filteredProxies.map(p => {
                 const modem = p.modems;
                 const isOnline = modem?.status === 'online';
+                const isDc = isProxyDatacenter(p);
                 const isWifi = isProxyWifi(p);
 
-                const rawOp = modem?.operator || (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE');
+                const rawOp = modem?.operator || (isDc ? 'DigitalOcean Datacenter 🇺🇸' : (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE'));
                 const carrier = rawOp.replace(/[, \t\r\n]+$/, '').trim() || (isWifi ? 'Residential Wi-Fi' : 'Mobile 4G/5G LTE');
                 const rawSerial = modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || p.id.slice(0, 8);
                 const serial = rawSerial.replace(/^android:|^wifi:/, '');
 
-                const accentColor = isWifi ? '#06b6d4' : '#8b5cf6';
-                const CardIcon    = isWifi ? Wifi : Smartphone;
-                const subcategoryLabel = isWifi ? 'Residential (Wi-Fi)' : 'Mobile Dedicated';
+                const accentColor = isDc ? '#3b82f6' : (isWifi ? '#06b6d4' : '#8b5cf6');
+                const CardIcon    = isDc ? Server : (isWifi ? Wifi : Smartphone);
+                const subcategoryLabel = isDc ? 'Datacenter' : (isWifi ? 'Residential' : 'Mobile Dedicated');
 
                 return (
                   <div
@@ -264,11 +265,10 @@ export default function ProxiesPage({ session }) {
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {isWifi ? (carrier.includes('USA') ? carrier : `USA Residential Proxy`) : carrier}
-                            {isWifi && <span>🇺🇸</span>}
+                            {modem?.label || carrier}
                           </div>
                           <div className="mono" style={{ fontSize: '0.75rem', color: accentColor }}>
-                            {isWifi ? 'Location: United States 🇺🇸' : `Serial: #${serial}`}
+                            {modem?.operator || (isDc ? 'DigitalOcean Datacenter 🇺🇸' : (isWifi ? 'Residential Wi-Fi' : `Serial: #${serial}`))}
                           </div>
                         </div>
                       </div>
@@ -284,7 +284,7 @@ export default function ProxiesPage({ session }) {
                           alignItems: 'center',
                           gap: '3px',
                         }}>
-                          <CardIcon size={10} /> {isWifi ? 'USA Residential' : subcategoryLabel}
+                          <CardIcon size={10} /> {subcategoryLabel}
                         </span>
                         <span className={`badge ${isOnline ? 'badge-online' : 'badge-offline'}`} style={{ fontSize: '0.7rem' }}>
                           <span className="dot" />
@@ -312,13 +312,15 @@ export default function ProxiesPage({ session }) {
                       </div>
 
                       <div>
-                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Location</div>
-                        <div style={{ fontWeight: 600 }}>{isWifi ? 'United States 🇺🇸' : 'Dedicated 4G/5G'}</div>
+                        <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Location / Network</div>
+                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {modem?.operator ? modem.operator.replace(/^.+?\((.+?)\).*$/, '$1') : (isDc ? 'USA 🇺🇸' : 'Residential')}
+                        </div>
                       </div>
 
                       <div>
                         <div style={{ color: 'var(--clr-text-3)', fontSize: '0.7rem' }}>Speed</div>
-                        <div style={{ fontWeight: 700, color: 'var(--clr-green)' }}>1 Gbps (Max Speed) ⚡</div>
+                        <div style={{ fontWeight: 700, color: 'var(--clr-green)' }}>{isDc ? '10 Gbps (Port)' : '1 Gbps (Max Speed) ⚡'}</div>
                       </div>
 
                       <div>

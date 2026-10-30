@@ -149,7 +149,7 @@ function ProxyCredCard({ sub }) {
   const isResidential = category === 'residential';
   const CategoryIcon = isDatacenter ? Server : (isResidential ? Wifi : Smartphone);
   const categoryAccent = isDatacenter ? '#3b82f6' : (isResidential ? '#06b6d4' : '#8b5cf6');
-  const categoryLabel = isDatacenter ? 'Datacenter (DigitalOcean)' : (isResidential ? 'USA Residential (Wi-Fi)' : 'Mobile (Dedicated 4G/5G)');
+  const categoryLabel = isDatacenter ? 'Datacenter (DigitalOcean)' : (isResidential ? 'Residential (Wi-Fi)' : 'Mobile (Dedicated 4G/5G)');
 
   const handleRotate = async () => {
     setRotating(true);
@@ -187,12 +187,11 @@ function ProxyCredCard({ sub }) {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {isResidential ? 'USA Residential Proxy' : ((modem?.operator || 'Mobile 4G/5G LTE').replace(/[, \t\r\n]+$/, '').trim())}
-              {isResidential && <span style={{ fontSize: '0.9rem' }}>🇺🇸</span>}
+              {modem?.label || (isResidential ? 'Residential Proxy' : ((modem?.operator || 'Mobile 4G/5G LTE').replace(/[, \t\r\n]+$/, '').trim()))}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--clr-text-2)' }}>
               <span className="mono" style={{ color: categoryAccent, fontWeight: 600 }}>
-                {isResidential ? 'Location: United States 🇺🇸' : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}`}
+                {modem?.operator || (isResidential ? 'Residential Wi-Fi' : `Serial: #${(modem?.adb_serial || (modem?.device_path ? modem.device_path.replace(/^android:|^wifi:/, '') : '') || sub.id.slice(0, 8)).replace(/^android:|^wifi:/, '')}`)}
               </span>
             </div>
           </div>
@@ -489,7 +488,7 @@ export default function Dashboard({ session }) {
             {[
               { label: 'Total Active',     value: active.length, sub: 'currently online' },
               { label: 'Datacenter Slots', value: dcCount,       sub: '10 Gbps unmetered' },
-              { label: 'USA Residential',  value: resCount,      sub: 'routed via USA Wi-Fi' },
+              { label: 'Residential Proxies', value: resCount,   sub: 'routed via local Wi-Fi' },
               { label: 'Mobile Proxies',   value: mobileCount,   sub: 'dedicated SIM' },
             ].map(s => (
               <div key={s.label} className="stat-card">
@@ -522,7 +521,7 @@ export default function Dashboard({ session }) {
                 className={`btn btn-sm ${categoryFilter === 'residential' ? 'btn-primary' : 'btn-ghost'}`}
                 style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
               >
-                <Wifi size={13} color="#06b6d4" /> USA Residential ({resCount})
+                <Wifi size={13} color="#06b6d4" /> Residential ({resCount})
               </button>
               <button
                 onClick={() => { playClickSound(); setCategoryFilter('datacenter'); }}

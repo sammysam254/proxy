@@ -238,7 +238,7 @@ export default function Storefront({ session }) {
                   Test Any Proxy Live Before Buying
                 </h2>
                 <p style={{ color: 'var(--clr-text-2)', fontSize: '0.95rem', margin: 0 }}>
-                  Click <strong>"Test Live"</strong> on any card to run an instant ISP probe, check ping latency, and verify real Comcast residential IP details.
+                  Click <strong>"Test Live"</strong> on any card to run an instant ISP probe, check ping latency, and verify real residential & datacenter IP details.
                 </p>
               </div>
               <Link to="/proxies" className="btn btn-secondary btn-sm" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
@@ -280,10 +280,10 @@ export default function Storefront({ session }) {
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                            {modem?.label || `USA Proxy #${p.public_port}`}
+                            {modem?.label || (isRes ? `Residential Proxy #${p.public_port}` : `Datacenter Proxy #${p.public_port}`)}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--clr-text-3)' }}>
-                            {isRes ? 'Comcast Residential 🇺🇸' : 'DigitalOcean Datacenter 🇺🇸'}
+                            {modem?.operator || (isRes ? 'Residential Wi-Fi' : 'DigitalOcean Datacenter 🇺🇸')}
                           </div>
                         </div>
                       </div>

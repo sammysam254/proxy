@@ -121,7 +121,7 @@ async function bringOnline(device) {
   log.ok(`[${getDeviceTag(device)}] Bringing online: ${device.label}`);
   
   // 1. Fetch real public IP from the computer's Wi-Fi network interface
-  const publicIp = await fetchPublicIp(device.ipAddress);
+  const publicIp = device.publicIp || await fetchPublicIp(device.ipAddress);
   device.publicIp = publicIp || device.ipAddress;
 
   log.ok(`  ↳ Public Residential IP: ${device.publicIp} (Local Wi-Fi: ${device.ipAddress})`);
@@ -180,7 +180,8 @@ async function runCycle() {
 
     const onlineCount  = detected.filter(d => d.ipAddress).length;
     const offlineCount = detected.length - onlineCount;
-    log.info(`USA Residential Proxies: ${onlineCount} online / ready at max speed (${offlineCount} pending)`);
+    const locTag = detected[0]?.country || 'Residential';
+    log.info(`${locTag} Residential Proxies: ${onlineCount} online / ready at max speed (${offlineCount} pending)`);
 
     const detectedPaths = new Set(detected.map(d => d.devicePath));
 
@@ -238,8 +239,11 @@ async function runCycle() {
 
         // Update live fields
         existing.ipAddress      = freshDevice.ipAddress;
+        existing.publicIp       = freshDevice.publicIp || existing.publicIp;
         existing.signal         = freshDevice.signal;
         existing.operator       = freshDevice.operator;
+        existing.label          = freshDevice.label;
+        existing.model          = freshDevice.model;
         existing.status         = freshDevice.status;
         existing.interface      = freshDevice.interface || existing.interface;
 
@@ -364,13 +368,14 @@ async function waitForDevices(maxWaitMs = 25_000, intervalMs = 2_000) {
 
   while (Date.now() < deadline) {
     attempt++;
-    log.info(`Initializing USA Residential Proxy slots (attempt #${attempt})...`);
+    log.info(`Initializing Residential Proxy slots (attempt #${attempt})...`);
 
     const wifiDevices = await wifi.detectWifiDevices().catch(() => []);
     const withIp = wifiDevices.filter(d => d.ipAddress).length;
 
     if (withIp > 0) {
-      log.ok(`✅ Initialized ${withIp} USA Residential proxy slots with live Wi-Fi connection. Proceeding!`);
+      const locTag = wifiDevices[0]?.country || 'Residential';
+      log.ok(`✅ Initialized ${withIp} ${locTag} Residential proxy slots with live Wi-Fi connection. Proceeding!`);
       return true;
     }
 
